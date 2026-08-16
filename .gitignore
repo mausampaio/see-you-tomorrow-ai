@@ -1,5 +1,7 @@
 node_modules/
 dist/
+.claude/worktrees/
+.claude/settings.local.json
 coverage/
 *.log
 .env
