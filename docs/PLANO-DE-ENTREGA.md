@@ -60,6 +60,25 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
 ## Sprint 1 — Enxergar as sessões
 
+- [ ] **S1-T0 — Tornar os guards insensíveis ao estado da árvore.** Vem antes de tudo: guard
+      instável mina toda tarefa seguinte, porque um vermelho que ninguém confia vira um vermelho
+      que todo mundo ignora.
+      **O que aconteceu:** no commit `6899f99` o CI falhou em **Linux e macOS** e passou no
+      Windows. O teste que caiu foi justamente o controle de D-019 (`aprova new Date(valor)`),
+      com `expected 2 to be +0` — o eslint viu 2 erros onde deveria ver zero. Passou a verde em
+      `c7a7bf6`, depois que S0-T6 serializou os guards. **A causa não foi provada.**
+      **Hipótese principal:** `limparResiduosDeTestesDeGuarda()` varre `src/` inteiro apagando
+      todo arquivo com prefixo `_`, e os fixtures usam esse prefixo — em paralelo, o `afterAll`
+      de um arquivo apaga o fixture em voo de outro.
+      - reproduzir a falha antes de corrigir: rodar os guards com paralelismo ligado em Linux
+        até quebrar, e **registrar a saída bruta do eslint**, não só a contagem
+      - eliminar a dependência do estado global: fixture em diretório próprio por arquivo de
+        teste, limpeza restrita a esse diretório, nunca varredura da árvore inteira
+      - quando a asserção for sobre contagem, imprimir as mensagens do eslint na falha — o log do
+        CI trouxe `expected 2 to be +0` e nenhuma pista de quais eram os 2 erros
+      *Aceite:* os guards passam nos 3 SOs **com paralelismo ligado**; a serialização deixa de ser
+      necessária para correção e vira, no máximo, escolha de desempenho.
+
 - [ ] **S1-T1 — `nucleo/` de domínio.** Tipos, portas e as regras puras de elegibilidade e de
       classificação viva/ociosa/encerrada. Sem I/O.
 - [ ] **S1-T2 — `adaptadores/processo`.** Liveness com desempate por `procStart`, nos 3 SOs.
