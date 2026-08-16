@@ -22,20 +22,14 @@ O objetivo aqui não é entregar produto, é **derrubar as incertezas antes que 
       husky, lint-staged e CI nos 3 SOs. 25 testes provando reprovação de violação real e
       aprovação dos casos permitidos. Gerou D-019 e D-020.
 
-- [~] **S0-T6 — Fechar a matriz de camadas.** Cada rodada de review de S0-T2 achou "mais um par
-      que ninguém listou". A matriz de `docs/ARQUITETURA.md` agora é **exaustiva**: 20 pares
-      ordenados, 12 proibidos e 8 permitidos. Esta tarefa alinha o `dependency-cruiser` a ela.
-      - regra e teste para `agendador → cli` (**proibido**: `cli` é a raiz de composição, o
-        contrário é inversão de dependência)
-      - teste de controle para cada par **permitido** ainda sem um: `adaptadores → nucleo`,
-        `aplicacao → nucleo`, `agendador → nucleo`, `agendador → aplicacao`, `cli → nucleo`,
-        `cli → aplicacao`, `cli → agendador`
-      - `testTimeout` maior nos testes que spawnam `eslint`/`depcruise`: o padrão de 5 s do
-        Vitest estoura sob carga e produz falha intermitente
-      - ancorar os `path` das regras por segmento, para `^src/aplicacao` não casar com um futuro
-        `src/aplicacao-legado/`
-      *Aceite:* um teste percorre a matriz de 20 pares e falha se qualquer par não tiver
-      cobertura — o guard do guard. Nenhuma rodada futura deve conseguir achar par faltando.
+- [x] **S0-T6 — Fechar a matriz de camadas.** Aprovado no review em 2026-08-16. Os 20 pares
+      ordenados cobertos, com o **guard do guard**: um teste dirigido por estrutura de dados
+      única (`tests/integracao/guardas/_matriz-de-camadas.ts`), declarada de forma independente
+      do `.dependency-cruiser.cjs` de propósito — se ela apenas repetisse o config, um erro
+      cometido nos dois lugares passaria batido. Verificado removendo regras: os pares
+      afetados falham nomeados individualmente, e uma camada nova em `src/` reprova o teste de
+      sanidade. Guards isolados em projeto vitest próprio, serializado porque disputam a árvore
+      real de `src/`; a faixa de integração segue paralela.
 
 - [x] **S0-T3 — SPIKE A.** Feito pelo PO em 2026-08-16. Veredito em
       `docs/spikes/A-resume-headless.md`: funciona com a sessão viva, transcript original
