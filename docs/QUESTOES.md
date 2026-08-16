@@ -67,4 +67,39 @@ B) Não registra, mas cria worktree → precisamos de **descoberta por worktree*
 C) Não registra e não dá pista nenhuma → esse cenário só é resolvido pelo wrapper (D-014),
    e vira mais um argumento para priorizar a v2.
 
-**Resposta:** aguardando coleta do usuário no outro ambiente.
+**Resposta:** **Respondida em parte — opção B, em 2026-08-16.** Ver
+`docs/spikes/D-sessao-filha-e-descoberta-de-headless.md`. Sessão headless deixa transcript mas
+**não** se registra em `~/.claude/sessions/`. Descoberta só por registro é cega para agentes de
+execução. Resolvido por D-016 (registro + varredura de transcripts). Falta saber por que as
+sessões do `agente-interno` não deixam transcript → Q-003.
+
+---
+
+## Q-003 — Por que as sessões do `agente-interno` não deixam transcript?
+**Tarefa:** nenhuma; investigação do PO
+**Bloqueia:** não. D-013 e D-016 cobrem o caso independentemente da causa.
+**Contexto:** a hipótese de que "sessão filha desabilita o transcript" foi testada e
+**falsificada** (Spike D): com e sem `CLAUDE_CODE_CHILD_SESSION=1`, o transcript foi criado nos
+dois casos. A causa real segue desconhecida. Importa porque, se for corrigível, o caso do
+trabalho deixa de precisar do fallback degradado.
+
+**Hipóteses ainda de pé, em ordem de probabilidade:**
+1. O script do `agente-interno:ui` passa `--no-session-persistence` explicitamente.
+2. O `agente-interno` usa o Agent SDK em vez do CLI, e o SDK não persiste por padrão.
+3. Um `settings.json` do repositório ou da organização desliga a persistência.
+4. O comportamento difere por SO ou por versão do Claude Code.
+
+**Dados necessários (segunda máquina, com o agente-interno rodando):**
+```
+# 1. o script existe e o que ele invoca
+#    localizar o script que o agente-interno:ui chama e ler a linha do claude
+# 2. o processo real e seus argumentos
+Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Select ProcessId,CommandLine
+# 3. transcript apareceu para aquela sessao?
+Get-ChildItem ~/.claude/projects -Recurse -Filter *.jsonl |
+  Where-Object LastWriteTime -gt (Get-Date).AddMinutes(-10)
+# 4. settings em vigor
+Get-Content ~/.claude/settings.json; Get-Content .claude/settings.json
+```
+
+**Resposta:** aguardando coleta.

@@ -182,10 +182,14 @@ registrou. Qualquer outro arquivo ali é intocável.
 
 ## D-013 — Transcript é uma fonte de evidência, não a fonte
 
-**Contexto.** Existem sessões legítimas sem transcript. Caso real: o agente `agente-interno`, usado no
-trabalho do usuário, roda com persistência desativada de propósito — ele escreve o resultado
-numa issue e cria um **worktree** no projeto, onde guarda tudo antes de encerrar. Nesse cenário o
-transcript é a fonte *menos* informativa disponível.
+**Contexto.** Existem sessões sem transcript utilizável. Caso real: as sessões do agente
+`agente-interno`, no trabalho do usuário, não deixam transcript. **A causa não é conhecida** — a
+hipótese de "sessão filha desabilita persistência" foi testada e falsificada no Spike D, e Q-003
+segue aberta. O que se sabe é que o estado real dessas sessões vive em outro lugar: numa issue e
+num **worktree** criado no projeto, onde tudo é guardado antes de encerrar.
+
+A decisão abaixo não depende da causa. Mesmo que Q-003 revele algo corrigível, sessão com
+transcript ausente, truncado ou ilegível continua sendo um caso a tratar.
 
 **Decisão.** A captura coleta evidências de **várias fontes independentes**, e o transcript é
 apenas uma delas. As fontes da v1, por ordem de confiabilidade:
@@ -236,3 +240,31 @@ temporário. Argumento de linha de comando só para flags e valores curtos e con
 
 **Consequências.** Vale junto com a regra já existente de `spawn` com array e `shell: false`.
 Tem teste de integração dedicado, com conteúdo contendo quebra de linha, aspas, acento e `%`.
+
+---
+
+## D-016 — Descoberta por duas estratégias, não uma
+
+**Contexto.** O Spike D mostrou que **sessão headless (`claude -p`) deixa transcript mas não se
+registra** em `~/.claude/sessions/`. Uma descoberta baseada só no registro é cega para todo
+agente de execução, que é justamente o caso que mais precisa de handoff.
+
+**Decisão.** `ProvedorDeSessoes` combina duas estratégias e devolve a **união deduplicada por
+`sessionId`**:
+
+1. **Registro** — `~/.claude/sessions/*.json`. Dá `pid`, liveness, `kind`, `name`. Só enxerga
+   interativas.
+2. **Varredura de transcripts** — `~/.claude/projects/**/*.jsonl` filtrado por mtime dentro de
+   `horasDeRelevancia`. Enxerga headless também. Não dá `pid` nem liveness.
+
+Sessão vista pelas duas tem os dados fundidos; sessão vista só pela varredura entra com
+`pid: null` e estado `desconhecido` — nunca é candidata a encerramento de processo (D-002).
+
+**Consequências.**
+- A varredura precisa ser barata: `stat` por arquivo, sem ler conteúdo, antes de qualquer parse.
+- Ela vê os forks do próprio `seeya`, então a exclusão de D-012 passa a ser **crítica**, não
+  higiênica.
+- O `cwd` de uma sessão vinda só da varredura tem de ser reconstruído do conteúdo do transcript,
+  já que o slug do diretório é irreversível com segurança.
+- Esta decisão substitui a suposição, agora sabidamente errada, de que o registro seria
+  suficiente.

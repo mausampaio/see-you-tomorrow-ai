@@ -45,9 +45,19 @@ O objetivo aqui não é entregar produto, é **derrubar as incertezas antes que 
 - [ ] **S1-T1 — `nucleo/` de domínio.** Tipos, portas e as regras puras de elegibilidade e de
       classificação viva/ociosa/encerrada. Sem I/O.
 - [ ] **S1-T2 — `adaptadores/processo`.** Liveness com desempate por `procStart`, nos 3 SOs.
-- [ ] **S1-T3 — `adaptadores/descoberta`.** Registro + resolução do transcript, tolerante a
-      arquivo corrompido. Exclui forks de `forks.json` (D-012). Sessão sem transcript entra
-      normalmente, com `temTranscript: false` (D-013).
+- [ ] **S1-T3 — `adaptadores/descoberta`, estratégia por registro.** Lê
+      `~/.claude/sessions/*.json`, tolerante a arquivo corrompido. Exclui forks de `forks.json`
+      (D-012). Sessão sem transcript entra normalmente, com `temTranscript: false` (D-013).
+- [ ] **S1-T8 — Estratégia por varredura de transcripts (D-016).** Varre
+      `~/.claude/projects/**/*.jsonl` por mtime dentro de `horasDeRelevancia`, sem ler conteúdo
+      antes de filtrar. Reconstrói o `cwd` a partir do transcript, já que o slug não é
+      reversível com segurança.
+      *Aceite:* sessão headless — que não aparece no registro — é descoberta. Um `~/.claude`
+      falso com 500 transcripts é filtrado sem parse de conteúdo.
+- [ ] **S1-T9 — Fusão das duas estratégias.** União deduplicada por `sessionId`; sessão vista só
+      pela varredura entra com `pid: null` e estado `desconhecido`, e nunca é candidata a
+      encerramento de processo.
+      *Aceite:* sessão presente nas duas origens aparece **uma** vez, com os campos fundidos.
 - [ ] **S1-T4 — `adaptadores/transcricao`.** Parser streaming; últimos prompts, arquivos
       tocados, última atividade.
 - [ ] **S1-T7 — Detecção precoce de sessão sem transcript.** Notificação uma vez por
