@@ -17,6 +17,14 @@
  * `type` e `subtype` ficam como string livre, não literal: é a saída documentada do modo
  * `--output-format json` do `claude -p` (D-011, D-015), mas sem confirmação empírica nesta
  * tarefa de que os valores observados aqui esgotam o conjunto possível.
+ *
+ * **Reconferido contra `docs/spikes/A-resume-headless.md`** depois da correção do recorte
+ * enganoso que o documento trazia (review de S0-T5): a saída real tem 20 campos de primeiro
+ * nível, e os 12 exigidos abaixo estão todos entre eles — nenhum campo obrigatório aqui é
+ * inventado. `api_error_status`, `duration_api_ms`, `fast_mode_state`, `stop_reason`,
+ * `terminal_reason`, `time_to_request_ms`, `ttft_ms` e `ttft_stream_ms` também aparecem na saída
+ * real mas ficam de fora do schema por não terem uso definido ainda — descartados pelo
+ * `z.object()` padrão, não um problema.
  */
 import { z } from 'zod';
 
