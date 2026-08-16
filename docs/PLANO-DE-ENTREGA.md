@@ -63,21 +63,51 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 - [ ] **S1-T0 — Tornar os guards insensíveis ao estado da árvore.** Vem antes de tudo: guard
       instável mina toda tarefa seguinte, porque um vermelho que ninguém confia vira um vermelho
       que todo mundo ignora.
-      **O que aconteceu:** no commit `6899f99` o CI falhou em **Linux e macOS** e passou no
-      Windows. O teste que caiu foi justamente o controle de D-019 (`aprova new Date(valor)`),
-      com `expected 2 to be +0` — o eslint viu 2 erros onde deveria ver zero. Passou a verde em
-      `c7a7bf6`, depois que S0-T6 serializou os guards. **A causa não foi provada.**
-      **Hipótese principal:** `limparResiduosDeTestesDeGuarda()` varre `src/` inteiro apagando
-      todo arquivo com prefixo `_`, e os fixtures usam esse prefixo — em paralelo, o `afterAll`
-      de um arquivo apaga o fixture em voo de outro.
-      - reproduzir a falha antes de corrigir: rodar os guards com paralelismo ligado em Linux
-        até quebrar, e **registrar a saída bruta do eslint**, não só a contagem
+      **O que aconteceu:** no commit `6899f99` o CI falhou em Linux e macOS e passou no Windows.
+      O teste que caiu foi o controle de D-019 (`aprova new Date(valor)`), com
+      `expected 2 to be +0` — o eslint viu 2 erros onde deveria ver zero.
+
+      **CUIDADO: não é problema de plataforma.** A primeira leitura foi essa e estava errada.
+      Reproduzido com paralelismo forçado nos dois sistemas:
+
+      | | com `--file-parallelism` |
+      |---|---|
+      | Linux (container) | **13 de 54 falham** |
+      | Windows (local) | **11 de 54 falham** |
+
+      O Windows nunca foi imune; teve sorte de timing naquela execução do CI. É uma **corrida**,
+      e a serialização do S0-T6 a **mascara**, não a corrige.
+
+      **Causa:** os arquivos de guard escrevem fixtures na árvore real de `src/` e as asserções
+      de controle exigem "zero erros". Rodando em paralelo, um controle enxerga a violação que
+      outro arquivo acabou de escrever. `limparResiduosDeTestesDeGuarda()` piora, varrendo `src/`
+      inteiro e apagando tudo com prefixo `_` — inclusive fixture em voo de outro arquivo.
+
+      **Como reproduzir** (recipe pronta, use antes e depois de corrigir):
+      ```
+      npx vitest run --project guardas --file-parallelism
+      ```
       - eliminar a dependência do estado global: fixture em diretório próprio por arquivo de
         teste, limpeza restrita a esse diretório, nunca varredura da árvore inteira
-      - quando a asserção for sobre contagem, imprimir as mensagens do eslint na falha — o log do
-        CI trouxe `expected 2 to be +0` e nenhuma pista de quais eram os 2 erros
-      *Aceite:* os guards passam nos 3 SOs **com paralelismo ligado**; a serialização deixa de ser
-      necessária para correção e vira, no máximo, escolha de desempenho.
+      - quando a asserção for sobre contagem, imprimir as mensagens da ferramenta na falha — o
+        log do CI trouxe `expected 2 to be +0` e nenhuma pista de quais eram os 2 erros
+      *Aceite:* `npx vitest run --project guardas --file-parallelism` passa, em Linux e Windows.
+      Aí a serialização deixa de ser correção e vira, no máximo, escolha de desempenho.
+
+- [ ] **S1-T0b — Pré-voo local em Linux com Docker.** O bug acima só apareceu depois do push,
+      porque não havia como rodar Linux localmente. Não precisava ser assim.
+      Script `npm run verificar:linux` rodando o portão dentro de `node:22-bookworm`.
+      Detalhe que não é opcional: `node_modules` **não pode** ser compartilhado entre host e
+      container — `vitest`, `esbuild` e `rollup` trazem binários específicos de plataforma. Use
+      volume nomeado montado em `/app/node_modules` e `npm ci` dentro do container; depois da
+      primeira vez fica rápido.
+      ```
+      docker run --rm -v "<repo>:/app" -v seeya-node-modules:/app/node_modules \
+        -w /app node:22-bookworm bash -lc "npm ci && npm run verificar"
+      ```
+      **Limite honesto:** cobre Linux, não macOS — não existe container de macOS. O CI nos 3 SOs
+      e a bateria manual do S5-T4 continuam necessários.
+      *Aceite:* o script reproduz o resultado do job Linux do CI, e está documentado no README.
 
 - [ ] **S1-T1 — `nucleo/` de domínio.** Tipos, portas e as regras puras de elegibilidade e de
       classificação viva/ociosa/encerrada. Sem I/O.
