@@ -14,10 +14,10 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "test": "vitest run --project unidade --project integracao",
+    "test": "vitest run --project unidade --project integracao --project guardas",
     "test:e2e": "vitest run --project e2e",
     "test:contrato": "vitest run --project contrato",
-    "cobertura": "vitest run --project unidade --project integracao --coverage",
+    "cobertura": "vitest run --project unidade --project integracao --project guardas --coverage",
     "lint": "eslint .",
     "dependencias": "depcruise src --config .dependency-cruiser.cjs",
     "format": "prettier --write .",
