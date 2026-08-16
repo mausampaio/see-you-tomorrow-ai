@@ -1,34 +1,84 @@
-# see-you-tomorrow
+# See You Tomorrow AI
 
-CLI `seeya`: descobre sessões do Claude Code na máquina, captura o estado de cada uma no fim do
-dia e retoma no dia seguinte.
+O dia acaba com várias sessões de IA em andamento, em projetos diferentes. No dia seguinte, o
+caro não é retomar o trabalho — é reconstruir o contexto de cada uma.
 
-Projeto em desenvolvimento inicial (Sprint 0 — fundação). Ainda não há comandos de negócio;
-apenas o esqueleto do projeto e `seeya --version`.
+**See You Tomorrow AI** descobre as sessões de Claude Code da sua máquina, captura o estado de
+cada uma no fim do dia, gera um plano para amanhã, e no dia seguinte retoma de onde parou.
+
+O comando se chama **`seeya`**.
+
+```bash
+seeya sessoes        # o que está aberto agora
+seeya encerrar-dia   # captura tudo e planeja amanhã
+seeya iniciar-dia    # retoma de onde parou
+```
+
+> **Estado: em desenvolvimento inicial (Sprint 0 — fundação).** Nenhum comando de negócio existe
+> ainda; hoje só há o esqueleto do projeto e `seeya --version`. Os comandos acima são o alvo, não
+> o presente. Acompanhe em [`docs/PLANO-DE-ENTREGA.md`](docs/PLANO-DE-ENTREGA.md).
+
+## Como funciona
+
+O Claude Code registra as sessões vivas em `~/.claude/sessions/` e guarda o transcript de cada
+uma em `~/.claude/projects/`. O `seeya` lê essas duas fontes — e o estado do git de cada projeto,
+worktrees incluídos — para montar um handoff por sessão: o que estava sendo feito, o que ficou
+pendente e o que fazer amanhã.
+
+Ele **nunca fala com a sessão viva**. Não existe canal para injetar comando numa sessão
+interativa em execução, então a captura acontece por fora, num processo headless que enxerga a
+conversa inteira. Isso funciona mesmo para sessões que já morreram, e não gasta o contexto da
+sessão que está aberta. O porquê está em [`docs/DECISOES.md`](docs/DECISOES.md), D-001.
+
+Tudo que o `seeya` escreve fica em `~/.see-you-tomorrow/`. Ele não escreve dentro dos seus
+repositórios nem dentro de `~/.claude/`.
 
 ## Requisitos
 
 - Node.js >= 22
+- Claude Code instalado e autenticado
 
 ## Desenvolvimento
 
 ```bash
 npm install
-npm run build       # compila TypeScript para dist/
-npm test            # testes de unidade + integração
-npm run test:e2e    # testes end-to-end
-npm run test:contrato  # testes contra o ~/.claude real (não roda no CI padrão)
-npm run lint         # eslint
-npm run verificar    # tipos + lint + build + testes — o portão de qualidade
+npm run verificar   # o portão: tipos + lint + camadas + build + cobertura
 ```
+
+Os demais comandos:
+
+```bash
+npm run build          # compila TypeScript para dist/
+npm test               # unidade + integração
+npm run test:e2e       # end-to-end
+npm run test:contrato  # contra o ~/.claude real; não roda no CI padrão
+npm run lint           # eslint
+npm run dependencias   # dependency-cruiser: valida as fronteiras de camada
+npm run cobertura      # testes com cobertura e limites por diretório
+```
+
+### Antes de escrever código
+
+Leia [`CLAUDE.md`](CLAUDE.md). É o contrato de trabalho do projeto: as fronteiras de camada, o
+que nunca fazer, e quando parar e perguntar em vez de decidir sozinho. Vale tanto para agente
+quanto para humano.
 
 ## Documentação
 
-O contrato de trabalho e as decisões de arquitetura e produto vivem em `docs/`:
+| Arquivo | O que é |
+|---|---|
+| [`CLAUDE.md`](CLAUDE.md) | Contrato de trabalho e regras inegociáveis |
+| [`docs/DECISOES.md`](docs/DECISOES.md) | Decisões travadas, numeradas e com o porquê |
+| [`docs/ESPECIFICACAO.md`](docs/ESPECIFICACAO.md) | Comportamento de cada comando |
+| [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) | Camadas e a matriz de dependências permitidas |
+| [`docs/TESTES.md`](docs/TESTES.md) | A pirâmide de testes e a faixa de contrato |
+| [`docs/PLANO-DE-ENTREGA.md`](docs/PLANO-DE-ENTREGA.md) | Roteiro por sprint, tarefa a tarefa |
+| [`docs/FORA-DE-ESCOPO.md`](docs/FORA-DE-ESCOPO.md) | O que a v1 deliberadamente não faz |
+| [`docs/spikes/`](docs/spikes/) | Experimentos, com a saída bruta e o veredito |
 
-- `docs/DECISOES.md` — decisões travadas.
-- `docs/ARQUITETURA.md` — as camadas do projeto.
-- `docs/PLANO-DE-ENTREGA.md` — o roteiro de entrega.
+Este projeto depende de estruturas internas e não documentadas do Claude Code. Quando elas
+mudarem, a suíte de contrato é o que vai avisar — ver [`docs/TESTES.md`](docs/TESTES.md).
 
-Um README completo, com instruções de instalação e uso para quem não é do time, entra em
-S5-T3.
+## Licença
+
+MIT

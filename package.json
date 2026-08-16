@@ -1,7 +1,7 @@
 {
-  "name": "see-you-tomorrow",
+  "name": "see-you-tomorrow-ai",
   "version": "0.1.0",
-  "description": "CLI que descobre sessões do Claude Code, captura o estado no fim do dia e retoma no dia seguinte.",
+  "description": "Descobre sessoes de IA na maquina, captura o estado no fim do dia e retoma no dia seguinte.",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -40,5 +40,21 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.67.0",
     "vitest": "^4.1.10"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mausampaio/see-you-tomorrow-ai.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mausampaio/see-you-tomorrow-ai/issues"
+  },
+  "homepage": "https://github.com/mausampaio/see-you-tomorrow-ai#readme",
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "cli",
+    "handoff",
+    "produtividade",
+    "ia"
+  ]
 }
