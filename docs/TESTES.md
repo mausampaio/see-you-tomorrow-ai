@@ -43,7 +43,14 @@ O que precisa estar coberto com rigor, porque é onde os bugs vão doer:
 - **Exclusão de forks (D-012)**: sessão cujo `sessionId` está em `forks.json` nunca é elegível.
   Este teste é o que impede o laço de realimentação — não pode ser removido.
 - **Detecção precoce sem transcript**: notifica na primeira vez que vê o `sessionId`, e não
-  notifica de novo nas passagens seguintes.
+  notifica de novo nas passagens seguintes. A mensagem inclui a correção (D-018).
+- **Sessão suprimida não tenta captura profunda**: sessão registrada sem transcript, com
+  `capturaProfunda: true`, cai para enxuto sem tentar `--resume` (D-018).
+- **Sanitização de ambiente (D-017)**: o `env` entregue ao processo filho não contém
+  `CLAUDE_CODE_CHILD_SESSION`, `CLAUDE_CODE_SESSION_ID`, `CLAUDE_PID` nem `CLAUDECODE`, mesmo
+  quando o processo do `seeya` os tem. Modo enxuto passa `--no-session-persistence`; modo
+  profundo define `CLAUDE_CODE_FORCE_SESSION_PERSISTENCE=1`. Este teste é o que impede o modo
+  profundo de falhar em silêncio quando o daemon sobe de dentro de uma sessão Claude.
 
 Cobertura mínima: **`nucleo/` 95%**, demais diretórios de produção **80%**. Configurado por
 diretório no vitest, e o CI falha abaixo disso.
@@ -100,8 +107,14 @@ Testes de contrato, marcados para **não** rodar no CI padrão (`vitest --projec
 - O schema zod de `~/.claude/sessions/*.json` valida os arquivos reais da máquina.
 - O `.jsonl` real tem entradas `user` e `assistant` com os campos que o parser usa.
 - `claude --help` ainda expõe `--resume`, `--fork-session`, `-p`, `--output-format`,
-  `--model`, `--max-budget-usd`.
+  `--model`, `--max-budget-usd`, `--no-session-persistence`.
 - `claude agents --json` ainda devolve array com `pid`, `sessionId`, `cwd`.
+- `CLAUDE_CODE_FORCE_SESSION_PERSISTENCE` ainda é reconhecido pela versão instalada.
+
+**Registrar sempre a versão contra a qual o contrato rodou.** O Spike D mostrou que o
+comportamento muda entre versões (2.1.201 × 2.1.233) e que **duas versões coexistem na mesma
+máquina** — CLI no PATH e a empacotada na extensão do VS Code. Um contrato verde sem a versão
+anotada não prova nada.
 
 Rodar antes de cada release e quando o Claude Code atualizar. Falha aqui = issue, não hotfix
 às cegas.

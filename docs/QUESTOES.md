@@ -102,4 +102,17 @@ Get-ChildItem ~/.claude/projects -Recurse -Filter *.jsonl |
 Get-Content ~/.claude/settings.json; Get-Content .claude/settings.json
 ```
 
-**Resposta:** aguardando coleta.
+**Resposta:** **FECHADA em 2026-08-16 — a hipótese original estava certa.** O usuário trouxe a
+mensagem exibida pela sessão da UI:
+
+> Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker
+> · restart with `CLAUDE_CODE_FORCE_SESSION_PERSISTENCE=1` to keep future transcripts
+
+O Spike D não reproduziu porque rodou o CLI 2.1.201, que **não tem o mecanismo**; a sessão da UI
+roda 2.1.233, que tem. Inspeção dos dois binários confirma (`nested_marker`,
+`tengu_persistence_suppressed` e `transcript-writer-degraded` só existem na 2.1.233).
+
+Descobriu-se um terceiro estado degradado não previsto: **transcript incompleto** por falha de
+escrita, indetectável de fora. Gerou D-017 e D-018, e esse cenário tem correção imediata
+sem depender do `seeya`: definir `CLAUDE_CODE_FORCE_SESSION_PERSISTENCE=1` no ambiente do script
+do `agente-interno:ui`.

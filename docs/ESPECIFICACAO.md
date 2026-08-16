@@ -124,15 +124,26 @@ handoff com o que responder. Um handoff é válido se qualquer fonte produzir co
 O handoff declara em `fontes: ["git", "transcript"]` de onde veio a informação, e o briefing
 sinaliza sessões cuja evidência é parcial.
 
-### Sessão sem transcript
+### Transcript ausente ou incompleto
 
-Cenário real e legítimo: agentes de execução rodam com persistência desativada de propósito
-porque o resultado deles vive em outro lugar — uma issue, um worktree, um PR. O `seeya` trata
-isso como caso normal, não como falha.
+O Claude Code 2.1.233 degrada a persistência em três situações, e o `seeya` trata as três como
+casos normais, não como falhas:
 
-- **Detecção precoce.** Assim que uma sessão registrada é vista sem transcript, o `seeya`
-  notifica na hora, não no encerramento. Só dá para reagir enquanto o contexto ainda existe.
-  A notificação é uma vez por `sessionId`, para não virar ruído.
+| Causa | Efeito | Detectável por |
+|---|---|---|
+| Marcador de sessão filha herdado | transcript não existe | sessão registrada sem `.jsonl` |
+| `CLAUDE_CODE_SKIP_PROMPT_HISTORY` | transcript não existe | idem |
+| Escrita do transcript falhando | transcript **incompleto** | não detectável de fora |
+
+Nos dois primeiros, o próprio produto declara que **`--resume` não encontra a sessão** — logo a
+captura profunda é impossível, não apenas pior. O terceiro é o mais traiçoeiro: o arquivo existe
+e parece íntegro. Por isso o handoff **nunca** afirma que o transcript é completo; ele declara
+apenas quais fontes responderam.
+
+- **Detecção precoce com diagnóstico.** Assim que uma sessão registrada é vista sem transcript,
+  o `seeya` notifica na hora — não no encerramento — informando a causa provável e a correção
+  (`CLAUDE_CODE_FORCE_SESSION_PERSISTENCE=1`). Uma vez por `sessionId`, para não virar ruído.
+  Ver D-018.
 - **Captura.** Cai para git + registro. Com worktree ativo o handoff continua bom: qual
   worktree, qual branch, o que foi commitado hoje, o que ficou sujo.
 - **Marcação.** `origem: "semTranscript"`. Não é erro, não polui a saída com aviso de falha.

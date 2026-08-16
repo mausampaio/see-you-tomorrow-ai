@@ -182,14 +182,18 @@ registrou. Qualquer outro arquivo ali é intocável.
 
 ## D-013 — Transcript é uma fonte de evidência, não a fonte
 
-**Contexto.** Existem sessões sem transcript utilizável. Caso real: as sessões do agente
-`agente-interno`, no trabalho do usuário, não deixam transcript. **A causa não é conhecida** — a
-hipótese de "sessão filha desabilita persistência" foi testada e falsificada no Spike D, e Q-003
-segue aberta. O que se sabe é que o estado real dessas sessões vive em outro lugar: numa issue e
-num **worktree** criado no projeto, onde tudo é guardado antes de encerrar.
+**Contexto.** Existem sessões sem transcript utilizável, e a causa é **conhecida** desde o Spike
+D: o Claude Code 2.1.233 suprime a persistência em três situações — marcador de sessão filha
+herdado, `CLAUDE_CODE_SKIP_PROMPT_HISTORY` definido, e falha de escrita do transcript. Nos dois
+primeiros casos o próprio produto avisa que **`--resume` não encontrará a sessão**. No terceiro,
+o transcript existe mas está incompleto, sem sinal externo que o distinga de uma sessão curta.
 
-A decisão abaixo não depende da causa. Mesmo que Q-003 revele algo corrigível, sessão com
-transcript ausente, truncado ou ilegível continua sendo um caso a tratar.
+Caso real: as sessões do agente `agente-interno` caem no primeiro caso. O estado real delas vive numa
+issue e num **worktree** criado no projeto.
+
+A decisão abaixo não depende da causa: mesmo com a supressão corrigida via
+`CLAUDE_CODE_FORCE_SESSION_PERSISTENCE=1`, transcript ausente, incompleto ou ilegível continua
+sendo caso a tratar — e o worktree continua sendo a fonte mais informativa desse tipo de sessão.
 
 **Decisão.** A captura coleta evidências de **várias fontes independentes**, e o transcript é
 apenas uma delas. As fontes da v1, por ordem de confiabilidade:
@@ -268,3 +272,50 @@ Sessão vista pelas duas tem os dados fundidos; sessão vista só pela varredura
   já que o slug do diretório é irreversível com segurança.
 - Esta decisão substitui a suposição, agora sabidamente errada, de que o registro seria
   suficiente.
+
+---
+
+## D-017 — O `seeya` declara o ambiente que dá ao `claude`, nunca herda
+
+**Contexto.** O Spike D mostrou que `CLAUDE_CODE_CHILD_SESSION` é herdado por todo processo
+filho e suprime o transcript na 2.1.233. O `seeya` spawna `claude` para gerar handoffs, e o
+daemon muito provavelmente será iniciado de dentro de uma sessão Claude — o projeto é
+desenvolvido assim. Sem tratamento, o `seeya` contamina as próprias invocações com estado
+ambiental que ele não escolheu.
+
+**Decisão.** Ao spawnar `claude`, o `seeya` monta o ambiente **explicitamente**, partindo do
+ambiente do sistema e **removendo** as variáveis de sessão herdadas: `CLAUDE_CODE_CHILD_SESSION`,
+`CLAUDE_CODE_SESSION_ID`, `CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_PID`, `CLAUDECODE`,
+`CLAUDE_AGENT_SDK_VERSION`. Depois define o que precisa, por modo:
+
+| Modo | Persistência desejada | Como |
+|---|---|---|
+| Enxuto (padrão) | **nenhuma** — a sessão é descartável | `--no-session-persistence` |
+| Profundo | **sim** — o fork precisa existir | `CLAUDE_CODE_FORCE_SESSION_PERSISTENCE=1` |
+
+**Consequências.**
+- **Simplifica D-012**: no modo enxuto, que é o padrão, nenhum fork ou transcript é criado.
+  O registro e a limpeza de forks passam a valer só para o modo profundo.
+- Sem isso, o modo profundo falharia silenciosamente quando o daemon fosse iniciado de dentro
+  de uma sessão Claude — o fork não seria criado e `--resume` não acharia nada.
+- Teste de integração dedicado: verificar o `env` entregue ao processo filho em cada modo.
+
+---
+
+## D-018 — Detectar a supressão e dizer como resolver
+
+**Decisão.** Quando o `seeya` encontra uma sessão registrada sem transcript, ele não se limita a
+degradar o handoff (D-013): informa **a causa provável e a correção**, uma vez por `sessionId`.
+
+```
+Sessão "agente-interno-ui-03" (c:\work\projeto) está sem transcript.
+Causa provável: marcador de sessão filha herdado (sessão aberta de dentro de outra sessão).
+Correção: definir CLAUDE_CODE_FORCE_SESSION_PERSISTENCE=1 no ambiente de quem abre a sessão.
+O handoff desta sessão usará git e worktree como fonte.
+```
+
+**Consequências.**
+- O `seeya` registra a versão do Claude Code observada em cada handoff — o comportamento varia
+  entre versões na mesma máquina (2.1.201 e 2.1.233 coexistindo foi o caso real).
+- A captura profunda (D-011) detecta sessão suprimida e **cai para enxuto** em vez de tentar um
+  `--resume` que o produto já declara que vai falhar.

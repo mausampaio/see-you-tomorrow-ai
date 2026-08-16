@@ -1,77 +1,99 @@
-# Spike D — Sessão filha desabilita transcript? E sessão headless é descoberta?
+# Spike D — Supressão de transcript e descoberta de sessão headless
 
 **Data:** 2026-08-16 · **Plataforma:** Windows 11 · **Perguntas:** Q-002, Q-003
 
+> **Correção.** A primeira versão deste documento concluiu que a hipótese da sessão filha estava
+> *falsificada*. Estava errado: o teste rodou o CLI 2.1.201, que **não tem o mecanismo**. A
+> conclusão correta está abaixo. O erro fica registrado porque a lição vale: um experimento que
+> não reproduz um comportamento relatado testa também a própria montagem.
+
 ## Hipótese testada
 
-Relato do usuário: ao chamar `agente-interno:ui` de dentro de uma sessão, o script que sobe o Claude
-gera uma sessão que o Claude Code entende como **filha**, e por isso desabilita o transcript.
+Ao chamar `agente-interno:ui` de dentro de uma sessão, o Claude entende a sessão nova como **filha** e
+desabilita o transcript.
 
-O ambiente de uma sessão Claude de fato carrega o sinal, e ele é herdado por todo processo
-filho:
+O ambiente de uma sessão Claude carrega o sinal, herdado por todo processo filho:
 
 ```
 CLAUDE_CODE_CHILD_SESSION = 1
 CLAUDE_CODE_SESSION_ID    = 11111111-…
-CLAUDE_CODE_ENTRYPOINT    = claude-vscode
 CLAUDE_PID                = 40001
 CLAUDECODE                = 1
-CLAUDE_AGENT_SDK_VERSION  = 0.3.233
 ```
 
-## Método
+## Primeira tentativa, inconclusiva
 
-A mesma invocação, duas vezes, de dentro de uma sessão Claude viva: uma herdando
-`CLAUDE_CODE_CHILD_SESSION=1`, outra com a variável removida.
+`claude -p` executado duas vezes de dentro de uma sessão viva, com e sem
+`CLAUDE_CODE_CHILD_SESSION=1`. **Ambas criaram transcript.** Isso pareceu falsificar a hipótese.
 
-```
-claude -p --model sonnet --output-format json "responda so: ok"
-```
+Não falsificou: o `claude` do PATH é **2.1.201**, e a sessão da UI que exibe o aviso é
+**2.1.233** (empacotada na extensão do VS Code). Duas versões diferentes na mesma máquina.
 
-Depois, verificação de existência de `<session_id>.jsonl` em `~/.claude/projects/`.
+## Confirmação por inspeção dos binários
 
-## Resultado
+Busca pelos marcadores nos dois binários:
 
-| Cenário | `session_id` | Transcript criado? |
+| Marcador | 2.1.201 (CLI do PATH) | 2.1.233 (extensão VS Code) |
 |---|---|---|
-| **Com** `CLAUDE_CODE_CHILD_SESSION=1` | `33333333-…` | **SIM** |
-| **Sem** a variável | `44444444-…` | **SIM** |
+| `nested_marker` | ausente | **presente** |
+| `tengu_persistence_suppressed` | ausente | **presente** |
+| `persistence-suppressed` | ausente | **presente** |
+| `transcript-writer-degraded` | ausente | **presente** |
+| `CLAUDE_CODE_SKIP_PROMPT_HISTORY` | presente | presente |
 
-**Hipótese falsificada.** Ser sessão filha não desabilita o transcript. `CLAUDE_CODE_CHILD_SESSION`
-não tem efeito sobre a persistência — pelo menos não para `claude -p` no Windows, nesta versão.
+**Veredito: hipótese confirmada.** A supressão por marcador de sessão filha é funcionalidade
+introduzida entre 2.1.201 e 2.1.233. O teste anterior rodou uma versão que não a possui.
 
-A causa da ausência de transcript no `agente-interno` é outra, e continua desconhecida. Ver Q-003.
+## O mecanismo, extraído do binário 2.1.233
 
-## Achado não previsto, e mais importante que a hipótese
+Existem **três** estados degradados distintos, não um:
 
-**Nenhuma das duas sessões headless criou entrada em `~/.claude/sessions/`.** Depois de duas
-invocações completas e bem-sucedidas, o registro continha apenas a sessão interativa
-(`40001.json`).
+### 1. `nested_marker` — marcador de sessão filha herdado
+> Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker
+> · restart with `CLAUDE_CODE_FORCE_SESSION_PERSISTENCE=1` to keep future transcripts
 
-Isso responde a parte central de Q-002:
+### 2. `skip_prompt_history` — variável explícita
+> Transcript saving is off — CLAUDE_CODE_SKIP_PROMPT_HISTORY is set
+> · **--resume will not find this session**; if unintended, unset it and restart
 
-> **Sessão headless (`claude -p`) deixa transcript, mas não se registra como processo.**
+### 3. `transcript-writer-degraded` — escrita falhando
+> Transcript writes are failing (`<código>`)
+> · recent messages may not be saved for resume
 
-Consequência direta: uma descoberta baseada só no registro — o desenho atual — **é cega para
-toda sessão headless**. Qualquer agente de execução que rode `claude -p`, agente-interno incluído,
-passaria despercebido, mesmo tendo transcript.
+O terceiro é o mais perigoso para o `seeya` e eu não sabia que existia: **o transcript existe,
+mas está incompleto.** Não há como distinguir "sessão curta" de "sessão longa com escrita
+falhando" olhando só o arquivo.
 
-A descoberta precisa de duas estratégias combinadas (D-016):
+## Consequências para o projeto
 
-| Estratégia | Enxerga | Dá liveness/PID? |
-|---|---|---|
-| Registro `~/.claude/sessions/*.json` | interativas | sim |
-| Varredura de `~/.claude/projects/**/*.jsonl` por mtime | interativas **e** headless | não |
+1. **A captura profunda é impossível em sessão suprimida.** O próprio produto declara que
+   `--resume` não encontra a sessão. Não é degradação, é indisponibilidade — o modo profundo
+   (D-011) tem de detectar e cair para o enxuto.
+2. **O `seeya` contamina o que ele mesmo executa.** Se o daemon subir de dentro de uma sessão
+   Claude — o que é provável, já que o projeto é desenvolvido assim — todo `claude` que ele
+   spawnar herda `CLAUDE_CODE_CHILD_SESSION`. Ver D-017.
+3. **Esse cenário tem solução imediata**, independente do `seeya`: definir
+   `CLAUDE_CODE_FORCE_SESSION_PERSISTENCE=1` no ambiente do script do `agente-interno:ui`.
+4. **Transcript incompleto vira caso de teste**, junto com transcript ausente.
+5. **A versão do Claude Code importa** e varia na mesma máquina. O `seeya` registra em cada
+   handoff a versão observada, e os testes de contrato passam a registrar contra qual versão
+   rodaram.
 
-## Achado secundário: confirmação da derivação do slug
+## Achado independente: sessão headless não se registra
 
-O `cwd` do teste virou o diretório
-`C--Users-<usuario>-AppData-Local-Temp-claude-…-scratchpad-spikeD`. A regra de derivação é
-substituir separadores e `:` por `-`. Continua valendo a decisão de **procurar o arquivo por
-`sessionId` em todos os slugs** em vez de confiar na derivação.
+**Nenhuma das duas invocações `claude -p` criou entrada em `~/.claude/sessions/`**, apesar de
+ambas terem criado transcript. Depois de duas execuções completas, o registro continha apenas a
+sessão interativa.
 
-## Limites deste spike
+Isso responde a parte central de Q-002 e vale para as duas versões:
 
-Testado apenas `claude -p` invocado por PowerShell filho de uma sessão VS Code, no Windows, com
-Claude Code 2.1.201. O caminho do `agente-interno` pode diferir: script próprio, Agent SDK, flags
-explícitas ou `settings.json` do repositório. Nada aqui prova o que acontece **lá**.
+> Sessão headless deixa transcript, mas **não** se registra como processo.
+
+Descoberta baseada só no registro é cega para todo agente de execução. Resolvido por D-016
+(registro + varredura de transcripts).
+
+## Achado secundário: derivação do slug
+
+O `cwd` do teste virou `C--Users-<usuario>-AppData-Local-Temp-…-scratchpad-spikeD`: separadores e
+`:` viram `-`. Continua valendo procurar o arquivo por `sessionId` em todos os slugs em vez de
+confiar na derivação.
