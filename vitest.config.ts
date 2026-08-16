@@ -74,6 +74,13 @@ export default defineConfig({
         test: {
           name: 'contrato',
           include: ['tests/contrato/**/*.teste.ts'],
+          /**
+           * Escreve a versão do Claude Code instalada direto no stdout antes de qualquer teste
+           * rodar — é o que garante docs/TESTES.md ("registrar sempre a versão") no caminho
+           * feliz do reporter padrão, que não imprime nome de teste quando tudo passa. Ver
+           * tests/contrato/_versao-global-setup.ts.
+           */
+          globalSetup: ['tests/contrato/_versao-global-setup.ts'],
         },
       },
     ],

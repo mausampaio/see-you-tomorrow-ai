@@ -41,7 +41,7 @@ O objetivo aqui não é entregar produto, é **derrubar as incertezas antes que 
       inconsistentes entre SOs: a spec passou a **não depender delas**. macOS e Linux
       documentados, não executados — S5-T4 continua obrigatório.
 
-- [ ] **S0-T5 — Schemas e contrato.** Schemas zod de tudo que vem do Claude Code, mais a suíte
+- [~] **S0-T5 — Schemas e contrato.** Schemas zod de tudo que vem do Claude Code, mais a suíte
       `contrato` de `docs/TESTES.md`.
       *Aceite:* contrato roda verde contra o `~/.claude` real da máquina.
 
