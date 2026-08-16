@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -71,4 +71,30 @@ export function escreverArquivoTemporario(caminhoRelativoAoProjeto: string, cont
 /** Apaga um arquivo temporário criado por escreverArquivoTemporario. Nunca lança se já sumiu. */
 export function apagarArquivoTemporario(caminhoAbsoluto: string): void {
   rmSync(caminhoAbsoluto, { force: true });
+}
+
+/**
+ * Rede de segurança para o caso de o processo ser morto no meio de um teste (timeout de CI, por
+ * exemplo) antes do `afterEach` apagar o arquivo violador. Todo arquivo temporário desta suíte
+ * começa com `_` (convenção deste diretório) — nenhum arquivo de produção real em src/ começa
+ * com `_`, então varrer e apagar por esse prefixo é seguro. Chamada num `afterAll` de cada
+ * arquivo de teste que escreve em src/.
+ */
+export function limparResiduosDeTestesDeGuarda(): void {
+  varrerEApagarComPrefixo(path.join(RAIZ_DO_PROJETO, 'src'), '_');
+}
+
+function varrerEApagarComPrefixo(diretorio: string, prefixo: string): void {
+  if (!existsSync(diretorio)) {
+    return;
+  }
+  const entradas = readdirSync(diretorio, { withFileTypes: true });
+  for (const entrada of entradas) {
+    const caminho = path.join(diretorio, entrada.name);
+    if (entrada.isDirectory()) {
+      varrerEApagarComPrefixo(caminho, prefixo);
+    } else if (entrada.isFile() && entrada.name.startsWith(prefixo)) {
+      rmSync(caminho, { force: true });
+    }
+  }
 }
