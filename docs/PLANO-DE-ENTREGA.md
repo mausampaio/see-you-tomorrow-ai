@@ -14,16 +14,20 @@ Legenda: `[ ]` a fazer · `[~]` em andamento · `[x]` aprovado no review
 
 O objetivo aqui não é entregar produto, é **derrubar as incertezas antes que elas custem caro**.
 
-- [~] **S0-T1 — Scaffold.** Node 22, TS estrito ESM, vitest, eslint, prettier, commander, zod.
-      `package.json` com `bin: { seeya }`. Estrutura de pastas de `docs/ARQUITETURA.md` criada
-      vazia com um `index.ts` por camada.
-      *Aceite:* `npm run build`, `npm test`, `npm run lint` passam num repo sem código de negócio.
+- [x] **S0-T1 — Scaffold.** Aprovado no review em 2026-08-16. `npm run verificar` verde, CLI
+      roda, estrutura de camadas conforme `docs/ARQUITETURA.md`, sem escopo adiantado.
 
 - [ ] **S0-T2 — Guards executáveis.** `dependency-cruiser` com as regras de camada;
       `no-restricted-imports` proibindo `node:*` em `nucleo/` e proibindo `Date`/`setTimeout`
       fora de `adaptadores/relogio`; limites de cobertura por diretório; husky + lint-staged;
       workflow de CI rodando lint + tipos + unidade + integração nos 3 SOs.
-      *Aceite:* commits propositalmente violadores são **rejeitados**, com o teste que prova isso.
+      **Duas dependências novas aprovadas pelo PO nesta tarefa:**
+      `@types/node` (sem ele nada de `node:*` compila, e o Sprint 1 inteiro depende disso — a
+      lista de S0-T1 estava incompleta, erro meu) e `typescript-eslint` com
+      `recommendedTypeChecked` no lugar de `recommended`, já que o Sprint 1 traz a lógica onde
+      regras type-aware passam a valer.
+      *Aceite:* commits propositalmente violadores são **rejeitados**, com o teste que prova
+      isso; e um arquivo probe usando `node:fs` compila.
 
 - [x] **S0-T3 — SPIKE A.** Feito pelo PO em 2026-08-16. Veredito em
       `docs/spikes/A-resume-headless.md`: funciona com a sessão viva, transcript original
