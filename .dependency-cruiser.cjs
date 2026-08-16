@@ -1,6 +1,10 @@
 /**
- * Regras de camada de docs/ARQUITETURA.md, impostas por dependency-cruiser. Ver S0-T2 em
- * docs/PLANO-DE-ENTREGA.md.
+ * Regras de camada de docs/ARQUITETURA.md (tabela "De → Para", D-020), impostas por
+ * dependency-cruiser. Ver S0-T2 em docs/PLANO-DE-ENTREGA.md.
+ *
+ * `cli/` é a única raiz de composição (D-020): só ele nomeia adapter concreto e injeta em
+ * aplicacao/ e agendador/. Por isso aplicacao/ e agendador/ não podem importar adaptadores/
+ * diretamente — só através das portas declaradas em nucleo/portas.ts.
  *
  * Arquivo em CommonJS (`.cjs`) de propósito: o pacote é `"type": "module"`, e o carregador de
  * config do dependency-cruiser é mais previsível com `module.exports` do que com um `.js` ESM.
@@ -36,14 +40,26 @@ module.exports = {
       to: { path: '^src/(aplicacao|cli|agendador)' },
     },
     {
-      name: 'aplicacao-nao-importa-cli-ou-agendador',
+      name: 'aplicacao-nao-importa-adaptadores-cli-ou-agendador',
       severity: 'error',
       comment:
         'aplicacao/ define os casos de uso; cli/ e agendador/ são quem os chama (a seta aponta ' +
-        'agendador → aplicacao em ARQUITETURA.md, nunca o contrário). Não pode ser o contrário ' +
-        '— mova o que cli/ ou agendador/ precisam para dentro do caso de uso.',
+        'agendador → aplicacao em ARQUITETURA.md, nunca o contrário) — não pode ser o ' +
+        'contrário. E aplicacao/ não pode importar adaptadores/ concreto (D-020): dependa só ' +
+        'da porta declarada em nucleo/portas.ts; quem injeta a implementação é cli/, a única ' +
+        'raiz de composição.',
       from: { path: '^src/aplicacao' },
-      to: { path: '^src/(cli|agendador)' },
+      to: { path: '^src/(adaptadores|cli|agendador)' },
+    },
+    {
+      name: 'agendador-nao-importa-adaptadores',
+      severity: 'error',
+      comment:
+        'agendador/ recebe as dependências injetadas por cli/ (D-020, a única raiz de ' +
+        'composição) — não pode nomear um adaptador concreto direto. Dependa da porta ' +
+        'declarada em nucleo/portas.ts.',
+      from: { path: '^src/agendador' },
+      to: { path: '^src/adaptadores' },
     },
     {
       name: 'sem-dependencia-circular',
