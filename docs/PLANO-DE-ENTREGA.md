@@ -41,9 +41,20 @@ O objetivo aqui não é entregar produto, é **derrubar as incertezas antes que 
       inconsistentes entre SOs: a spec passou a **não depender delas**. macOS e Linux
       documentados, não executados — S5-T4 continua obrigatório.
 
-- [~] **S0-T5 — Schemas e contrato.** Schemas zod de tudo que vem do Claude Code, mais a suíte
-      `contrato` de `docs/TESTES.md`.
-      *Aceite:* contrato roda verde contra o `~/.claude` real da máquina.
+- [x] **S0-T5 — Schemas e contrato.** Aprovado no review em 2026-08-16. Schemas do registro de
+      sessões, do `agents --json`, do transcript e da saída do `claude -p`, escritos depois de
+      conferir 2808 entradas reais desta máquina — que já trazem campos não previstos pela spec
+      (`status`, `bridgeSessionId`, `nameSource`…), confirmando na prática o princípio de
+      tolerar o desconhecido. Suíte de contrato roda contra o `~/.claude` real, imprime a versão
+      do Claude Code no caminho feliz, e foi **verificada capaz de falhar** quando o schema
+      diverge da realidade. `procStart` fica como string: os valores reais excedem
+      `Number.MAX_SAFE_INTEGER`. Gerou D-021.
+
+**Sprint 0 fechado.** As quatro incertezas que podiam custar caro foram derrubadas antes de
+existir código de negócio: o `--resume` headless funciona e preserva o transcript (Spike A), a
+notificação nativa não precisa de dependência (Spike B), a supressão de transcript tem causa
+conhecida e correção (Spike D), e as fronteiras de camada são impostas por ferramenta, não por
+boa vontade. Onze decisões nasceram de medição, não de opinião.
 
 ---
 
