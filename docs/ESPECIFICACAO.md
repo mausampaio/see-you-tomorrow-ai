@@ -208,10 +208,17 @@ O briefing do dia (`resumo.md`) é gerado a partir dos handoffs, em markdown leg
 ## Notificações
 
 Nativas do SO, por adapter (`docs/ARQUITETURA.md`). Casos: aviso prévio, encerramento
-executado, encerramento com falhas parciais, daemon caiu. Onde o SO suportar ações na
-notificação, oferecer *Adiar 30min* e *Pular hoje*; onde não suportar, o texto instrui o
-comando equivalente. Se nenhuma notificação nativa estiver disponível, cai para stderr e nunca
-quebra o fluxo.
+executado, encerramento com falhas parciais, sessão sem transcript detectada (D-018), daemon
+caiu.
+
+**Nenhum caso de uso depende de ação clicável na notificação.** O Spike B mostrou que ações são
+inconsistentes entre os três SOs e caras em dois deles. Toda notificação é informativa e sempre
+diz o comando equivalente (`seeya adiar +30m`). Onde a ação for barata e confiável, entra como
+conveniência — nunca como único caminho.
+
+`Notificador` tem contrato mínimo **sem ações**; ações são capacidade opcional que o backend
+declara. Se nenhuma notificação nativa estiver disponível, cai para stderr e nunca quebra o
+fluxo.
 
 ## Requisitos não funcionais
 

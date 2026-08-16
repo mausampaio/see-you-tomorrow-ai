@@ -30,9 +30,10 @@ O objetivo aqui não é entregar produto, é **derrubar as incertezas antes que 
       preservado. Gerou D-011, D-012 e D-015.
       *Complemento feito:* `docs/spikes/C-alternativa-barata-e-transcript-desativado.md`.
 
-- [ ] **S0-T4 — SPIKE B.** Notificação nativa nos 3 SOs: escolher biblioteca ou chamada direta,
-      testar ações clicáveis, medir dependências externas necessárias.
-      *Aceite:* `docs/spikes/B-notificacoes.md` com o que funciona em cada SO e o fallback.
+- [x] **S0-T4 — SPIKE B.** Feito pelo PO em 2026-08-16. Veredito em `docs/spikes/B-notificacoes.md`.
+      Windows exibe toast sem dependência nenhuma (WinRT via PowerShell). Ações clicáveis são
+      inconsistentes entre SOs: a spec passou a **não depender delas**. macOS e Linux
+      documentados, não executados — S5-T4 continua obrigatório.
 
 - [ ] **S0-T5 — Schemas e contrato.** Schemas zod de tudo que vem do Claude Code, mais a suíte
       `contrato` de `docs/TESTES.md`.
@@ -109,7 +110,9 @@ O objetivo aqui não é entregar produto, é **derrubar as incertezas antes que 
 
 ## Sprint 4 — Automatizar
 
-- [ ] **S4-T1 — `adaptadores/notificacao`** conforme o Spike B, com a cadeia de fallback.
+- [ ] **S4-T1 — `adaptadores/notificacao`** conforme o Spike B, com a cadeia de fallback e o
+      contrato mínimo **sem ações**. Validação manual do `activationType="protocol"` com esquema
+      `seeya://` no Windows; se não se provar, o produto segue sem ações clicáveis e nada quebra.
 - [ ] **S4-T2 — `nucleo/agenda`.** Puro: dado config + estado + agora, o que deve acontecer.
       É aqui que moram os testes de horário de verão e de máquina suspensa.
 - [ ] **S4-T3 — Daemon.** Loop, lockfile de instância única, recuperação de disparo atrasado.

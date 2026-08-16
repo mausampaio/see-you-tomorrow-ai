@@ -119,13 +119,22 @@ Regras comuns, todas com origem em spike e todas testadas:
 - Erro tipado. Quem decide o fallback é `aplicacao/`, não o adapter.
 
 ### `notificacao/`
-Adapter por plataforma, escolhido em runtime:
-- Windows: toast via API do SO; fallback para balão simples.
-- macOS: `terminal-notifier` se presente, senão `osascript`.
-- Linux: `notify-send`; fallback stderr.
+Adapter por plataforma, escolhido em runtime. Conforme o Spike B:
+
+- **Windows:** WinRT via PowerShell, **sem dependência alguma**. Carregar explicitamente
+  `Windows.UI.Notifications.ToastNotificationManager` **e**
+  `Windows.Data.Xml.Dom.XmlDocument` — omitir o segundo falha com erro que aponta para o tipo
+  errado.
+- **macOS:** `terminal-notifier` se presente, senão `osascript -e 'display notification'`.
+- **Linux:** `notify-send`; fallback stderr.
 
 Cada backend implementa `estaDisponivel()`. A seleção é uma cadeia de fallback testável em
 unidade com backends falsos.
+
+**Contrato mínimo sem ações.** Ações clicáveis são capacidade opcional (`suportaAcoes()`), nunca
+pressuposto. No Windows, se forem implementadas, o caminho é `activationType="protocol"` com
+esquema `seeya://` registrado em `HKCU\Software\Classes` — evita servidor COM e processo
+residente. Não validado; ver S4-T1.
 
 ### `armazenamento/`
 Raiz injetada (nunca `os.homedir()` direto no código de negócio). Escrita atômica. Todo arquivo
