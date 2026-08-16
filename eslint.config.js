@@ -1,7 +1,9 @@
 // Configuração do ESLint (flat config). Ver docs/PLANO-DE-ENTREGA.md S0-T2: regras type-aware
 // (recommendedTypeChecked) mais os dois guards de fronteira que o dependency-cruiser não cobre
-// sozinho — proibição de node:* em nucleo/ e de Date/setTimeout/setInterval fora de
-// adaptadores/relogio/.
+// sozinho — proibição de node:* em nucleo/ e, fora de adaptadores/relogio/, da fonte
+// não-determinística de tempo (D-019: `new Date()` sem argumento, `Date.now()`, setTimeout/
+// setInterval). `new Date(valor)` e `Date.parse` continuam livres em qualquer lugar — não são
+// leitura do "agora", são transformação determinística de um dado que já se tem.
 import tseslint from 'typescript-eslint';
 
 const MENSAGEM_NODE_NO_NUCLEO =
@@ -55,17 +57,31 @@ export default tseslint.config(
     },
   },
   {
-    // Date/setTimeout/setInterval só existem em adaptadores/relogio/, que implementa a porta
-    // Relogio. O restante do projeto (nucleo/, aplicacao/, cli/, os demais adaptadores) usa a
-    // porta, nunca o relógio de parede direto.
+    // A fonte não-determinística de tempo só existe em adaptadores/relogio/, que implementa a
+    // porta Relogio (D-019). setTimeout/setInterval são banidos por inteiro — não têm uma forma
+    // determinística. Date é mais fino: `new Date()` sem argumento e `Date.now()` leem o
+    // "agora" (proibidos); `new Date(valor)`, `Date.parse(valor)` e os métodos de instância só
+    // transformam um dado que já se tem (permitidos em qualquer lugar) — por isso
+    // no-restricted-globals (que não distingue aridade) não serve para Date, e viramos
+    // no-restricted-syntax com seletores que olham os argumentos de verdade.
     files: ['src/**/*.ts'],
     ignores: ['src/adaptadores/relogio/**/*.ts'],
     rules: {
       'no-restricted-globals': [
         'error',
-        { name: 'Date', message: MENSAGEM_RELOGIO('Date') },
         { name: 'setTimeout', message: MENSAGEM_RELOGIO('setTimeout') },
         { name: 'setInterval', message: MENSAGEM_RELOGIO('setInterval') },
+      ],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "NewExpression[callee.name='Date'][arguments.length=0]",
+          message: MENSAGEM_RELOGIO('new Date() sem argumento'),
+        },
+        {
+          selector: "CallExpression[callee.object.name='Date'][callee.property.name='now']",
+          message: MENSAGEM_RELOGIO('Date.now()'),
+        },
       ],
     },
   },
