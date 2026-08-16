@@ -22,7 +22,7 @@ O objetivo aqui não é entregar produto, é **derrubar as incertezas antes que 
       husky, lint-staged e CI nos 3 SOs. 25 testes provando reprovação de violação real e
       aprovação dos casos permitidos. Gerou D-019 e D-020.
 
-- [ ] **S0-T6 — Fechar a matriz de camadas.** Cada rodada de review de S0-T2 achou "mais um par
+- [~] **S0-T6 — Fechar a matriz de camadas.** Cada rodada de review de S0-T2 achou "mais um par
       que ninguém listou". A matriz de `docs/ARQUITETURA.md` agora é **exaustiva**: 20 pares
       ordenados, 12 proibidos e 8 permitidos. Esta tarefa alinha o `dependency-cruiser` a ela.
       - regra e teste para `agendador → cli` (**proibido**: `cli` é a raiz de composição, o

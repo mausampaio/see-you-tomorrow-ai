@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 /**
  * Projetos de teste separados por faixa (ver docs/TESTES.md). `unidade` e `integracao` rodam em
@@ -45,6 +45,23 @@ export default defineConfig({
         test: {
           name: 'integracao',
           include: ['tests/integracao/**/*.teste.ts'],
+          // guardas/ tem projeto próprio (ver abaixo) porque precisa rodar em sequência; o
+          // resto de integracao/ (descoberta/, armazenamento/, git/, processo/, notificacao/ a
+          // partir do Sprint 1) usa tmpdir isolado por teste e não disputa recurso nenhum, então
+          // mantém o paralelismo padrão do Vitest.
+          exclude: [...configDefaults.exclude, 'tests/integracao/guardas/**'],
+        },
+      },
+      {
+        test: {
+          name: 'guardas',
+          include: ['tests/integracao/guardas/**/*.teste.ts'],
+          // Os guards escrevem fixtures na árvore real de src/ e rodam eslint/depcruise de
+          // verdade contra ela inteira (scan completo, não por arquivo) — por isso disputam o
+          // mesmo recurso mutável real e têm que rodar em sequência. O resto de integracao/ usa
+          // tmpdir isolado por teste e não disputa nada (projeto separado acima, com
+          // paralelismo padrão). Ver S0-T6 em docs/PLANO-DE-ENTREGA.md.
+          fileParallelism: false,
         },
       },
       {
