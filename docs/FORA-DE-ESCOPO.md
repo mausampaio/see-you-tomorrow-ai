@@ -1,0 +1,40 @@
+# Fora de escopo da v1
+
+Este arquivo existe para o agente dev **não implementar** o que está aqui, mesmo que pareça
+natural, fácil ou "já que estou mexendo nisso". Cada item saiu de uma decisão consciente.
+
+Se uma tarefa parecer exigir algo desta lista, isso é sinal de que a tarefa foi mal entendida.
+Pare e registre em `docs/QUESTOES.md`.
+
+## Não fazemos na v1
+
+- **Outros harnesses.** Cursor, Codex, Copilot, Aider, Gemini CLI. As interfaces existem
+  (D-009), os adapters não. Não escreva um adapter especulativo.
+- **Interface gráfica ou web.** É CLI e notificação nativa. Sem TUI elaborada, sem servidor
+  HTTP, sem dashboard.
+- **Sincronização entre máquinas ou nuvem.** O estado é local, de uma máquina só.
+- **Multiusuário.** Um usuário, um `~/.see-you-tomorrow/`.
+- **Injetar comandos na sessão viva.** Fechado por D-001. Não tente TTY, named pipe, injeção
+  de teclado, automação de janela ou qualquer variação disso.
+- **Kill forçado de sessão.** Só terminação graciosa (D-002).
+- **Editar arquivos do usuário nos projetos capturados.** O app lê `cwd` e roda `git status`.
+  Não commita, não faz stash, não escreve nada.
+- **Chamar a API da Anthropic diretamente.** A geração passa pelo binário `claude`, que já tem
+  a autenticação do usuário. Sem SDK HTTP, sem manipular chave de API.
+- **Analytics, telemetria ou qualquer envio de dados para fora.**
+- **Plugin ou hook do Claude Code.** A v1 é externa e não instala nada em `~/.claude/`.
+- **Retomar automaticamente ao ligar a máquina.** `seeya iniciar-dia` é sempre uma ação do
+  usuário.
+- **Histórico com busca, métricas ou relatórios.** Os handoffs ficam em disco; ler é `cat`.
+
+## Ideias boas guardadas para depois
+
+Registradas para não se perderem. **Não implementar sem decisão nova.**
+
+- `seeya ontem` para reler handoffs antigos formatados.
+- Captura periódica de segurança durante o dia (snapshot a cada N horas), para o caso de a
+  máquina morrer antes do encerramento.
+- Métricas de foco por projeto a partir do histórico de handoffs.
+- Virar pendência em issue do tracker.
+- Modo equipe: consolidar handoffs de várias pessoas.
+- Detecção de "sessão abandonada há dias" com sugestão de arquivar.
