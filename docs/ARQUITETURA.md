@@ -34,15 +34,30 @@ agendador/     ← o daemon; orquestra aplicacao/ no tempo
 só ele nomeia adapter concreto e injeta nos demais (D-020). Verificado por `dependency-cruiser`
 no CI, não por boa vontade:
 
-| De → Para | |
-|---|---|
-| `nucleo` → qualquer outra camada, ou `node:*` | **proibido** |
-| `adaptadores` → `aplicacao`, `cli`, `agendador` | **proibido** |
-| `aplicacao` → `adaptadores`, `cli`, `agendador` | **proibido** |
-| `agendador` → `adaptadores` | **proibido** |
-| `cli` → `aplicacao`, `agendador`, `adaptadores`, `nucleo` | permitido |
-| `agendador` → `aplicacao`, `nucleo` | permitido |
-| `adaptadores` → `nucleo` | permitido (as portas) |
+**A matriz é exaustiva de propósito.** São 5 camadas, logo 20 pares ordenados, e todos os 20
+estão abaixo. Três rodadas de review de S0-T2 acharam, cada uma, "mais um par que ninguém
+listou" — porque a tabela era parcial e "não está na lista" era ambíguo entre *permitido* e
+*esquecido*. Aqui não há omissão possível: par que não estiver nesta matriz é erro da matriz, e
+vira questão em `docs/QUESTOES.md`.
+
+| De ↓ / Para → | `nucleo` | `adaptadores` | `aplicacao` | `agendador` | `cli` |
+|---|---|---|---|---|---|
+| **`nucleo`** | — | ✗ | ✗ | ✗ | ✗ |
+| **`adaptadores`** | ✓ portas | — | ✗ | ✗ | ✗ |
+| **`aplicacao`** | ✓ | ✗ D-020 | — | ✗ | ✗ |
+| **`agendador`** | ✓ | ✗ D-020 | ✓ | — | ✗ |
+| **`cli`** | ✓ | ✓ raiz | ✓ | ✓ | — |
+
+✓ permitido · ✗ proibido · 8 permitidos, 12 proibidos
+
+`nucleo` também não importa `node:*`. Não há ciclos, em nenhuma direção.
+
+Leitura em uma frase: **tudo aponta para `nucleo`; só `cli` conhece implementação; `agendador`
+manda em `aplicacao` e nunca o contrário.**
+
+Cada ✗ tem regra no `dependency-cruiser` **e** teste provando a reprovação. Cada ✓ tem teste
+provando que não é bloqueado por engano — sem isso, alguém aperta um regex e quebra a raiz de
+composição sem ninguém notar.
 
 ## Portas (interfaces do núcleo)
 

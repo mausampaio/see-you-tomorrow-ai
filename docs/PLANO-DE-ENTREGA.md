@@ -17,17 +17,25 @@ O objetivo aqui não é entregar produto, é **derrubar as incertezas antes que 
 - [x] **S0-T1 — Scaffold.** Aprovado no review em 2026-08-16. `npm run verificar` verde, CLI
       roda, estrutura de camadas conforme `docs/ARQUITETURA.md`, sem escopo adiantado.
 
-- [~] **S0-T2 — Guards executáveis.** `dependency-cruiser` com as regras de camada;
-      `no-restricted-imports` proibindo `node:*` em `nucleo/` e proibindo `Date`/`setTimeout`
-      fora de `adaptadores/relogio`; limites de cobertura por diretório; husky + lint-staged;
-      workflow de CI rodando lint + tipos + unidade + integração nos 3 SOs.
-      **Duas dependências novas aprovadas pelo PO nesta tarefa:**
-      `@types/node` (sem ele nada de `node:*` compila, e o Sprint 1 inteiro depende disso — a
-      lista de S0-T1 estava incompleta, erro meu) e `typescript-eslint` com
-      `recommendedTypeChecked` no lugar de `recommended`, já que o Sprint 1 traz a lógica onde
-      regras type-aware passam a valer.
-      *Aceite:* commits propositalmente violadores são **rejeitados**, com o teste que prova
-      isso; e um arquivo probe usando `node:fs` compila.
+- [x] **S0-T2 — Guards executáveis.** Aprovado no review em 2026-08-16, após três rodadas.
+      `dependency-cruiser`, `no-restricted-syntax` conforme D-019, cobertura por diretório,
+      husky, lint-staged e CI nos 3 SOs. 25 testes provando reprovação de violação real e
+      aprovação dos casos permitidos. Gerou D-019 e D-020.
+
+- [ ] **S0-T6 — Fechar a matriz de camadas.** Cada rodada de review de S0-T2 achou "mais um par
+      que ninguém listou". A matriz de `docs/ARQUITETURA.md` agora é **exaustiva**: 20 pares
+      ordenados, 12 proibidos e 8 permitidos. Esta tarefa alinha o `dependency-cruiser` a ela.
+      - regra e teste para `agendador → cli` (**proibido**: `cli` é a raiz de composição, o
+        contrário é inversão de dependência)
+      - teste de controle para cada par **permitido** ainda sem um: `adaptadores → nucleo`,
+        `aplicacao → nucleo`, `agendador → nucleo`, `agendador → aplicacao`, `cli → nucleo`,
+        `cli → aplicacao`, `cli → agendador`
+      - `testTimeout` maior nos testes que spawnam `eslint`/`depcruise`: o padrão de 5 s do
+        Vitest estoura sob carga e produz falha intermitente
+      - ancorar os `path` das regras por segmento, para `^src/aplicacao` não casar com um futuro
+        `src/aplicacao-legado/`
+      *Aceite:* um teste percorre a matriz de 20 pares e falha se qualquer par não tiver
+      cobertura — o guard do guard. Nenhuma rodada futura deve conseguir achar par faltando.
 
 - [x] **S0-T3 — SPIKE A.** Feito pelo PO em 2026-08-16. Veredito em
       `docs/spikes/A-resume-headless.md`: funciona com a sessão viva, transcript original

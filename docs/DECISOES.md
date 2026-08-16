@@ -344,8 +344,15 @@ tempo**, não o tipo `Date`:
 
 **Consequências.**
 - `no-restricted-globals` não distingue aridade; a regra passa a ser `no-restricted-syntax` com
-  seletores precisos: `NewExpression[callee.name='Date'][arguments.length=0]` e
+  os seletores `NewExpression[callee.name='Date'][arguments.length=0]` e
   `CallExpression[callee.object.name='Date'][callee.property.name='now']`.
+
+**Limitação conhecida e aceita.** O review mediu: o seletor casa forma sintática, não fluxo de
+dados, então quatro construções escapam — `const D = Date; D.now()`, `Date['now']()`,
+`globalThis.Date.now()` e `new Date(...[])`. Nenhuma delas é escrita por acidente, e as formas
+literais `new Date()` e `Date.now()`, que são o risco real, são pegas. O guard cobre o
+descuido, não o contorno deliberado — e isso é suficiente, porque contorno deliberado também
+passa por review. Não chame estes seletores de "à prova de bala" na documentação.
 - A porta `Relogio` **não** ganha método de parsing. Ela existe para responder "que horas são",
   e essa continua sendo a única pergunta não-determinística.
 - Testes de guarda obrigatórios para os dois lados: `new Date()` reprovado, `new Date(iso)`
