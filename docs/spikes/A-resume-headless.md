@@ -21,7 +21,12 @@ Hash SHA-256 e tamanho do transcript original capturados antes e depois.
 
 `exit=0`, 5,55 s de parede, 3,21 s de API.
 
-```json
+**RECORTE, não a saída completa.** Os campos abaixo são os relevantes para o veredito; a lista
+completa vem logo depois. A primeira versão deste documento mostrava só este bloco sem avisar
+que era recorte, e isso levou um review a concluir que o schema de `geracao` exigia campos
+inexistentes. Se você for escrever schema, use a lista completa, não este bloco.
+
+```jsonc
 {"type":"result","subtype":"success","is_error":false,
  "session_id":"22222222-2222-4222-8222-222222222222",
  "result":"O binário se chama `seeya` (D-010); D-001 é: o handoff é sempre gerado por fora da
@@ -30,8 +35,25 @@ Hash SHA-256 e tamanho do transcript original capturados antes e depois.
  "total_cost_usd":0.49659,
  "usage":{"input_tokens":2,"cache_creation_input_tokens":82539,
           "cache_read_input_tokens":0,"output_tokens":90,
-          "cache_creation":{"ephemeral_1h_input_tokens":82539}}}
+          "cache_creation":{"ephemeral_1h_input_tokens":82539}}
+ /* ...demais campos omitidos, ver lista completa abaixo... */ }
 ```
+
+### Campos completos de `claude -p --output-format json`
+
+Verificado na saída bruta capturada neste spike, 20 campos de primeiro nível:
+
+```
+api_error_status   duration_api_ms   duration_ms        fast_mode_state
+is_error           modelUsage        num_turns          permission_denials
+result             session_id        stop_reason        subtype
+terminal_reason    time_to_request_ms                   total_cost_usd
+ttft_ms            ttft_stream_ms    type               usage
+uuid
+```
+
+`usage` traz `input_tokens`, `output_tokens`, `cache_creation_input_tokens`,
+`cache_read_input_tokens`, `service_tier`, `cache_creation`, `server_tool_use`, `iterations`.
 
 A resposta é correta e específica: o processo headless **enxergou a conversa inteira**, incluindo
 decisões tomadas minutos antes.
