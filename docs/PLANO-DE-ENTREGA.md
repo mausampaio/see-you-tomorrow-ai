@@ -17,7 +17,7 @@ O objetivo aqui não é entregar produto, é **derrubar as incertezas antes que 
 - [x] **S0-T1 — Scaffold.** Aprovado no review em 2026-08-16. `npm run verificar` verde, CLI
       roda, estrutura de camadas conforme `docs/ARQUITETURA.md`, sem escopo adiantado.
 
-- [ ] **S0-T2 — Guards executáveis.** `dependency-cruiser` com as regras de camada;
+- [~] **S0-T2 — Guards executáveis.** `dependency-cruiser` com as regras de camada;
       `no-restricted-imports` proibindo `node:*` em `nucleo/` e proibindo `Date`/`setTimeout`
       fora de `adaptadores/relogio`; limites de cobertura por diretório; husky + lint-staged;
       workflow de CI rodando lint + tipos + unidade + integração nos 3 SOs.
