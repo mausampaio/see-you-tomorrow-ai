@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import {
   apagarArquivoTemporario,
   escreverArquivoTemporario,
+  limparResiduosDeTestesDeGuarda,
   rodarDependencyCruiser,
 } from './_apoio.js';
 
@@ -20,6 +21,12 @@ describe('guard: dependency-cruiser reprova violação de camada', () => {
     for (const caminho of criados.splice(0)) {
       apagarArquivoTemporario(caminho);
     }
+  });
+
+  // Rede de segurança: se o processo for morto no meio de um teste (timeout de CI), o
+  // afterEach acima não roda. Varre src/ por resíduo com prefixo `_` de qualquer teste anterior.
+  afterAll(() => {
+    limparResiduosDeTestesDeGuarda();
   });
 
   it('aprova a árvore real, sem violação (controle)', () => {
@@ -66,7 +73,7 @@ describe('guard: dependency-cruiser reprova violação de camada', () => {
     const resultado = rodarDependencyCruiser();
 
     expect(resultado.codigoDeSaida).not.toBe(0);
-    expect(resultado.saida).toContain('adaptadores-nao-importa-aplicacao-ou-cli');
+    expect(resultado.saida).toContain('adaptadores-nao-importa-aplicacao-cli-ou-agendador');
   });
 
   it('reprova adaptadores/ importando cli/', () => {
@@ -80,7 +87,21 @@ describe('guard: dependency-cruiser reprova violação de camada', () => {
     const resultado = rodarDependencyCruiser();
 
     expect(resultado.codigoDeSaida).not.toBe(0);
-    expect(resultado.saida).toContain('adaptadores-nao-importa-aplicacao-ou-cli');
+    expect(resultado.saida).toContain('adaptadores-nao-importa-aplicacao-cli-ou-agendador');
+  });
+
+  it('reprova adaptadores/ importando agendador/', () => {
+    criados.push(
+      escreverArquivoTemporario(
+        'src/adaptadores/relogio/_violacao_teste_agendador.ts',
+        "import '../../agendador/index.js';\nexport {};\n",
+      ),
+    );
+
+    const resultado = rodarDependencyCruiser();
+
+    expect(resultado.codigoDeSaida).not.toBe(0);
+    expect(resultado.saida).toContain('adaptadores-nao-importa-aplicacao-cli-ou-agendador');
   });
 
   it('reprova aplicacao/ importando cli/', () => {
@@ -94,7 +115,21 @@ describe('guard: dependency-cruiser reprova violação de camada', () => {
     const resultado = rodarDependencyCruiser();
 
     expect(resultado.codigoDeSaida).not.toBe(0);
-    expect(resultado.saida).toContain('aplicacao-nao-importa-cli');
+    expect(resultado.saida).toContain('aplicacao-nao-importa-cli-ou-agendador');
+  });
+
+  it('reprova aplicacao/ importando agendador/', () => {
+    criados.push(
+      escreverArquivoTemporario(
+        'src/aplicacao/_violacao_teste_agendador.ts',
+        "import '../agendador/index.js';\nexport {};\n",
+      ),
+    );
+
+    const resultado = rodarDependencyCruiser();
+
+    expect(resultado.codigoDeSaida).not.toBe(0);
+    expect(resultado.saida).toContain('aplicacao-nao-importa-cli-ou-agendador');
   });
 
   it('reprova ciclo de dependência entre dois módulos', () => {

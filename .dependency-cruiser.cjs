@@ -26,22 +26,24 @@ module.exports = {
       to: { dependencyTypes: ['core'] },
     },
     {
-      name: 'adaptadores-nao-importa-aplicacao-ou-cli',
+      name: 'adaptadores-nao-importa-aplicacao-cli-ou-agendador',
       severity: 'error',
       comment:
-        'adaptadores/ implementa portas do núcleo; não pode depender de aplicacao/ nem de ' +
-        'cli/. Inverta a dependência: é aplicacao/ quem chama o adapter, nunca o contrário.',
+        'adaptadores/ implementa portas do núcleo; não pode depender de aplicacao/, cli/ nem ' +
+        'agendador/. Inverta a dependência: é aplicacao/ (ou agendador/) quem chama o adapter, ' +
+        'nunca o contrário.',
       from: { path: '^src/adaptadores' },
-      to: { path: '^src/(aplicacao|cli)' },
+      to: { path: '^src/(aplicacao|cli|agendador)' },
     },
     {
-      name: 'aplicacao-nao-importa-cli',
+      name: 'aplicacao-nao-importa-cli-ou-agendador',
       severity: 'error',
       comment:
-        'aplicacao/ define os casos de uso; cli/ é quem os chama. Não pode ser o contrário — ' +
-        'mova o que cli/ precisa para dentro do caso de uso.',
+        'aplicacao/ define os casos de uso; cli/ e agendador/ são quem os chama (a seta aponta ' +
+        'agendador → aplicacao em ARQUITETURA.md, nunca o contrário). Não pode ser o contrário ' +
+        '— mova o que cli/ ou agendador/ precisam para dentro do caso de uso.',
       from: { path: '^src/aplicacao' },
-      to: { path: '^src/cli' },
+      to: { path: '^src/(cli|agendador)' },
     },
     {
       name: 'sem-dependencia-circular',
