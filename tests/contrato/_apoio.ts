@@ -54,8 +54,12 @@ export function executarClaude(argumentos: readonly string[]): {
  * coexistem na mesma máquina (CLI do PATH × extensão do VS Code) e se comportam diferente, então
  * "contrato verde" sem a versão anotada não prova nada.
  *
- * Lida uma única vez por processo de teste e embutida no nome de cada `describe`, para aparecer
- * garantidamente na saída de qualquer reporter do vitest.
+ * Chamada por cada arquivo de teste e embutida no nome do `describe` — útil para saber de qual
+ * versão veio uma falha específica, ou ao rodar com `--reporter=verbose`. **Isso sozinho não
+ * garante visibilidade no caminho feliz**: o reporter padrão do vitest não imprime nome de teste
+ * quando tudo passa (medido pelo review de S0-T5 — era o que este comentário afirmava antes,
+ * errado). A garantia de verdade vem de `tests/contrato/_versao-global-setup.ts`, que escreve a
+ * versão direto no stdout antes da suíte rodar, fora do controle de qualquer reporter.
  */
 export function obterVersaoDoClaudeCode(): string {
   const resultado = executarClaude(['--version']);
