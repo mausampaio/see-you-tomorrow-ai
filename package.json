@@ -17,18 +17,25 @@
     "test": "vitest run --project unidade --project integracao",
     "test:e2e": "vitest run --project e2e",
     "test:contrato": "vitest run --project contrato",
+    "cobertura": "vitest run --project unidade --project integracao --coverage",
     "lint": "eslint .",
+    "dependencias": "depcruise src --config .dependency-cruiser.cjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "verificar": "tsc -p tsconfig.json --noEmit && npm run lint && npm run build && npm test"
+    "verificar": "tsc -p tsconfig.json --noEmit && npm run lint && npm run dependencias && npm run build && npm run cobertura",
+    "prepare": "husky"
   },
   "dependencies": {
     "commander": "^15.0.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/node": "^22.20.1",
     "@vitest/coverage-v8": "^4.1.10",
+    "dependency-cruiser": "^18.2.0",
     "eslint": "^10.8.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
     "prettier": "^3.9.6",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.67.0",

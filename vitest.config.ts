@@ -9,6 +9,31 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     passWithNoTests: true,
+    /**
+     * Cobertura por diretório (docs/TESTES.md): nucleo/ 95%, demais diretórios de produção 80%.
+     * Só é medida quando a suíte roda com `--coverage` (script `npm run cobertura`, chamado por
+     * `npm run verificar`) — `test:e2e` e `test:contrato` não passam essa flag e não são
+     * afetados pelo limite.
+     */
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.ts'],
+      exclude: ['src/cli/index.ts'],
+      thresholds: {
+        'src/nucleo/**': {
+          statements: 95,
+          branches: 95,
+          functions: 95,
+          lines: 95,
+        },
+        'src/**': {
+          statements: 80,
+          branches: 80,
+          functions: 80,
+          lines: 80,
+        },
+      },
+    },
     projects: [
       {
         test: {
