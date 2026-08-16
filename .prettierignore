@@ -1,0 +1,9 @@
+dist/
+coverage/
+node_modules/
+
+# Documentos de autoridade e o contrato de trabalho: fora do alcance de reformatação
+# automática desta tarefa (docs/DECISOES.md e docs/ESPECIFICACAO.md nem podem ser alterados
+# pelo agente dev — ver CLAUDE.md).
+CLAUDE.md
+docs/

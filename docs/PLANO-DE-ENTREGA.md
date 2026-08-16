@@ -14,7 +14,7 @@ Legenda: `[ ]` a fazer · `[~]` em andamento · `[x]` aprovado no review
 
 O objetivo aqui não é entregar produto, é **derrubar as incertezas antes que elas custem caro**.
 
-- [ ] **S0-T1 — Scaffold.** Node 22, TS estrito ESM, vitest, eslint, prettier, commander, zod.
+- [~] **S0-T1 — Scaffold.** Node 22, TS estrito ESM, vitest, eslint, prettier, commander, zod.
       `package.json` com `bin: { seeya }`. Estrutura de pastas de `docs/ARQUITETURA.md` criada
       vazia com um `index.ts` por camada.
       *Aceite:* `npm run build`, `npm test`, `npm run lint` passam num repo sem código de negócio.

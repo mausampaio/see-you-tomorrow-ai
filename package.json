@@ -1,0 +1,37 @@
+{
+  "name": "see-you-tomorrow",
+  "version": "0.1.0",
+  "description": "CLI que descobre sessões do Claude Code, captura o estado no fim do dia e retoma no dia seguinte.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "seeya": "./dist/cli/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run --project unidade --project integracao",
+    "test:e2e": "vitest run --project e2e",
+    "test:contrato": "vitest run --project contrato",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "verificar": "tsc -p tsconfig.json --noEmit && npm run lint && npm run build && npm test"
+  },
+  "dependencies": {
+    "commander": "^15.0.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.10",
+    "eslint": "^10.8.1",
+    "prettier": "^3.9.6",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.67.0",
+    "vitest": "^4.1.10"
+  }
+}
