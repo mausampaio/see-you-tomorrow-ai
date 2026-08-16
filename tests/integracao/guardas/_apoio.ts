@@ -15,6 +15,15 @@ import { fileURLToPath } from 'node:url';
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
 export const RAIZ_DO_PROJETO = path.resolve(AQUI, '..', '..', '..');
 
+/**
+ * Timeout (ms) para testes que spawnam eslint/depcruise como processo filho de verdade. O
+ * padrão de 5 s do Vitest estoura sob carga (CI ocupado, disco lento) e produz falha
+ * intermitente sem relação nenhuma com a regra sendo testada — observado em review de S0-T2.
+ * Passe como terceiro argumento de `it(...)` em qualquer teste que chame `rodarEslint` ou
+ * `rodarDependencyCruiser`.
+ */
+export const TIMEOUT_PROCESSO_FILHO = 20_000;
+
 export interface ResultadoDoComando {
   codigoDeSaida: number | null;
   saida: string;

@@ -45,6 +45,14 @@ export default defineConfig({
         test: {
           name: 'integracao',
           include: ['tests/integracao/**/*.teste.ts'],
+          // Os guards de tests/integracao/guardas/ escrevem fixtures na árvore real de src/ e
+          // rodam eslint/depcruise de verdade contra ela — inclusive scans da árvore inteira.
+          // Com paralelismo de arquivo (padrão do Vitest), um arquivo pode escrever/limpar um
+          // fixture enquanto outro está no meio de um scan da mesma árvore, contaminando o
+          // resultado (S0-T6: apareceu ao somar matriz-de-camadas.teste.ts aos dois guards já
+          // existentes). Arquivos desta faixa compartilham um recurso mutável real, então rodam
+          // em sequência.
+          fileParallelism: false,
         },
       },
       {
