@@ -82,6 +82,59 @@ describe('esquemaRegistroDeSessao', () => {
 
     expect(resultado.success).toBe(false);
   });
+
+  it('rejeita registro sem sessionId (D-021: identidade continua obrigatória)', () => {
+    const semSessionId: Record<string, unknown> = { ...registroValido };
+    delete semSessionId['sessionId'];
+    const resultado = esquemaRegistroDeSessao.safeParse(semSessionId);
+
+    expect(resultado.success).toBe(false);
+  });
+
+  it('rejeita registro sem cwd (D-021: identidade continua obrigatória)', () => {
+    const semCwd: Record<string, unknown> = { ...registroValido };
+    delete semCwd['cwd'];
+    const resultado = esquemaRegistroDeSessao.safeParse(semCwd);
+
+    expect(resultado.success).toBe(false);
+  });
+
+  it('aceita registro sem name (D-021: campo de exibição não pode ocultar a sessão)', () => {
+    const semName: Record<string, unknown> = { ...registroValido };
+    delete semName['name'];
+    const resultado = esquemaRegistroDeSessao.safeParse(semName);
+
+    expect(resultado.success).toBe(true);
+    expect(resultado.success && resultado.data.name).toBeUndefined();
+  });
+
+  it('aceita registro sem entrypoint (D-021: campo de exibição não pode ocultar a sessão)', () => {
+    const semEntrypoint: Record<string, unknown> = { ...registroValido };
+    delete semEntrypoint['entrypoint'];
+    const resultado = esquemaRegistroDeSessao.safeParse(semEntrypoint);
+
+    expect(resultado.success).toBe(true);
+    expect(resultado.success && resultado.data.entrypoint).toBeUndefined();
+  });
+
+  it('aceita registro sem kind (D-021: campo de exibição não pode ocultar a sessão)', () => {
+    const semKind: Record<string, unknown> = { ...registroValido };
+    delete semKind['kind'];
+    const resultado = esquemaRegistroDeSessao.safeParse(semKind);
+
+    expect(resultado.success).toBe(true);
+    expect(resultado.success && resultado.data.kind).toBeUndefined();
+  });
+
+  it('aceita registro sem os três campos de exibição ao mesmo tempo', () => {
+    const soIdentidade: Record<string, unknown> = { ...registroValido };
+    delete soIdentidade['name'];
+    delete soIdentidade['entrypoint'];
+    delete soIdentidade['kind'];
+    const resultado = esquemaRegistroDeSessao.safeParse(soIdentidade);
+
+    expect(resultado.success).toBe(true);
+  });
 });
 
 describe('esquemaSaidaAgentsJson', () => {
@@ -127,5 +180,32 @@ describe('esquemaSaidaAgentsJson', () => {
     ]);
 
     expect(resultado.success).toBe(false);
+  });
+
+  it('rejeita item sem cwd (D-021: identidade continua obrigatória)', () => {
+    const resultado = esquemaSaidaAgentsJson.safeParse([
+      {
+        pid: 12345,
+        kind: 'interactive',
+        startedAt: 1755360000000,
+        sessionId: '11111111-2222-4333-8444-555555555555',
+        name: 'projeto-03',
+      },
+    ]);
+
+    expect(resultado.success).toBe(false);
+  });
+
+  it('aceita item sem name e sem kind (D-021: exibição não pode ocultar a sessão)', () => {
+    const resultado = esquemaSaidaAgentsJson.safeParse([
+      {
+        pid: 12345,
+        cwd: 'c:\\code\\projeto',
+        startedAt: 1755360000000,
+        sessionId: '11111111-2222-4333-8444-555555555555',
+      },
+    ]);
+
+    expect(resultado.success).toBe(true);
   });
 });

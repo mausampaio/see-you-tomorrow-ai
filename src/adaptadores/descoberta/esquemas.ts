@@ -19,10 +19,20 @@
 import { z } from 'zod';
 
 /**
- * `~/.claude/sessions/<pid>.json` — um arquivo por processo, vivo ou obsoleto. Todos os sete
- * campos abaixo são citados literalmente pela especificação e são os que a descoberta usa:
- * `pid` e `procStart` para desempate de liveness (PID reciclado pelo SO), `sessionId` e `cwd`
- * para identificar e localizar a sessão, `kind`/`entrypoint`/`name` para classificar e exibir.
+ * `~/.claude/sessions/<pid>.json` — um arquivo por processo, vivo ou obsoleto. Os sete campos
+ * abaixo são citados literalmente pela especificação e são os que a descoberta usa, mas nem
+ * todos reprovam o registro se faltarem — D-021 divide os campos em dois grupos:
+ *
+ * - **Identidade e liveness, obrigatórios**: `sessionId` e `cwd` (identificam e localizam a
+ *   sessão), `pid` e `procStart` (desempate de liveness — PID reciclado pelo SO), `startedAt`.
+ *   Sem eles não dá para saber que sessão é essa nem se ela está viva — a sessão não pode
+ *   entrar na descoberta.
+ * - **Classificação e exibição, opcionais**: `kind`, `entrypoint`, `name`. São cosméticos: sem
+ *   eles a sessão ainda é identificável e capturável, só não tem como classificar/nomear com
+ *   precisão. D-021 existe porque o schema anterior exigia os três e rejeitava o registro
+ *   inteiro se um faltasse — cruzado com transcript suprimido (D-013), a sessão ficava
+ *   totalmente invisível. Os padrões de exibição (`name` derivado do `cwd`, `kind`/`entrypoint`
+ *   como "desconhecido") são responsabilidade do adapter em S1-T3, não deste schema.
  *
  * `kind` e `entrypoint` ficam como string livre, não enum: só foram observados os valores
  * "interactive" e "cli"/"claude-vscode" nesta máquina, mas a spec já assume a existência de
@@ -38,11 +48,11 @@ export const esquemaRegistroDeSessao = z.object({
   pid: z.number().int().positive(),
   sessionId: z.uuid(),
   cwd: z.string().min(1),
-  kind: z.string().min(1),
-  entrypoint: z.string().min(1),
   startedAt: z.number().int().positive(),
   procStart: z.string().regex(/^\d+$/, 'procStart deve ser uma string só de dígitos'),
-  name: z.string().min(1),
+  kind: z.string().min(1).optional(),
+  entrypoint: z.string().min(1).optional(),
+  name: z.string().min(1).optional(),
 });
 
 export type RegistroDeSessao = z.infer<typeof esquemaRegistroDeSessao>;
@@ -50,15 +60,16 @@ export type RegistroDeSessao = z.infer<typeof esquemaRegistroDeSessao>;
 /**
  * Um item da saída de `claude agents --json` (D-016). É uma fonte independente do registro em
  * disco — mesmo formato geral, mas sem `entrypoint` e com `status` presente só às vezes
- * (observado: sessão "busy" tem `status`, sessão ociosa não tem o campo).
+ * (observado: sessão "busy" tem `status`, sessão ociosa não tem o campo). `kind` e `name`
+ * seguem o mesmo tratamento de D-021: cosméticos, opcionais, nunca reprovam o item.
  */
 const esquemaItemDeAgentsJson = z.object({
   pid: z.number().int().positive(),
   sessionId: z.uuid(),
   cwd: z.string().min(1),
-  kind: z.string().min(1),
   startedAt: z.number().int().positive(),
-  name: z.string().min(1),
+  kind: z.string().min(1).optional(),
+  name: z.string().min(1).optional(),
   status: z.string().min(1).optional(),
 });
 
