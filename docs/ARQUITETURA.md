@@ -30,9 +30,19 @@ adaptadores/   ← implementam as portas do núcleo
 agendador/     ← o daemon; orquestra aplicacao/ no tempo
 ```
 
-**Regra de dependência.** Setas apontam para dentro. `nucleo/` não importa nada do projeto nem
-nada de `node:`. `adaptadores/` importa `nucleo/` (para as interfaces) e nada de `aplicacao/`
-ou `cli/`. Isso é verificado por `dependency-cruiser` no CI, não por boa vontade.
+**Regra de dependência.** Setas apontam para dentro, e `cli/` é a **única raiz de composição** —
+só ele nomeia adapter concreto e injeta nos demais (D-020). Verificado por `dependency-cruiser`
+no CI, não por boa vontade:
+
+| De → Para | |
+|---|---|
+| `nucleo` → qualquer outra camada, ou `node:*` | **proibido** |
+| `adaptadores` → `aplicacao`, `cli`, `agendador` | **proibido** |
+| `aplicacao` → `adaptadores`, `cli`, `agendador` | **proibido** |
+| `agendador` → `adaptadores` | **proibido** |
+| `cli` → `aplicacao`, `agendador`, `adaptadores`, `nucleo` | permitido |
+| `agendador` → `aplicacao`, `nucleo` | permitido |
+| `adaptadores` → `nucleo` | permitido (as portas) |
 
 ## Portas (interfaces do núcleo)
 

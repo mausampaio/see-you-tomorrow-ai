@@ -351,3 +351,32 @@ tempo**, não o tipo `Date`:
 - Testes de guarda obrigatórios para os dois lados: `new Date()` reprovado, `new Date(iso)`
   aprovado, ambos fora de `relogio/`. Sem o teste do caso permitido, a regra pode voltar a ser
   estrita demais sem ninguém notar.
+
+---
+
+## D-020 — `cli/` é a única raiz de composição
+
+**Contexto.** `docs/ARQUITETURA.md` diz que todo acesso ao mundo passa por uma porta de
+`nucleo/portas.ts`, mas as regras de camada não impediam `aplicacao/` de importar
+`adaptadores/` direto. Verificado na prática: `aplicacao` importando `adaptadores/git` passa sem
+reclamação. Isso deixaria um caso de uso instanciar adapter concreto e furar as portas — e
+levaria junto a garantia de que teste unitário não toca disco.
+
+**Decisão.** Só `cli/` pode nomear adapter concreto. É ele que constrói as implementações e as
+injeta em `aplicacao/` e em `agendador/`.
+
+| De → Para | |
+|---|---|
+| `aplicacao` → `adaptadores` | **proibido** — dependa da porta em `nucleo/` |
+| `agendador` → `adaptadores` | **proibido** — recebe injetado do `cli` |
+| `cli` → `adaptadores` | permitido — é a raiz de composição |
+| `cli` → `agendador`, `cli` → `aplicacao` | permitido |
+| `agendador` → `aplicacao` | permitido |
+
+**Consequências.**
+- Todo caso de uso recebe suas dependências por parâmetro ou construtor. Nenhum faz `import`
+  de implementação.
+- É isto que torna executável a regra de `docs/TESTES.md` de que nenhum teste unitário toca
+  disco: sem acesso ao adapter, não há como tocar.
+- `docs/ARQUITETURA.md` ganha esta tabela; a regra de dependência lá deixa de ser só o diagrama
+  de setas.
