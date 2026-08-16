@@ -25,13 +25,10 @@ O objetivo aqui não é entregar produto, é **derrubar as incertezas antes que 
       workflow de CI rodando lint + tipos + unidade + integração nos 3 SOs.
       *Aceite:* commits propositalmente violadores são **rejeitados**, com o teste que prova isso.
 
-- [ ] **S0-T3 — SPIKE A (risco maior do projeto).** Descobrir empiricamente o comportamento de
-      `claude -p --resume <id> --fork-session --output-format json`:
-      funciona com a sessão **viva**? o transcript original é preservado? qual a latência e o
-      custo típicos? o que acontece se o `cwd` mudou?
-      *Aceite:* `docs/spikes/A-resume-headless.md` com os comandos executados, a saída bruta e
-      um veredito claro. Se não funcionar em sessão viva, o caminho alternativo do
-      `docs/ARQUITETURA.md` vira o padrão — **e isso é decisão do PO, não do dev**.
+- [x] **S0-T3 — SPIKE A.** Feito pelo PO em 2026-08-16. Veredito em
+      `docs/spikes/A-resume-headless.md`: funciona com a sessão viva, transcript original
+      preservado. Gerou D-011, D-012 e D-015.
+      *Complemento feito:* `docs/spikes/C-alternativa-barata-e-transcript-desativado.md`.
 
 - [ ] **S0-T4 — SPIKE B.** Notificação nativa nos 3 SOs: escolher biblioteca ou chamada direta,
       testar ações clicáveis, medir dependências externas necessárias.
@@ -49,9 +46,14 @@ O objetivo aqui não é entregar produto, é **derrubar as incertezas antes que 
       classificação viva/ociosa/encerrada. Sem I/O.
 - [ ] **S1-T2 — `adaptadores/processo`.** Liveness com desempate por `procStart`, nos 3 SOs.
 - [ ] **S1-T3 — `adaptadores/descoberta`.** Registro + resolução do transcript, tolerante a
-      arquivo corrompido.
+      arquivo corrompido. Exclui forks de `forks.json` (D-012). Sessão sem transcript entra
+      normalmente, com `temTranscript: false` (D-013).
 - [ ] **S1-T4 — `adaptadores/transcricao`.** Parser streaming; últimos prompts, arquivos
       tocados, última atividade.
+- [ ] **S1-T7 — Detecção precoce de sessão sem transcript.** Notificação uma vez por
+      `sessionId`, disparada quando a sessão é vista, não no encerramento (D-013).
+      *Aceite:* sessão registrada sem `.jsonl` gera exatamente uma notificação, e a segunda
+      passagem da descoberta não repete.
 - [ ] **S1-T5 — `adaptadores/armazenamento`.** Raiz injetável, escrita atômica, config com
       defaults, `versaoDoEsquema`.
 - [ ] **S1-T6 — `seeya sessoes` e `seeya status`.**
@@ -62,11 +64,22 @@ O objetivo aqui não é entregar produto, é **derrubar as incertezas antes que 
 
 ## Sprint 2 — Encerrar o dia
 
-- [ ] **S2-T1 — `adaptadores/git`.** Branch e status do `cwd`, sem quebrar quando não é repo.
-- [ ] **S2-T2 — `adaptadores/geracao`.** Invocação headless conforme o veredito do Spike A;
-      timeout, orçamento, `spawn` sem shell, erro tipado.
-- [ ] **S2-T3 — Caso de uso `encerrarDia`.** Concorrência limitada, isolamento de falha por
-      sessão, fallback determinístico, anti-duplicidade, guarda de turno ativo.
+- [ ] **S2-T1 — `adaptadores/git`.** Branch, status, commits do dia e **enumeração de
+      worktrees** com o estado de cada um (D-013). Sem quebrar quando o `cwd` não é repo.
+      *Aceite:* repo de teste com dois worktrees, um sujo e um limpo, produz o estado correto
+      dos dois.
+- [ ] **S2-T2 — `adaptadores/geracao`.** Duas implementações, enxuta e profunda (D-011).
+      Contexto por stdin ou arquivo, nunca por argumento (D-015). `--tools ""`,
+      `--system-prompt` curto, `--json-schema`, timeout, orçamento, `spawn` sem shell, erro
+      tipado. Registro do fork em `forks.json` no modo profundo.
+      *Aceite:* teste com conteúdo contendo quebra de linha, aspas, acento e `%` chega íntegro
+      ao processo filho; medição do piso de tokens antes e depois do `--tools ""` registrada.
+- [ ] **S2-T3 — Caso de uso `encerrarDia`.** Coleta multi-fonte com `fontes[]` (D-013),
+      concorrência limitada, isolamento de falha por sessão, fallback determinístico,
+      anti-duplicidade, guarda de turno ativo. Handoff válido com qualquer fonte respondendo.
+- [ ] **S2-T6 — Limpeza de forks.** Apaga forks próprios com mais de `diasParaLimparForks`.
+      *Aceite:* apaga apenas IDs presentes em `forks.json`; um teste prova que nenhum outro
+      arquivo de `~/.claude/projects/` é tocado.
 - [ ] **S2-T4 — Briefing.** Geração do `resumo.md` a partir dos handoffs.
 - [ ] **S2-T5 — `seeya encerrar-dia` com `--dry-run` e `--sessao`.**
       *Aceite do sprint:* e2e 2, 3 e 4 passam. Encerramento com o modelo indisponível ainda

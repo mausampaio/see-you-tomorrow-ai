@@ -142,3 +142,97 @@ Codex depois deve ser escrever um adapter novo, não editar o núcleo.
 
 **Consequências.** `bin: { "seeya": "./dist/cli/index.js" }` no `package.json`. Nenhum outro
 alias é publicado na v1. Toda documentação e todo texto de ajuda usam `seeya`.
+
+---
+
+## D-011 — Captura enxuta por padrão, profunda por opção
+
+**Contexto.** Medido no Spike A e no Spike C: `--resume` completo custa ~US$ 0,50 por sessão
+(82 k tokens de contexto reescritos no cache); sessão nova com contexto enxuto custa ~US$ 0,15
+(dos quais ~12 k tokens são piso fixo do próprio Claude Code, não o nosso texto).
+
+**Decisão.** O padrão é **enxuto**: o `seeya` lê o transcript, extrai o que importa e manda para
+uma sessão nova. Projetos marcados com `capturaProfunda: true` na config usam `--resume`
+completo.
+
+**Consequências.**
+- `GeradorDeHandoff` tem duas implementações atrás da mesma porta; a escolha é config, não `if`
+  espalhado.
+- A geração usa `--tools ""`, `--system-prompt` curto e `--json-schema`, para derrubar o piso de
+  tokens e domar a saída (Spike C, segundo achado).
+- O custo estimado do encerramento é mostrado no `--dry-run`.
+
+---
+
+## D-012 — Os forks são responsabilidade do `seeya`
+
+**Contexto.** `--fork-session` copia o transcript inteiro para um arquivo novo em
+`~/.claude/projects/`. Sem tratamento, o `seeya` descobriria os próprios forks como sessões e
+tentaria capturá-los, gerando novos forks — laço de realimentação.
+
+**Decisão.** Todo `sessionId` de fork criado pelo `seeya` é registrado em
+`~/.see-you-tomorrow/forks.json`. A descoberta **exclui** esses IDs. Forks com mais de
+`diasParaLimparForks` (default 7) são apagados.
+
+**Consequências.** Apagar arquivo dentro de `~/.claude/projects/` é a **única** exceção à regra
+"nunca escreva em `~/.claude/`", e vale exclusivamente para forks que o próprio `seeya` criou e
+registrou. Qualquer outro arquivo ali é intocável.
+
+---
+
+## D-013 — Transcript é uma fonte de evidência, não a fonte
+
+**Contexto.** Existem sessões legítimas sem transcript. Caso real: o agente `agente-interno`, usado no
+trabalho do usuário, roda com persistência desativada de propósito — ele escreve o resultado
+numa issue e cria um **worktree** no projeto, onde guarda tudo antes de encerrar. Nesse cenário o
+transcript é a fonte *menos* informativa disponível.
+
+**Decisão.** A captura coleta evidências de **várias fontes independentes**, e o transcript é
+apenas uma delas. As fontes da v1, por ordem de confiabilidade:
+
+1. **Git** — branch, commits do dia, diff não commitado, e **worktrees** do repositório, com o
+   estado de cada um.
+2. **Transcript**, quando existe.
+3. **Registro de processos** — `cwd`, nome, horário de início.
+
+Um handoff é útil se **qualquer** fonte responder. Sessão sem transcript mas com worktree ativo
+gera handoff bom.
+
+**Além disso:** o `seeya` detecta a ausência de transcript **assim que vê a sessão**, não no fim
+do dia, e notifica na hora — quando ainda dá para reagir.
+
+**Consequências.**
+- `adaptadores/git` cresce: precisa enumerar worktrees (`git worktree list`), não só o `cwd`.
+- O handoff ganha `fontes: []` declarando de onde cada informação veio.
+- `origem: "semTranscript"` é um estado normal, não um erro.
+
+---
+
+## D-014 — O wrapper PTY é v2, e é aditivo
+
+**Decisão.** O `seeya claude` — subir o Claude dentro de um PTY controlado pelo `seeya`, para
+poder pedir o handoff à própria sessão — fica para a v2. Quando chegar, **coexiste** com a
+descoberta: será o modo recomendado de abrir sessão, mas a descoberta continua funcionando para
+tudo que for aberto sem ele. Nada passa despercebido por não ter usado o wrapper.
+
+**Consequências.**
+- A descoberta é o piso permanente da arquitetura, nunca substituída pelo wrapper.
+- `ProvedorDeSessoes` precisa suportar duas origens simultâneas sem duplicar sessão: uma sessão
+  aberta via wrapper aparece **uma vez**, não duas.
+- É o caminho para harnesses sem transcript legível (codex e afins), conforme D-009.
+- Riscos conhecidos, a tratar quando for a hora: `node-pty` é dependência nativa; o passthrough
+  precisa ser impecável (resize, raw mode, alt screen, Ctrl+C); injetar texto com um diálogo de
+  permissão aberto responde o diálogo. O wrapper pede o handoff **em arquivo**, nunca lê a tela.
+
+---
+
+## D-015 — Contexto vai por stdin ou arquivo, nunca por argumento
+
+**Contexto.** No Spike C o contexto multilinha foi passado como argumento de linha de comando e
+chegou mutilado ao modelo — o PowerShell quebrou a string e o modelo recebeu uma palavra solta.
+
+**Decisão.** Todo texto de tamanho variável enviado ao `claude` vai por **stdin** ou por arquivo
+temporário. Argumento de linha de comando só para flags e valores curtos e conhecidos.
+
+**Consequências.** Vale junto com a regra já existente de `spawn` com array e `shell: false`.
+Tem teste de integração dedicado, com conteúdo contendo quebra de linha, aspas, acento e `%`.

@@ -80,20 +80,43 @@ resolve o caminho do transcript. O slug do diretório em `~/.claude/projects/` �
 `cwd`; a derivação é frágil, então a estratégia primária é **procurar o arquivo
 `<sessionId>.jsonl` em todos os slugs**, e a derivação do slug é só otimização.
 
+Duas responsabilidades que vieram do Spike A e são fáceis de esquecer:
+
+- **Excluir os forks do próprio `seeya`** listados em `forks.json`, sob pena de laço de
+  realimentação (D-012).
+- **Transcript ausente não desqualifica a sessão** (D-013). A sessão entra com
+  `temTranscript: false` e dispara a notificação de detecção precoce, uma vez por `sessionId`.
+
+Na v2 este adapter passa a ter duas origens — registro e wrapper PTY — e precisa deduplicar por
+`sessionId` (D-014). A interface já é desenhada para isso: `listar()` devolve a união, não a
+concatenação.
+
 ### `transcricao/`
 Streaming linha a linha (arquivos passam de 1 MB). Ignora tipos desconhecidos em vez de falhar
 — o Claude Code adiciona tipos novos com o tempo. Extrai só o que a spec pede.
 
-### `geracao/`
-Invoca `claude -p --resume <id> --fork-session --model <modelo> --output-format json` com
-timeout duro e `--max-budget-usd` da config. Nunca usa shell (`spawn` com array de argumentos,
-`shell: false`) — os `cwd` têm espaços e acentos. Retorna erro tipado; quem decide o fallback é
-`aplicacao/`, não o adapter.
+### `git/`
+Mais importante do que parecia. Além de branch e status do `cwd`, enumera **worktrees**
+(`git worktree list --porcelain`) com branch, sujeira e commits do dia de cada um, e lista os
+commits do dia. Para sessões sem transcript, esta é a única fonte substantiva (D-013). Não
+quebra quando o `cwd` não é repositório: devolve "sem git" e segue.
 
-**Este adapter tem um caminho alternativo obrigatório** (ver Spike A em
-`docs/PLANO-DE-ENTREGA.md`): se `--resume` sobre sessão viva não funcionar, o gerador monta o
-contexto a partir do transcript lido e chama `claude -p` numa sessão nova. A escolha do caminho
-é configuração, não reescrita.
+### `geracao/`
+Duas implementações da mesma porta, escolhidas por config (D-011):
+
+- **Enxuta (padrão).** Monta o contexto a partir das evidências já coletadas e chama
+  `claude -p` numa sessão nova. ~US$ 0,15/sessão.
+- **Profunda (opt-in).** `claude -p --resume <id> --fork-session`. ~US$ 0,50/sessão, melhor
+  entendimento. Registra o `sessionId` do fork em `forks.json` (D-012).
+
+Regras comuns, todas com origem em spike e todas testadas:
+
+- `spawn` com array e `shell: false` — os `cwd` têm espaços e acentos.
+- **Contexto por stdin ou arquivo temporário, nunca por argumento** (D-015).
+- `--tools ""`, `--system-prompt` curto e `--json-schema` do handoff: derruba o piso de ~12 k
+  tokens e evita saída em prosa livre.
+- Timeout duro e `--max-budget-usd`.
+- Erro tipado. Quem decide o fallback é `aplicacao/`, não o adapter.
 
 ### `notificacao/`
 Adapter por plataforma, escolhido em runtime:

@@ -37,6 +37,13 @@ O que precisa estar coberto com rigor, porque é onde os bugs vão doer:
   stderr sem lançar.
 - **Decisão de fallback da geração**: erro do modelo produz handoff `deterministico`, nunca
   exceção que aborte o encerramento.
+- **Coleta multi-fonte (D-013)**: handoff continua válido com só git respondendo; com só
+  transcript; com só registro; com nenhuma fonte, a sessão é reportada como não capturável, sem
+  exceção. O campo `fontes[]` reflete exatamente quem respondeu.
+- **Exclusão de forks (D-012)**: sessão cujo `sessionId` está em `forks.json` nunca é elegível.
+  Este teste é o que impede o laço de realimentação — não pode ser removido.
+- **Detecção precoce sem transcript**: notifica na primeira vez que vê o `sessionId`, e não
+  notifica de novo nas passagens seguintes.
 
 Cobertura mínima: **`nucleo/` 95%**, demais diretórios de produção **80%**. Configurado por
 diretório no vitest, e o CI falha abaixo disso.
@@ -56,7 +63,12 @@ Cada adapter contra o mundo real, mas num mundo de mentira controlado.
   deixar arquivo pela metade; ler documento de `versaoDoEsquema` antiga aciona migração.
 - **`geracao/`**: um script falso de `claude` colocado no PATH do teste, que devolve JSON
   canned, JSON inválido, código de saída != 0, e um que trava (para testar o timeout).
-  **Nenhum teste da suíte chama a API de verdade.**
+  **Nenhum teste da suíte chama a API de verdade.** Obrigatório: um teste que passa contexto com
+  quebra de linha, aspas duplas e simples, acento e `%`, e verifica que o processo filho recebeu
+  o texto **íntegro** (D-015 — foi exatamente isso que quebrou no Spike C).
+- **`git/`**: repositório de teste construído em `tmpdir` com dois worktrees, um sujo e um
+  limpo, commits datados de hoje e de ontem. Verificar enumeração, estado por worktree e o
+  recorte de "commits do dia". Mais um caso com `cwd` que não é repositório.
 - **`processo/`**: iniciar um processo filho trivial, verificar liveness, terminar com graça,
   verificar que morreu. Por plataforma.
 - **`notificacao/`**: cada backend com o binário externo falsificado; verificar os argumentos

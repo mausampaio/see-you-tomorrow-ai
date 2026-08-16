@@ -16,6 +16,11 @@ Pare e registre em `docs/QUESTOES.md`.
 - **Multiusuário.** Um usuário, um `~/.see-you-tomorrow/`.
 - **Injetar comandos na sessão viva.** Fechado por D-001. Não tente TTY, named pipe, injeção
   de teclado, automação de janela ou qualquer variação disso.
+- **O wrapper PTY (`seeya claude`).** É v2 e já está desenhado em D-014. Não antecipe, não
+  adicione `node-pty`, não crie o comando "só para reservar o nome". A v1 tem que funcionar
+  inteira sem ele.
+- **Ler a issue / o tracker** de onde um agente de execução escreve o resultado. O `seeya` lê o
+  worktree, não o tracker.
 - **Kill forçado de sessão.** Só terminação graciosa (D-002).
 - **Editar arquivos do usuário nos projetos capturados.** O app lê `cwd` e roda `git status`.
   Não commita, não faz stash, não escreve nada.

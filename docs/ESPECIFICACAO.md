@@ -110,12 +110,47 @@ nos últimos 60 s. Se foi, a sessão está no meio de um turno: adia a captura d
 até 5 minutos, tentando de novo. Esgotado o prazo, captura assim mesmo e marca o handoff como
 `capturadoDuranteTurnoAtivo: true`.
 
+## Fontes de evidência (D-013)
+
+O transcript **não** é a fonte de verdade, é uma entre três. A captura tenta todas e monta o
+handoff com o que responder. Um handoff é válido se qualquer fonte produzir conteúdo.
+
+| Fonte | O que dá | Disponível quando |
+|---|---|---|
+| **Git** | branch, commits do dia, diff não commitado, worktrees e o estado de cada um | `cwd` é repositório |
+| **Transcript** | últimos prompts, arquivos tocados, última atividade | persistência ligada |
+| **Registro** | `cwd`, nome, horário de início, `kind` | sessão registrada |
+
+O handoff declara em `fontes: ["git", "transcript"]` de onde veio a informação, e o briefing
+sinaliza sessões cuja evidência é parcial.
+
+### Sessão sem transcript
+
+Cenário real e legítimo: agentes de execução rodam com persistência desativada de propósito
+porque o resultado deles vive em outro lugar — uma issue, um worktree, um PR. O `seeya` trata
+isso como caso normal, não como falha.
+
+- **Detecção precoce.** Assim que uma sessão registrada é vista sem transcript, o `seeya`
+  notifica na hora, não no encerramento. Só dá para reagir enquanto o contexto ainda existe.
+  A notificação é uma vez por `sessionId`, para não virar ruído.
+- **Captura.** Cai para git + registro. Com worktree ativo o handoff continua bom: qual
+  worktree, qual branch, o que foi commitado hoje, o que ficou sujo.
+- **Marcação.** `origem: "semTranscript"`. Não é erro, não polui a saída com aviso de falha.
+
+### Worktrees
+
+Um worktree é uma unidade de trabalho de primeira classe, não um detalhe do repositório. Para
+cada worktree do repositório do `cwd`, o handoff registra caminho, branch, se está sujo e os
+commits do dia. Isso é o que salva o caso do agente de execução.
+
 ## Elegibilidade
 
 Uma sessão entra no encerramento se, e somente se:
 
-- tem transcript legível; **e**
-- teve atividade nas últimas `horasDeRelevancia` (default 12 h); **e**
+- pelo menos uma fonte de evidência respondeu; **e**
+- teve atividade nas últimas `horasDeRelevancia` (default 12 h) — medida pela fonte mais
+  recente disponível, não só pelo transcript; **e**
+- o `sessionId` não é um fork criado pelo próprio `seeya` (D-012); **e**
 - o `cwd` não está na lista `ignorar` da config; **e**
 - não tem handoff do dia corrente com transcript inalterado desde então (anti-duplicidade).
 
@@ -132,12 +167,23 @@ Uma sessão entra no encerramento se, e somente se:
   "capturadoEm": "2026-08-16T21:00:04.120Z",
   "estadoDaSessao": "viva" | "ociosa" | "encerrada",
   "capturadoDuranteTurnoAtivo": false,
-  "origem": "modelo" | "deterministico",
+  "origem": "modelo" | "deterministico" | "semTranscript",
+  "modoDaCaptura": "enxuto" | "profundo",
+  "fontes": ["git", "transcript", "registro"],
   "fatos": {
     "ultimaAtividade": "2026-08-16T20:41:11.000Z",
     "ultimosPrompts": ["...", "..."],
     "arquivosTocados": ["src/a.ts"],
-    "git": { "branch": "main", "sujo": true, "arquivosModificados": ["src/a.ts"] }
+    "git": {
+      "branch": "main",
+      "sujo": true,
+      "arquivosModificados": ["src/a.ts"],
+      "commitsDoDia": [{ "sha": "1b7fd99", "titulo": "docs: especificação inicial" }],
+      "worktrees": [
+        { "caminho": "c:\\code\\projeto\\.wt\\issue-42", "branch": "issue-42",
+          "sujo": false, "commitsDoDia": 3 }
+      ]
+    }
   },
   "entendimento": "texto livre",
   "pendencias": ["..."],

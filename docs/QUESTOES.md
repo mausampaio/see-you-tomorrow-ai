@@ -28,4 +28,43 @@ foi verificado empiricamente. É o risco número um do projeto.
 **Opções que enxergo:** A) funciona como assumido, seguimos com D-001 literal. B) não funciona
 com sessão viva, e a geração passa a montar o contexto a partir do transcript lido, chamando
 `claude -p` numa sessão nova.
-**Resposta:** aguardando o resultado do Spike A.
+**Resposta:** **Opção A — FECHADA em 2026-08-16.** Ver `docs/spikes/A-resume-headless.md`.
+Funciona com a sessão viva, o transcript original é preservado, o fork enxerga a conversa
+inteira, ~5,5 s por sessão. D-001 permanece como está. O spike levantou três consequências
+novas: custo por captura, forks acumulando em disco e risco de laço de realimentação — todas
+tratadas em D-011, D-012 e nas tarefas dos Sprints 1 e 2.
+
+---
+
+## Q-002 — Uma sessão do `agente-interno` chega a ser descoberta?
+**Tarefa:** S1-T3
+**Bloqueia:** não a v1; **sim** o cenário do agente autônomo
+**Contexto:** D-013 resolve o handoff de sessão sem transcript lendo git e worktree. Mas isso
+pressupõe que o `seeya` **enxergue** a sessão. A descoberta depende de o Claude Code registrar
+o processo em `~/.claude/sessions/<pid>.json`.
+
+Sessões interativas registram — verificado nesta máquina. Sessões headless (`-p`) podem não
+registrar: os spikes A e C não deixaram entrada no registro, mas foram curtos demais para
+concluir. O campo `kind: "interactive"` sugere que existem outros valores.
+
+Se o `agente-interno` roda `claude -p`, é possível que **não haja registro nem transcript** — o
+`seeya` ficaria completamente cego para ele. Nesse caso a descoberta teria de ser
+**por worktree**, e não por sessão: varrer repositórios conhecidos e tratar cada worktree novo
+como unidade de trabalho, independente de haver processo Claude associado.
+
+**Dados necessários (a coletar na segunda máquina, com o `agente-interno` rodando):**
+```
+claude agents --json --all
+ls ~/.claude/sessions/           # há entrada nova? qual o "kind"?
+ls ~/.claude/projects/*/         # apareceu .jsonl?
+git worktree list --porcelain    # no repositório do projeto
+```
+
+**Opções que enxergo:**
+A) O agente-interno registra → D-013 basta, nada muda.
+B) Não registra, mas cria worktree → precisamos de **descoberta por worktree** como segunda
+   origem do `ProvedorDeSessoes`. É trabalho novo, provavelmente um sprint.
+C) Não registra e não dá pista nenhuma → esse cenário só é resolvido pelo wrapper (D-014),
+   e vira mais um argumento para priorizar a v2.
+
+**Resposta:** aguardando coleta do usuário no outro ambiente.
