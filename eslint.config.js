@@ -16,7 +16,9 @@ export default tseslint.config(
   {
     // .dependency-cruiser.cjs é CommonJS de propósito (ver o próprio arquivo) e não faz parte
     // do programa TypeScript do projeto — fica fora do escopo do ESLint type-aware.
-    ignores: ['dist/**', 'coverage/**', 'node_modules/**', '.dependency-cruiser.cjs'],
+    // coverage/** é '**/coverage/**' (não só a da raiz) porque as fixtures de
+    // tests/fixtures/guardas/ geram a delas própria ao rodar.
+    ignores: ['dist/**', '**/coverage/**', 'node_modules/**', '.dependency-cruiser.cjs'],
   },
   ...tseslint.configs.recommendedTypeChecked,
   {
