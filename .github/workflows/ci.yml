@@ -1,0 +1,36 @@
+# CI do see-you-tomorrow. Roda o portão de qualidade (`npm run verificar`: tipos, lint,
+# dependency-cruiser, build e testes de unidade + integração com cobertura) nos 3 SOs
+# suportados. Ver docs/PLANO-DE-ENTREGA.md S0-T2 e CLAUDE.md.
+#
+# Não roda test:e2e nem test:contrato aqui: e2e é caro e contrato depende do ~/.claude real da
+# máquina (CLAUDE.md, docs/TESTES.md).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verificar:
+    name: verificar (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - name: Baixa o código
+        uses: actions/checkout@v4
+
+      - name: Configura o Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instala as dependências
+        run: npm ci
+
+      - name: Roda o portão de qualidade (tipos + lint + dependency-cruiser + build + cobertura)
+        run: npm run verificar
