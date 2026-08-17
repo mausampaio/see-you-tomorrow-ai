@@ -115,12 +115,30 @@ a lista inteira → D-022 e S1-T0c.
 | a filha ESTÁ em `~/.claude/sessions/` mas `claude agents --json` a filtra | o `seeya` lê o **diretório direto**, não o CLI. D-016 funciona e nada muda de arquitetura. |
 | a filha NÃO está no diretório | cenário C: descoberta por registro é cega para ela. Aí sobra descoberta por **worktree**, que é trabalho novo e provavelmente um sprint. |
 
-**Comando, com uma sessão do agente-interno rodando:**
+**Descartado em 2026-08-17: não é janela de tempo.** O Spike E mostrou que o registro é efêmero
+(a entrada é apagada na saída graciosa), e a primeira hipótese foi que as filhas já teriam
+terminado. **O usuário confirmou que havia sessões ativas** quando rodou o comando. A ephemeralidade
+é real mas não explica a ausência.
+
+**A medição de três fontes, que é o que decide.** O SO é a verdade; registro e CLI são o que o
+Claude Code escolhe expor. Rodar no Linux, com uma filha do agente-interno trabalhando:
+
+```bash
+ps -ef | grep -i '[c]laude'                                  # 1. o que existe de verdade
+ls -la ~/.claude/sessions/ && cat ~/.claude/sessions/*.json  # 2. o que está no registro
+claude agents --json --all                                   # 3. o que o CLI mostra
+ls -l /proc/<PID>/cwd && tr '\0' ' ' < /proc/<PID>/cmdline    # 4. para um pid só em 1
 ```
-ls -la ~/.claude/sessions/ && cat ~/.claude/sessions/*.json
-```
-Compare os `sessionId` que aparecem ali com os de `claude agents --json --all`. Se houver algum a
-mais no diretório, é o primeiro mundo.
+
+| Filha aparece em… | Conclusão |
+|---|---|
+| 1, 2 e 3 | era outra coisa; a questão fecha |
+| 1 e 2, não em 3 | o CLI **filtra** → o `seeya` lê o diretório direto e ignora `agents --json` |
+| só em 1 | o Claude Code **não registra** → sobra enumerar processos; o passo 4 prova que no Linux `cwd` e linha de comando são acessíveis |
+
+O passo 4 vale por si: no Windows medi que o `cwd` de outro processo **não** é acessível sem
+código nativo. Se no Linux for, a terceira estratégia fica viável exatamente na plataforma onde o
+problema existe.
 
 **O vão entre as duas estratégias, que só ficou claro agora.** D-016 tem registro e varredura de
 transcript, e elas foram desenhadas para se complementar: registro pega interativa, varredura

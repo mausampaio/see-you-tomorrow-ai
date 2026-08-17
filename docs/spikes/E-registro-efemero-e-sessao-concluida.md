@@ -38,10 +38,14 @@ sem `-p` registra.
 
 A entrada existe **apenas enquanto o processo vive**, e é apagada na saída graciosa.
 
-`claude agents --json` é, portanto, um **retrato de sessões vivas**, não um histórico. Isso quase
-certamente explica a observação relatada: as filhas do agente-interno não apareciam porque **já
-tinham terminado** quando o comando rodou. Não é filtragem, não é ausência de registro — é que
-já não existiam.
+`claude agents --json` é, portanto, um **retrato de sessões vivas**, não um histórico.
+
+> **CORREÇÃO (2026-08-17).** A primeira versão deste documento concluiu que isso explicava a
+> observação relatada — que as filhas não apareciam porque já teriam terminado. **O usuário
+> confirmou que havia sessões ativas no momento em que rodou o comando.** Logo a ephemeralidade
+> **não** explica a ausência delas. O achado do spike continua válido e foi verificado por
+> execução; ele apenas não é a resposta para Q-002. A causa segue desconhecida, e a medição de
+> três fontes registrada em Q-002 é o que decide.
 
 **Nuance importante, não contradiz:** entradas obsoletas *existem* (verificado na primeira recon:
 uma de 26/07 apontando para um PID morto). Elas sobrevivem apenas a **terminação anormal** — kill,
