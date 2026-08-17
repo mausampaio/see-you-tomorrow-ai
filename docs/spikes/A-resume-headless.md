@@ -10,7 +10,7 @@ teste (`sessionId 11111111-…`, pid 40001, `cwd c:\code\see-you-tomorrow`), que
 cenário de risco.
 
 ```
-claude -p --resume 11111111-5139-4ec7-ab48-0ab0688323bc --fork-session \
+claude -p --resume 11111111-1111-4111-8111-111111111111 --fork-session \
        --model sonnet --output-format json \
        "Responda apenas com uma linha: qual o nome do binario CLI decidido neste projeto e qual a decisao D-001?"
 ```

@@ -78,6 +78,23 @@ Perguntar custa uma mensagem.
   este app.
 - Fixtures de teste são anonimizadas. Nenhum caminho real, token ou código privado no repo.
 
+**Este projeto é de código aberto**
+Tudo que entra aqui é lido por qualquer pessoa, para sempre, e não tem como ser retirado depois.
+Isso vale para código, documentos, mensagens de commit e fixtures.
+
+- Contexto que vem de **fora deste projeto** — nome de ferramenta de terceiro, sistema interno,
+  identificador, caminho de máquina — é **anonimizado antes** de entrar em arquivo versionado.
+  Descreva o comportamento técnico, que é o que importa para a decisão, e omita a origem.
+- **Documentar bem e publicar são decisões separadas.** É fácil tratar como uma só quando se
+  está escrevendo rápido, e o custo de errar é irreversível.
+- Em exemplo, use placeholder: `<usuario>`, `~`, UUID obviamente sintético
+  (`11111111-1111-4111-8111-111111111111`). Nunca o valor real, nem "só nesta linha".
+- `scripts/verificar-termos-locais.mjs` roda no pre-commit e recusa o commit em dois casos: termo
+  presente em `.termos-locais` (arquivo local, fora do git), ou conteúdo com **forma** de
+  vazamento — caminho de home com usuário, e-mail, UUID que não pareça sintético.
+- O guard só conhece o que já se sabe. **A regra vale mais que ele**: ele não vai pegar o nome
+  novo que só você viu.
+
 **Testes**
 - Nenhum teste toca a rede, o relógio real, o `~/.claude` real ou o `~/.see-you-tomorrow` real.
 - Toda tarefa entrega os testes da sua faixa. Código sem teste não está pronto.

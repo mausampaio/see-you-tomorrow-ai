@@ -32,6 +32,10 @@ Checklist do revisor:
 5. Entrou código que só faz sentido para uma tarefa futura? (escopo adiantado é defeito)
 6. Erro de fora do app é tratado sem derrubar o comando inteiro?
 7. Algo aqui deveria ter virado uma questão em vez de uma decisão do dev?
+8. **O diff publica algo que não deveria?** Este projeto é de código aberto. Procure caminho de
+   máquina com usuário real, e-mail, identificador de sessão, nome de sistema de terceiro — em
+   código, documento, fixture **e mensagem de commit**. O guard de pre-commit pega o que já se
+   sabe; você é quem pega o que é novo.
 
 Saída do review: lista de achados com severidade, e um veredito **aprovado** ou **reprovado**.
 Só o PO move a tarefa para `[x]`.

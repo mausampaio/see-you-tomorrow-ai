@@ -32,7 +32,14 @@ function lerTermos() {
     .filter((linha) => linha.length > 0 && !linha.startsWith('#'));
 }
 
-/** Conteúdo que está em stage, incluindo os nomes dos arquivos (um caminho pode vazar tanto quanto o texto). */
+/**
+ * Conteúdo que está sendo ADICIONADO em stage, mais os nomes dos arquivos (um caminho pode vazar
+ * tanto quanto o texto).
+ *
+ * Só as linhas `+` do diff, nunca as `-`. Ao remover um dado que não deveria estar publicado, o
+ * diff necessariamente contém o valor antigo na linha removida — checar o diff inteiro faria o
+ * guard impedir a própria limpeza. Isso aconteceu de verdade na primeira versão deste script.
+ */
 function conteudoEmStage() {
   const diff = spawnSync('git', ['diff', '--cached', '--unified=0'], {
     cwd: raizDoRepo,
@@ -50,38 +57,117 @@ function conteudoEmStage() {
     process.exitCode = 1;
     return null;
   }
-  return `${diff.stdout}\n${nomes.stdout}`;
+  const linhasAdicionadas = diff.stdout
+    .split(/\r?\n/)
+    .filter((linha) => linha.startsWith('+') && !linha.startsWith('+++'))
+    .join('\n');
+  return `${linhasAdicionadas}\n${nomes.stdout}`;
+}
+
+/**
+ * Padrões que têm forma de vazamento, independente de qualquer lista. A lista de termos só
+ * conhece o que já vazou uma vez; estes padrões pegam o próximo, que ninguém previu.
+ *
+ * Este projeto é de código aberto: tudo aqui é lido por qualquer pessoa, para sempre. Caminho
+ * de home, endereço de e-mail e identificador de sessão real não acrescentam nada a quem lê e
+ * não têm como ser retirados depois que saem.
+ */
+const PADROES_SUSPEITOS = [
+  {
+    nome: 'caminho de home com usuário real',
+    // Aceita placeholder entre <> ou ~, recusa nome de usuário literal.
+    regex: /(?:\/home\/|\/Users\/|[A-Za-z]:\\Users\\)(?!<)[A-Za-z0-9._%+-]{2,}/g,
+  },
+  {
+    nome: 'endereço de e-mail',
+    regex: /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g,
+  },
+  {
+    nome: 'UUID de aparência real',
+    // Um UUID de exemplo deve ser obviamente falso: só dígitos repetidos e letras em sequência.
+    // Este padrão casa qualquer UUID e a filtragem de falsos positivos vem depois.
+    regex: /\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b/g,
+  },
+];
+
+/**
+ * UUIDs que são constantes públicas conhecidas, não identificadores de ninguém. Cada entrada
+ * precisa de um comentário dizendo de onde vem — sem isso, esta lista vira um lugar para
+ * silenciar avisos.
+ */
+const UUIDS_PUBLICOS = new Set([
+  // AppUserModelID do PowerShell, usado como remetente de toast no Windows (Spike B).
+  '1ac14e77-02e7-4e5d-b744-2eb1ae5198b7',
+]);
+
+/** Um UUID de exemplo é aceitável se for obviamente sintético: no máximo 4 símbolos distintos. */
+function pareceSintetico(uuid) {
+  const distintos = new Set(uuid.toLowerCase().replace(/-/g, ''));
+  return distintos.size <= 4;
+}
+
+function acharPadroesSuspeitos(conteudo) {
+  const achados = [];
+  for (const { nome, regex } of PADROES_SUSPEITOS) {
+    for (const ocorrencia of conteudo.matchAll(regex)) {
+      const valor = ocorrencia[0];
+      if (nome === 'UUID de aparência real') {
+        if (UUIDS_PUBLICOS.has(valor.toLowerCase()) || pareceSintetico(valor)) {
+          continue;
+        }
+      }
+      achados.push({ nome, valor });
+    }
+  }
+  return achados;
+}
+
+function reportar(titulo, itens, orientacao) {
+  console.error('');
+  console.error(`Commit recusado: ${titulo}`);
+  console.error('');
+  for (const item of itens) {
+    console.error(`  - ${item}`);
+  }
+  console.error('');
+  console.error(orientacao);
+  console.error('');
 }
 
 function main() {
-  const termos = lerTermos();
-  if (termos.length === 0) {
-    return;
-  }
-
   const conteudo = conteudoEmStage();
   if (conteudo === null) {
     return;
   }
 
+  const termos = lerTermos();
   const conteudoMinusculo = conteudo.toLowerCase();
-  const encontrados = termos.filter((termo) => conteudoMinusculo.includes(termo.toLowerCase()));
+  const termosEncontrados = termos.filter((termo) =>
+    conteudoMinusculo.includes(termo.toLowerCase()),
+  );
 
-  if (encontrados.length === 0) {
+  if (termosEncontrados.length > 0) {
+    reportar(
+      'o conteúdo em stage contém termo listado em .termos-locais.',
+      termosEncontrados,
+      'Reescreva o trecho de forma genérica antes de commitar. Se o termo é legítimo aqui,\n' +
+        'remova-o de .termos-locais — mas remova por decisão, nunca por pressa.',
+    );
+    process.exitCode = 1;
     return;
   }
 
-  console.error('');
-  console.error('Commit recusado: o conteúdo em stage contém termo listado em .termos-locais.');
-  console.error('');
-  for (const termo of encontrados) {
-    console.error(`  - ${termo}`);
+  const suspeitos = acharPadroesSuspeitos(conteudo);
+  if (suspeitos.length > 0) {
+    reportar(
+      'o conteúdo em stage tem forma de dado que não deveria ser publicado.',
+      [...new Set(suspeitos.map(({ nome, valor }) => `${nome}: ${valor}`))],
+      'Troque por um placeholder — `<usuario>`, `~`, ou um UUID obviamente sintético.\n' +
+        'Se for constante pública, acrescente a UUIDS_PUBLICOS neste script, com um comentário\n' +
+        'dizendo de onde ela vem.',
+    );
+    process.exitCode = 1;
   }
-  console.error('');
-  console.error('Reescreva o trecho de forma genérica antes de commitar. Se o termo é legítimo');
-  console.error('aqui, remova-o de .termos-locais — mas remova por decisão, nunca por pressa.');
-  console.error('');
-  process.exitCode = 1;
 }
 
 main();
