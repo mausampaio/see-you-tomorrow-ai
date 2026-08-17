@@ -70,9 +70,26 @@ npm run verificar:linux
 Isso executa `npm ci && npm run verificar` dentro de `node:22-bookworm`, reproduzindo o job
 Linux do CI. O `node_modules` do host **nunca** é montado no container — `vitest`, `esbuild`
 e `rollup` trazem binários nativos por plataforma, e um `node_modules` instalado no Windows
-quebra na hora dentro do Linux. Em vez disso, o script usa um volume Docker nomeado
-(`seeya-node-modules`), isolado do host, populado por `npm ci` rodando dentro do container. A
-primeira execução reinstala tudo; as seguintes reaproveitam o volume e ficam rápidas.
+quebra na hora dentro do Linux. Em vez disso, o script usa um volume Docker nomeado, isolado
+do host, populado por `npm ci` rodando dentro do container. A primeira execução reinstala
+tudo; as seguintes reaproveitam o volume e ficam rápidas.
+
+O nome do volume é `seeya-node-modules-<hash>`, onde `<hash>` deriva do caminho absoluto do
+repositório — **um volume por repositório/worktree, nunca um só global**. Foi provado que um
+volume único quebra sob concorrência: dois `npm ci` simultâneos (dois worktrees rodando o
+pré-voo ao mesmo tempo — cenário comum aqui) escrevendo no mesmo volume fazem um deles perder
+a corrida com `ENOENT: Cannot cd into '/app/node_modules/...'`. É falso-vermelho, não
+falso-verde, e o volume não fica corrompido — mas é um vermelho sem relação com o código do
+dev. O hash por caminho elimina a corrida sem precisar de lock: cada worktree tem o seu volume,
+e o repositório principal continua reaproveitando o mesmo entre execuções (mesmo caminho toda
+vez), preservando o ganho de cache.
+
+Custo: um volume órfão fica para trás quando um worktree é removido. Para limpar:
+
+```bash
+docker volume ls --filter name=seeya-node-modules-   # lista os volumes do projeto
+docker volume rm seeya-node-modules-<hash>            # remove o de um worktree específico
+```
 
 Requer o Docker Desktop instalado e em execução; o script detecta se o daemon não responde e
 avisa em vez de falhar com um erro críptico.
