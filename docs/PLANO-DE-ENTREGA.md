@@ -175,6 +175,12 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       - extrair da linha de comando o que serve de handoff: o comando e o item de trabalho
       - sessão vinda só desta origem entra com `sessionId: null` e nunca é candidata a
         encerramento de processo
+      **A união de tipos vai precisar crescer, e isso é esperado.** O tipo de S1-T1 tem duas
+      formas: com `pid` (e `sessionId`) e sem `pid` (e com `sessionId`). Esta origem é o inverso
+      que ainda não existe: tem `pid` e **não tem `sessionId`** — o `.key` dá o PID, e o processo
+      dá `cwd` e linha de comando, mas nenhum dos dois dá o id da sessão. Quem implementar decide
+      a forma junto com o PO; o importante é não forçar um `sessionId` sintético só para caber no
+      tipo atual, o que criaria um identificador falso que a deduplicação de S1-T9 usaria.
       *Aceite:* uma sessão lançada por script com prompt como argumento é descoberta, com `cwd` e
       linha de comando, num `~/.claude` falso + processo de teste. E um `.key` cujo PID **não**
       está vivo é ignorado, não reportado como sessão.

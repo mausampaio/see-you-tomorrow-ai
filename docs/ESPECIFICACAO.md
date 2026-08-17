@@ -193,7 +193,7 @@ Uma sessão entra no encerramento se, e somente se:
   "cwd": "c:\\code\\projeto",
   "nome": "projeto-03",
   "capturadoEm": "2026-08-16T21:00:04.120Z",
-  "estadoDaSessao": "viva" | "ociosa" | "encerrada",
+  "estadoDaSessao": "viva" | "ociosa" | "encerrada" | "desconhecida",
   "capturadoDuranteTurnoAtivo": false,
   "origem": "modelo" | "deterministico" | "semTranscript",
   "modoDaCaptura": "enxuto" | "profundo",

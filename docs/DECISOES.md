@@ -455,6 +455,40 @@ não perder. Exigir `pid` ou `id` reintroduziria o bug que D-021 corrigiu.
 
 ---
 
+## D-025 — Ausência de dado não vira afirmação sobre o mundo
+
+**Contexto.** Ao classificar o estado de uma sessão viva cuja última escrita no transcript é
+`null` — porque não há transcript —, a implementação de S1-T1 retornou **`ociosa`**, com o
+argumento de que é a leitura literal de "sessão viva sem escrita no transcript há mais de
+`minutosParaOcioso`" no caso degenerado.
+
+**Decisão. Está errado, e a resposta correta é `viva`.** O próprio glossário resolve:
+
+- **`viva`** = "sessão cujo processo está em execução agora". É exatamente o que se sabe quando o
+  PID está vivo.
+- **`ociosa`** = "sessão **viva** sem escrita no transcript há mais de `minutosParaOcioso`". É um
+  **refinamento** de `viva`, e depende de evidência de não-escrita.
+
+Com `null` não há transcript, logo não há como estabelecer "sem escrita há mais de X minutos" —
+não há como estabelecer nada sobre escrita. `ociosa` é uma **afirmação**; `null` é **ausência de
+dado**. Converter uma na outra é o erro.
+
+**Por que isso importa mais do que parece.** `null` é precisamente o caso de D-013: transcript
+suprimido, que é o agente de execução autônomo. Marcá-lo como `ociosa` diria "não está fazendo
+nada" justamente sobre a sessão com maior probabilidade de estar trabalhando a todo vapor e
+invisível. O `seeya sessoes` mentiria com confiança, e sobre o caso que mais importa.
+
+**Consequências.**
+- `classificarEstado` devolve `viva` quando o processo está vivo e `ultimaEscritaNoTranscript` é
+  `null`. Só devolve `ociosa` com um timestamp real que já passou do limite.
+- Vale como princípio geral do domínio: **nenhuma regra converte "não sei" em afirmação
+  positiva.** Quando faltar dado, o resultado é o estado menos específico que a evidência
+  sustenta, nunca o mais específico que ela permitiria imaginar.
+- Teste obrigatório: sessão viva com `null` é `viva`; sessão viva com timestamp antigo é `ociosa`.
+  Os dois casos, sempre — sem o primeiro, alguém "otimiza" de volta.
+
+---
+
 ## D-019 — O que é proibido é ler o relógio, não construir uma data
 
 **Contexto.** O guard de S0-T2 baniu o identificador `Date` inteiro fora de

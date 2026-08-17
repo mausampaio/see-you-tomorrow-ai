@@ -30,7 +30,7 @@ O que precisa estar coberto com rigor, porque é onde os bugs vão doer:
   passado no momento da checagem; `horarioDeEncerramento: null`.
 - **Adiamento e pular-hoje**: adiar antes do horário; adiar depois do horário; adiar duas vezes;
   pular depois de já ter adiado; virada de meia-noite zerando o estado do dia.
-- **Elegibilidade da sessão**: cada uma das quatro condições da spec isolada, e as combinações
+- **Elegibilidade da sessão**: cada uma das **cinco** condições da spec isolada, e as combinações
   de borda (sessão relevante mas ignorada; sessão com handoff do dia mas transcript alterado).
 - **Liveness com PID reciclado**: PID vivo + `procStart` divergente = obsoleta.
 - **Cadeia de fallback do notificador**: primeiro disponível vence; nenhum disponível cai para
