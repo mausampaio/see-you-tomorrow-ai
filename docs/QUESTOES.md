@@ -122,7 +122,38 @@ ls -la ~/.claude/sessions/ && cat ~/.claude/sessions/*.json
 Compare os `sessionId` que aparecem ali com os de `claude agents --json --all`. Se houver algum a
 mais no diretório, é o primeiro mundo.
 
-**Resposta:** aguardando essa comparação.
+**O vão entre as duas estratégias, que só ficou claro agora.** D-016 tem registro e varredura de
+transcript, e elas foram desenhadas para se complementar: registro pega interativa, varredura
+pega headless. As filhas do agente-interno caem **no vão**: não têm transcript para varrer, e
+aparentemente não têm entrada visível no registro. A redundância do D-016 não ajuda aqui.
+
+**Terceira estratégia possível, se a medição der no pior caso: enumerar processos do SO.** O
+sistema operacional sabe que existe um `claude` rodando, independente de o Claude Code o ter
+registrado. Medido nesta máquina, a capacidade é assimétrica:
+
+| | pid | linha de comando | cwd |
+|---|---|---|---|
+| Linux | sim | sim | sim — `/proc/<pid>/cwd` |
+| macOS | sim | sim | sim, via `lsof -p <pid> -a -d cwd` |
+| **Windows** | sim | sim | **não** — `Win32_Process` não expõe; exigiria ler o PEB via `NtQueryInformationProcess`, código nativo |
+
+A assimetria é aceitável porque o cenário existe no Linux, que é onde a capacidade é
+completa. No Windows as sessões se registram normalmente e a estratégia não é necessária.
+
+Bônus: a própria linha de comando carrega informação útil para o handoff —
+`claude --dangerously-skip-permissions "/agente-interno:dev --item X"` já diz o que a sessão está
+fazendo e em qual item, mesmo sem transcript.
+
+Complicação para a deduplicação do D-016: essa origem **não** fornece `sessionId`. A dedução
+teria de ser por `pid`, que as duas origens têm para sessão viva.
+
+**Ordem de decisão, para não construir o que não precisa:**
+1. medir se a filha está em `~/.claude/sessions/`
+2. se estiver → ler o diretório direto, nada de novo
+3. se não estiver → enumerar processos é mais barato que varrer worktrees, porque não exige saber
+   quais repositórios olhar
+
+**Resposta:** aguardando a comparação entre o diretório e a saída do `agents --json`.
 
 ---
 
