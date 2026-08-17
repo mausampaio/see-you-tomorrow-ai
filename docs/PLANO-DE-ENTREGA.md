@@ -94,20 +94,18 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* `npx vitest run --project guardas --file-parallelism` passa, em Linux e Windows.
       Aí a serialização deixa de ser correção e vira, no máximo, escolha de desempenho.
 
-- [~] **S1-T0b — Pré-voo local em Linux com Docker.** O bug acima só apareceu depois do push,
-      porque não havia como rodar Linux localmente. Não precisava ser assim.
-      Script `npm run verificar:linux` rodando o portão dentro de `node:22-bookworm`.
-      Detalhe que não é opcional: `node_modules` **não pode** ser compartilhado entre host e
-      container — `vitest`, `esbuild` e `rollup` trazem binários específicos de plataforma. Use
-      volume nomeado montado em `/app/node_modules` e `npm ci` dentro do container; depois da
-      primeira vez fica rápido.
-      ```
-      docker run --rm -v "<repo>:/app" -v seeya-node-modules:/app/node_modules \
-        -w /app node:22-bookworm bash -lc "npm ci && npm run verificar"
-      ```
-      **Limite honesto:** cobre Linux, não macOS — não existe container de macOS. O CI nos 3 SOs
-      e a bateria manual do S5-T4 continuam necessários.
-      *Aceite:* o script reproduz o resultado do job Linux do CI, e está documentado no README.
+- [x] **S1-T0b — Pré-voo local em Linux com Docker.** Aprovado no review em 2026-08-16.
+      `npm run verificar:linux` roda o portão dentro de `node:22-bookworm` via `spawnSync` com
+      array e `shell: false` — caminho do Windows atravessa até o Docker sem shell intermediário
+      reescrevendo aspas (D-015 aplicado a ferramental). Propagação de exit code verificada com
+      erro de tipo injetado: saiu 2, com a mensagem real do `tsc`. O review tentou forçar
+      falso-verde por quatro caminhos e todos falharam alto e correto.
+      **Achado do review, corrigido:** volume global compartilhado quebra sob concorrência —
+      dois `npm ci` simultâneos de worktrees diferentes, e um perde com `ENOENT`. Passou a ser
+      `seeya-node-modules-<hash-do-caminho>`, um por repositório/worktree. Elimina a corrida sem
+      lock e preserva o cache (3m06s frio → 1m39s quente).
+      **Limite honesto, escrito no README:** cobre Linux, não macOS — não existe container de
+      macOS. O CI nos 3 SOs e a bateria manual do S5-T4 continuam obrigatórios.
 
 - [ ] **S1-T1 — `nucleo/` de domínio.** Tipos, portas e as regras puras de elegibilidade e de
       classificação viva/ociosa/encerrada. Sem I/O.
