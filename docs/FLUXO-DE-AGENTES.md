@@ -36,7 +36,30 @@ Checklist do revisor:
 Saída do review: lista de achados com severidade, e um veredito **aprovado** ou **reprovado**.
 Só o PO move a tarefa para `[x]`.
 
+## Armadilhas conhecidas do review
+
+Registradas porque já custaram tempo. Se você é o revisor, leia antes de abrir um achado.
+
+**`git diff main..HEAD` num branch desatualizado mente sobre remoção.** Ele compara dois pontos
+finais, então tudo que entrou no `main` depois que o branch nasceu aparece como se o branch
+estivesse **apagando**. Não está: merge de três vias usa a base comum e preserva. Antes de abrir
+achado de "isto apaga trabalho aprovado", **teste**:
+
+```
+git merge --no-commit --no-ff <branch>   # veja o que realmente acontece
+git merge --abort                        # e desfaça
+```
+
+**Tarefas em paralelo não são o dev pulando a fila.** O plano diz que o dev não pula tarefa —
+isso vale para *um* dev. O PO pode rodar tarefas independentes em paralelo, e aí a ordem de
+aprovação não segue a numeração. Se a sequência parecer errada, pergunte antes de tratar como
+violação.
+
 ## Regra de ouro
 
 Dev e revisor nunca são a mesma execução. Se o dev "revisar o próprio trabalho", o review não
 aconteceu.
+
+E a recíproca: **revisor também erra.** Achado é hipótese até ser testado. Um veredito de
+reprovação baseado em leitura de diff, sem execução, vale menos que um "não sei" honesto —
+porque manda o dev corrigir o que não está quebrado.
