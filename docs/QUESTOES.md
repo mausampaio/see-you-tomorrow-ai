@@ -277,7 +277,7 @@ quinta condição (anti-duplicidade) entrou na spec.
 num review de doc. B) alguma das cinco não deveria ser uma condição independente (ex.: deveria
 estar fundida com outra) e o "quatro" é intencional — nesse caso `avaliarElegibilidade` precisa
 mudar.
-**Resposta:** (preenchida pelo PO)
+**Resposta:** **FECHADA — opção A.** `docs/TESTES.md` corrigido para "cinco condições".
 
 **2) `SessaoDescoberta` ainda não cobre a sessão de D-023 (`pid` sem `sessionId`).** D-024 pede
 uma união discriminada por PID — duas formas. Implementei exatamente essas duas
@@ -290,21 +290,24 @@ forma (ou `sessionId` vira nullable em `SessaoComPid`) — decisão de quem impl
 tarefa, não modificação retroativa desta.
 **Opções:** A) confirma o adiamento — o tipo muda em S1-T10. B) o tipo já deveria nascer pronto
 para as três origens, e a tarefa deveria ter sido escopada maior.
-**Resposta:** (preenchida pelo PO)
+**Resposta:** **FECHADA — opção A.** `docs/PLANO-DE-ENTREGA.md` S1-T10 ganhou o aviso explícito de
+que a união de tipos vai precisar crescer para a forma com `pid` e sem `sessionId` — esperado, não
+retrabalho.
 
 **3) `EstadoDaSessao` ganha um quarto valor (`desconhecida`) que não existe no enum do handoff em
 ESPECIFICACAO.** D-016 diz literalmente que uma sessão vista só pela varredura de transcript
 "entra com `pid: null` e estado desconhecido". Mas o formato do handoff em ESPECIFICACAO §
 "Formato do handoff" declara `"estadoDaSessao": "viva" | "ociosa" | "encerrada"` — só três
 valores, sem `"desconhecida"`. Implementei os quatro em `nucleo/tipos.ts#EstadoDaSessao`, porque
-a tarefa (docs/PLANO-DE-ENTREGA.md S1-T1) pede literalmente os quatro e D-016 tem autoridade maior
-que o JSON de exemplo do handoff (que, aliás, é escopo de S2-T3/S2-T4, não desta tarefa). Mas o
-handoff formal em algum momento vai precisar decidir se `estadoDaSessao` aceita o quarto valor ou
-se sessões `SessaoSemPid` simplesmente não geram esse campo da mesma forma.
+a tarefa pede literalmente os quatro e D-016 tem autoridade maior que o JSON de exemplo do handoff
+(que, aliás, é escopo de S2-T3/S2-T4, não desta tarefa). Mas o handoff formal em algum momento vai
+precisar decidir se `estadoDaSessao` aceita o quarto valor ou se sessões `SessaoSemPid`
+simplesmente não geram esse campo da mesma forma.
 **Opções:** A) ESPECIFICACAO está incompleta nesse enum — ganha o quarto valor quando o handoff
 for implementado (S2-T3/S2-T4). B) sessão sem PID nunca chega a ter `estadoDaSessao` no handoff —
 o campo é específico de sessão com PID, e o handoff resolve isso de outro jeito.
-**Resposta:** (preenchida pelo PO)
+**Resposta:** **FECHADA — opção A.** `docs/ESPECIFICACAO.md` § "Formato do handoff" corrigido:
+`"estadoDaSessao": "viva" | "ociosa" | "encerrada" | "desconhecida"`.
 
 **4) Sessão viva sem nenhuma escrita de transcript conhecida: classifiquei como `ociosa`, não
 `viva`.** O glossário define "sessão ociosa" como "sessão viva sem escrita no transcript há mais
@@ -318,4 +321,11 @@ elegibilidade (que não depende do estado, só de `ultimaAtividade`), o risco é
 confirmação antes de S1-T6 depender disso na exibição.
 **Opções:** A) confirma `ociosa` como o default correto. B) `viva` é o default certo quando não há
 transcript para julgar.
-**Resposta:** (preenchida pelo PO)
+**Resposta:** **FECHADA — opção B, e a escolha original (A) estava errada, não só arriscada.**
+Ver `docs/DECISOES.md` D-025: `viva` é o estado padrão de processo vivo, e `ociosa` só se aplica
+com evidência positiva de silêncio (timestamp real além do limite) — nunca por ausência de
+transcript. `null` é ausência de dado, não uma afirmação sobre inatividade; converter uma na
+outra é o erro que D-025 nomeia. Importa mais do que "cosmético": é precisamente o caso do agente
+de execução autônomo (D-013), a sessão com maior chance de estar trabalhando invisível.
+`classificarEstado` corrigido; ver também D-026, que generaliza o mesmo princípio para a
+anti-duplicidade da elegibilidade.
