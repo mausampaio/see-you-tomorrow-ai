@@ -252,3 +252,70 @@ Descobriu-se um terceiro estado degradado não previsto: **transcript incompleto
 escrita, indetectável de fora. Gerou D-017 e D-018, e esse cenário tem correção imediata
 sem depender do `seeya`: definir `CLAUDE_CODE_FORCE_SESSION_PERSISTENCE=1` no ambiente do script
 do `agente-interno:ui`.
+
+---
+
+## Q-004 — Quatro pontos não-bloqueantes encontrados implementando S1-T1
+**Tarefa:** S1-T1
+**Bloqueia:** não — nenhum dos quatro impediu a implementação; registrados para visibilidade do
+review, conforme "perguntar custa uma mensagem".
+**Contexto:** implementando `nucleo/tipos.ts`, `nucleo/classificacao.ts` e
+`nucleo/elegibilidade.ts`, encontrei quatro pontos onde os documentos divergem entre si ou onde a
+spec não decide sozinha o suficiente para codificar sem uma escolha explícita. Em nenhum dos
+quatro a implementação exigiu inventar comportamento novo não ancorado em texto — são escolhas de
+representação/grafia, ou um recorte de escopo já anunciado. Registro aqui para o review confirmar
+ou corrigir.
+
+**1) `docs/TESTES.md` diz "quatro condições" de elegibilidade; `docs/ESPECIFICACAO.md` lista
+cinco.** A seção "Elegibilidade" de ESPECIFICACAO tem cinco marcadores em "e": fonte de evidência,
+atividade recente, não é fork, `cwd` não ignorado, anti-duplicidade. TESTES.md § "Unidade" diz
+"cada uma das quatro condições da spec isolada". Implementei as cinco (`avaliarElegibilidade` em
+`nucleo/elegibilidade.ts`), porque ESPECIFICACAO tem autoridade maior que TESTES.md na ordem do
+CLAUDE.md, e testei as cinco isoladamente. TESTES.md parece só não ter sido atualizado quando a
+quinta condição (anti-duplicidade) entrou na spec.
+**Opções:** A) TESTES.md está desatualizado, sem consequência — só corrigir "quatro" para "cinco"
+num review de doc. B) alguma das cinco não deveria ser uma condição independente (ex.: deveria
+estar fundida com outra) e o "quatro" é intencional — nesse caso `avaliarElegibilidade` precisa
+mudar.
+**Resposta:** (preenchida pelo PO)
+
+**2) `SessaoDescoberta` ainda não cobre a sessão de D-023 (`pid` sem `sessionId`).** D-024 pede
+uma união discriminada por PID — duas formas. Implementei exatamente essas duas
+(`SessaoComPid`/`SessaoSemPid`, ambas com `sessionId` obrigatório). Mas D-023 (S1-T10, ainda não
+implementada) descreve uma **terceira** origem: PID confirmado pelo SO, sem `sessionId` nenhum —
+o inverso do que `SessaoSemPid` cobre hoje (`sessionId` presente, sem `pid`). Deixei isso fora de
+propósito, para não adiantar escopo de uma tarefa que ainda nem começou, e documentei a lacuna em
+comentário no tipo. Quando S1-T10 chegar, `SessaoDescoberta` provavelmente precisa de uma terceira
+forma (ou `sessionId` vira nullable em `SessaoComPid`) — decisão de quem implementar aquela
+tarefa, não modificação retroativa desta.
+**Opções:** A) confirma o adiamento — o tipo muda em S1-T10. B) o tipo já deveria nascer pronto
+para as três origens, e a tarefa deveria ter sido escopada maior.
+**Resposta:** (preenchida pelo PO)
+
+**3) `EstadoDaSessao` ganha um quarto valor (`desconhecida`) que não existe no enum do handoff em
+ESPECIFICACAO.** D-016 diz literalmente que uma sessão vista só pela varredura de transcript
+"entra com `pid: null` e estado desconhecido". Mas o formato do handoff em ESPECIFICACAO §
+"Formato do handoff" declara `"estadoDaSessao": "viva" | "ociosa" | "encerrada"` — só três
+valores, sem `"desconhecida"`. Implementei os quatro em `nucleo/tipos.ts#EstadoDaSessao`, porque
+a tarefa (docs/PLANO-DE-ENTREGA.md S1-T1) pede literalmente os quatro e D-016 tem autoridade maior
+que o JSON de exemplo do handoff (que, aliás, é escopo de S2-T3/S2-T4, não desta tarefa). Mas o
+handoff formal em algum momento vai precisar decidir se `estadoDaSessao` aceita o quarto valor ou
+se sessões `SessaoSemPid` simplesmente não geram esse campo da mesma forma.
+**Opções:** A) ESPECIFICACAO está incompleta nesse enum — ganha o quarto valor quando o handoff
+for implementado (S2-T3/S2-T4). B) sessão sem PID nunca chega a ter `estadoDaSessao` no handoff —
+o campo é específico de sessão com PID, e o handoff resolve isso de outro jeito.
+**Resposta:** (preenchida pelo PO)
+
+**4) Sessão viva sem nenhuma escrita de transcript conhecida: classifiquei como `ociosa`, não
+`viva`.** O glossário define "sessão ociosa" como "sessão viva sem escrita no transcript há mais
+de `minutosParaOcioso`". Quando `ultimaEscritaNoTranscript` é `null` (sem transcript — D-013, ou
+transcript nunca escreveu), não há um "há quanto tempo" para medir. Escolhi tratar isso como
+`ociosa`: a leitura mais literal é que "sem escrita há mais de X minutos" vale trivialmente quando
+não há escrita nenhuma. A alternativa — tratar como `viva` por falta de evidência em contrário —
+também é defensável e eu não encontrei texto que decida entre as duas. Como isso não afeta
+elegibilidade (que não depende do estado, só de `ultimaAtividade`), o risco é só cosmético
+(`seeya sessoes` mostraria "ociosa" em vez de "viva" para uma sessão sem transcript), mas quero
+confirmação antes de S1-T6 depender disso na exibição.
+**Opções:** A) confirma `ociosa` como o default correto. B) `viva` é o default certo quando não há
+transcript para julgar.
+**Resposta:** (preenchida pelo PO)
