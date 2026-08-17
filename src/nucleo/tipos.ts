@@ -104,10 +104,13 @@ export interface SessaoSemPid extends CamposComunsDaSessao {
 /**
  * Estado de exibição de uma sessão (docs/ESPECIFICACAO.md § "Glossário"; D-016).
  *
- * - `viva` — processo em execução agora, com escrita no transcript dentro da janela de
- *   `minutosParaOcioso`.
- * - `ociosa` — processo em execução agora, mas sem escrita no transcript há mais que
- *   `minutosParaOcioso` (ou nunca escreveu nada — ver `nucleo/classificacao.ts`).
+ * - `viva` — processo em execução agora. É o estado padrão para processo vivo: também vale
+ *   quando não há nenhuma evidência de escrita no transcript (`ultimaEscritaNoTranscript: null`,
+ *   D-013) — `null` não é um sinal de inatividade, é ausência de dado, e `ociosa` é uma
+ *   afirmação que exige um timestamp real (D-025).
+ * - `ociosa` — processo em execução agora, **e** um timestamp real de última escrita no
+ *   transcript que já passou de `minutosParaOcioso`. Refinamento de `viva` que só se aplica
+ *   quando há evidência positiva de silêncio, nunca por ausência de transcript (D-025).
  * - `encerrada` — processo não está mais vivo (morreu, ou a entrada do registro está obsoleta:
  *   PID reciclado com `procStart` divergente). Reportada, não descartada (D-016).
  * - `desconhecida` — sessão sem PID (`SessaoSemPid`): não há como checar liveness, então não há

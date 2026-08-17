@@ -77,14 +77,32 @@ describe('classificarEstado', () => {
     expect(classificarEstado(sessao, PARAMETROS_PADRAO)).toBe('ociosa');
   });
 
-  it('processo vivo sem transcript nenhum (null) é "ociosa" — sem evidência de atividade', () => {
-    const sessao = criarSessaoComPid({
-      processoEstaVivo: true,
-      temTranscript: false,
-      ultimaEscritaNoTranscript: null,
+  /**
+   * D-025: ausência de dado não vira afirmação sobre o mundo. Os dois casos sempre juntos — sem
+   * o primeiro, alguém "otimiza" a checagem de volta para tratar `null` como se fosse um
+   * timestamp antigo.
+   */
+  describe('D-025 — null não é evidência de ociosidade', () => {
+    it('processo vivo sem transcript nenhum (null) é "viva", não "ociosa"', () => {
+      const sessao = criarSessaoComPid({
+        processoEstaVivo: true,
+        temTranscript: false,
+        ultimaEscritaNoTranscript: null,
+      });
+
+      expect(classificarEstado(sessao, PARAMETROS_PADRAO)).toBe('viva');
     });
 
-    expect(classificarEstado(sessao, PARAMETROS_PADRAO)).toBe('ociosa');
+    it('processo vivo com timestamp real além do limite continua "ociosa"', () => {
+      const cinquentaMinutosAtras = new Date(AGORA.getTime() - 50 * 60_000);
+      const sessao = criarSessaoComPid({
+        processoEstaVivo: true,
+        temTranscript: true,
+        ultimaEscritaNoTranscript: cinquentaMinutosAtras,
+      });
+
+      expect(classificarEstado(sessao, PARAMETROS_PADRAO)).toBe('ociosa');
+    });
   });
 });
 
