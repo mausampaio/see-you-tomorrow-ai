@@ -60,7 +60,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
 ## Sprint 1 — Enxergar as sessões
 
-- [ ] **S1-T0 — Tornar os guards insensíveis ao estado da árvore.** Vem antes de tudo: guard
+- [~] **S1-T0 — Tornar os guards insensíveis ao estado da árvore.** Vem antes de tudo: guard
       instável mina toda tarefa seguinte, porque um vermelho que ninguém confia vira um vermelho
       que todo mundo ignora.
       **O que aconteceu:** no commit `6899f99` o CI falhou em Linux e macOS e passou no Windows.
