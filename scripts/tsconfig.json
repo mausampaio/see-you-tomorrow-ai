@@ -1,0 +1,15 @@
+{
+  // Projeto TS só para scripts/: tipagem real (com @types/node) para os scripts de
+  // ferramental, sem ligar allowJs no tsconfig raiz — isso manteria src/ livre de .js solto
+  // (ver comentário em eslint.config.js). Não entra no build (dist/) nem no `tsc -p
+  // tsconfig.json --noEmit` da raiz; é usado só pelo ESLint type-aware ao lintar este
+  // diretório.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["*.mjs"]
+}
