@@ -9,6 +9,17 @@
 // `npm ci` rodando DENTRO do container. Na primeira execução isso reinstala tudo; nas
 // seguintes o volume já está populado e fica rápido.
 //
+// Por que o volume leva um hash do caminho do repositório, e não é um nome fixo global: o
+// review provou uma corrida real — dois `npm ci` concorrentes (dois worktrees rodando o
+// pré-voo ao mesmo tempo, cenário comum aqui) escrevendo no MESMO volume, um perdendo a
+// corrida com `ENOENT: Cannot cd into '/app/node_modules/...'`. Falso-vermelho, não
+// falso-verde, mas ainda um vermelho sem relação com o código do dev. Um volume por
+// caminho absoluto de repositório elimina a corrida sem precisar de lock: cada worktree
+// tem o seu, e o repositório principal continua reaproveitando o mesmo volume entre
+// execuções (é o mesmo caminho toda vez), preservando o ganho de cache medido no S1-T0b
+// (~3min06s frio → ~1min39s quente). Custo: volumes órfãos quando um worktree é removido —
+// ver a seção do README sobre como limpá-los.
+//
 // Por que este script é `.mjs` chamado por `node`, e não uma linha de docker no
 // package.json: montar um caminho do Windows atravessando PowerShell → docker → bash é
 // onde aspas se despedaçam. `spawnSync` com array de argumentos e `shell: false` nunca
@@ -18,6 +29,7 @@
 // macOS — o kernel XNU e a licença da Apple exigem hardware Apple. O CI nos 3 SOs e a
 // bateria manual do S5-T4 continuam obrigatórios.
 
+import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,7 +37,19 @@ import { fileURLToPath } from 'node:url';
 const raizDoRepo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const IMAGEM = 'node:22-bookworm';
-const VOLUME_NODE_MODULES = 'seeya-node-modules';
+
+/**
+ * @param {string} caminhoDoRepo
+ * @returns {string}
+ */
+function nomeDoVolumeDeNodeModules(caminhoDoRepo) {
+  // Hash curto (12 hex) do caminho absoluto, não o caminho em si: nomes de volume Docker só
+  // aceitam [a-zA-Z0-9][a-zA-Z0-9_.-]*, e um caminho do Windows tem `:`, espaço e acento.
+  const hash = createHash('sha256').update(caminhoDoRepo).digest('hex').slice(0, 12);
+  return `seeya-node-modules-${hash}`;
+}
+
+const VOLUME_NODE_MODULES = nomeDoVolumeDeNodeModules(raizDoRepo);
 
 function dockerEstaRodando() {
   const resultado = spawnSync('docker', ['info'], { stdio: 'ignore', shell: false });
@@ -34,6 +58,9 @@ function dockerEstaRodando() {
 
 function main() {
   if (!dockerEstaRodando()) {
+    // console.* solto é proibido em código de produto (CLAUDE.md § Qualidade — "use o
+    // logger"). Este arquivo é ferramental fora de src/, sem logger de produto disponível;
+    // mesmo precedente de tests/contrato/_versao-global-setup.ts.
     console.error(
       [
         'Docker não respondeu (`docker info` falhou).',
@@ -45,6 +72,7 @@ function main() {
     return;
   }
 
+  // console.log solto: mesma justificativa acima — script de ferramental, não produto.
   console.log(`Rodando o portão dentro de ${IMAGEM} (repositório: ${raizDoRepo})`);
   console.log(`Volume de node_modules: ${VOLUME_NODE_MODULES} (não compartilhado com o host)`);
 
@@ -66,12 +94,14 @@ function main() {
   const resultado = spawnSync('docker', argumentos, { stdio: 'inherit', shell: false });
 
   if (resultado.error) {
+    // console.error solto: mesma justificativa acima — script de ferramental, não produto.
     console.error(`Falha ao executar o Docker: ${resultado.error.message}`);
     process.exitCode = 1;
     return;
   }
 
   if (resultado.signal) {
+    // console.error solto: mesma justificativa acima — script de ferramental, não produto.
     console.error(`Container encerrado pelo sinal ${resultado.signal}.`);
     process.exitCode = 1;
     return;
