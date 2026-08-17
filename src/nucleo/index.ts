@@ -4,6 +4,12 @@
  * Não importa `node:*` nem nada de `aplicacao/`, `cli/` ou `adaptadores/`. Sem I/O, sem
  * relógio, sem rede, sem processo. Ver docs/ARQUITETURA.md.
  *
- * Ainda vazio — tipos, portas e regras entram a partir de S1-T1.
+ * Barril de conveniência (S1-T1). Quem preferir, pode importar direto do módulo específico
+ * (ex. `nucleo/classificacao.js`) — os dois caminhos funcionam.
  */
-export {};
+export * from './tipos.js';
+export * from './tempo.js';
+export * from './classificacao.js';
+export * from './elegibilidade.js';
+export * from './encerramento.js';
+export * from './portas.js';
