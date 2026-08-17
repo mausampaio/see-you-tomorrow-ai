@@ -94,7 +94,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* `npx vitest run --project guardas --file-parallelism` passa, em Linux e Windows.
       Aí a serialização deixa de ser correção e vira, no máximo, escolha de desempenho.
 
-- [ ] **S1-T0b — Pré-voo local em Linux com Docker.** O bug acima só apareceu depois do push,
+- [~] **S1-T0b — Pré-voo local em Linux com Docker.** O bug acima só apareceu depois do push,
       porque não havia como rodar Linux localmente. Não precisava ser assim.
       Script `npm run verificar:linux` rodando o portão dentro de `node:22-bookworm`.
       Detalhe que não é opcional: `node_modules` **não pode** ser compartilhado entre host e

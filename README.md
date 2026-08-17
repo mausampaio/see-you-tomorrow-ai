@@ -55,7 +55,31 @@ npm run test:contrato  # contra o ~/.claude real; não roda no CI padrão
 npm run lint           # eslint
 npm run dependencias   # dependency-cruiser: valida as fronteiras de camada
 npm run cobertura      # testes com cobertura e limites por diretório
+npm run verificar:linux  # o portão dentro de um container Linux (node:22-bookworm)
 ```
+
+### Pré-voo em Linux via Docker
+
+O CI roda em três SOs (ubuntu, windows, macos). Um bug real de Linux já escapou para depois
+do push porque não havia como reproduzir o job Linux localmente numa máquina Windows. Rode:
+
+```bash
+npm run verificar:linux
+```
+
+Isso executa `npm ci && npm run verificar` dentro de `node:22-bookworm`, reproduzindo o job
+Linux do CI. O `node_modules` do host **nunca** é montado no container — `vitest`, `esbuild`
+e `rollup` trazem binários nativos por plataforma, e um `node_modules` instalado no Windows
+quebra na hora dentro do Linux. Em vez disso, o script usa um volume Docker nomeado
+(`seeya-node-modules`), isolado do host, populado por `npm ci` rodando dentro do container. A
+primeira execução reinstala tudo; as seguintes reaproveitam o volume e ficam rápidas.
+
+Requer o Docker Desktop instalado e em execução; o script detecta se o daemon não responde e
+avisa em vez de falhar com um erro críptico.
+
+**Limite honesto: não existe cobertura de macOS aqui.** Não existe container de macOS — o
+kernel XNU e a licença da Apple exigem hardware Apple. Este comando cobre só o job Linux do
+CI; o CI nos 3 SOs e a bateria manual do S5-T4 continuam obrigatórios.
 
 ### Antes de escrever código
 
