@@ -67,11 +67,39 @@ B) Não registra, mas cria worktree → precisamos de **descoberta por worktree*
 C) Não registra e não dá pista nenhuma → esse cenário só é resolvido pelo wrapper (D-014),
    e vira mais um argumento para priorizar a v2.
 
-**Resposta:** **Respondida em parte — opção B, em 2026-08-16.** Ver
-`docs/spikes/D-sessao-filha-e-descoberta-de-headless.md`. Sessão headless deixa transcript mas
-**não** se registra em `~/.claude/sessions/`. Descoberta só por registro é cega para agentes de
-execução. Resolvido por D-016 (registro + varredura de transcripts). Falta saber por que as
-sessões do `agente-interno` não deixam transcript → Q-003.
+**Resposta:** **FECHADA em 2026-08-17 — opção A para o agente-interno.** O usuário trouxe o comando
+exato:
+
+```
+claude --dangerously-skip-permissions "/agente-interno:dev [--item X]"
+```
+
+**Não tem `-p`.** É uma sessão **interativa** que começa processando um prompt, não headless. E
+sessão interativa se registra em `~/.claude/sessions/<pid>.json` — verificado nesta máquina.
+
+Cadeia de evidência: a mensagem `Transcript saving is off` é um banner da TUI (componente
+React/Ink no binário 2.1.233, ver Spike D). Só o caminho interativo o renderiza. Se o banner
+aparece, a sessão é interativa; se é interativa, está no registro.
+
+**Consequência boa:** o cenário C — "não registra e não dá pista nenhuma" — está descartado, e
+com ele a possibilidade de precisarmos de **descoberta por worktree**, que era o risco de um
+sprint inteiro. A descoberta por registro (S1-T3) encontra as sessões do agente-interno.
+
+**O que continua valendo:** elas não deixam transcript (marcador de sessão filha herdado,
+D-013), então o handoff delas usa git e worktree como fonte, e D-018 informa a correção. A
+descoberta por varredura de transcripts (D-016, S1-T8) **não** perde razão de existir: ela cobre
+qualquer `claude -p` de verdade, que é o que o Spike D mostrou não se registrar.
+
+**Nota lateral que importa para D-002:** o `--dangerously-skip-permissions` indica sessão
+autônoma trabalhando sem confirmação humana. Encerrar processo dessas é mais arriscado que o
+normal — o default de D-002 (só capturar e avisar) é o certo aqui, e marcar `podeEncerrar: true`
+num projeto que roda agente-interno merece pensar duas vezes.
+
+**Confirmação de um comando, quando puder** (na segunda máquina, com agente-interno rodando):
+```
+claude agents --json --all
+```
+Se a sessão do agente-interno aparecer na lista, está confirmado por execução e não só por inferência.
 
 ---
 

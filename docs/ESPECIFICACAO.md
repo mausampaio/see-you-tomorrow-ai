@@ -124,6 +124,23 @@ handoff com o que responder. Um handoff é válido se qualquer fonte produzir co
 O handoff declara em `fontes: ["git", "transcript"]` de onde veio a informação, e o briefing
 sinaliza sessões cuja evidência é parcial.
 
+### Caso real de referência: agente de execução autônomo
+
+Vale ter em mente um cenário concreto ao implementar a descoberta e a captura, porque ele
+combina três coisas de uma vez:
+
+```
+claude --dangerously-skip-permissions "/agente-interno:dev [--item X]"
+```
+
+- **É interativa**, não headless — logo aparece no registro de processos (Q-002).
+- **Não deixa transcript**, porque herda o marcador de sessão filha de quem a lançou (D-013).
+- **Trabalha sem confirmação humana** e deixa o resultado num worktree e numa issue.
+
+O handoff dessa sessão tem de ser bom usando só git e worktree. E ela é o exemplo mais forte de
+por que D-002 tem o default certo: encerrar o processo de um agente autônomo no meio do trabalho
+é bem pior que deixá-lo aberto.
+
 ### Transcript ausente ou incompleto
 
 O Claude Code 2.1.233 degrada a persistência em três situações, e o `seeya` trata as três como
