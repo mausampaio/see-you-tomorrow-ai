@@ -45,10 +45,10 @@ export default defineConfig({
         test: {
           name: 'integracao',
           include: ['tests/integracao/**/*.teste.ts'],
-          // guardas/ tem projeto próprio (ver abaixo) porque precisa rodar em sequência; o
-          // resto de integracao/ (descoberta/, armazenamento/, git/, processo/, notificacao/ a
-          // partir do Sprint 1) usa tmpdir isolado por teste e não disputa recurso nenhum, então
-          // mantém o paralelismo padrão do Vitest.
+          // guardas/ tem projeto próprio (ver abaixo) porque escreve fixtures na árvore real de
+          // src/; o resto de integracao/ (descoberta/, armazenamento/, git/, processo/,
+          // notificacao/ a partir do Sprint 1) usa tmpdir isolado por teste e não disputa
+          // recurso nenhum, então mantém o paralelismo padrão do Vitest.
           exclude: [...configDefaults.exclude, 'tests/integracao/guardas/**'],
         },
       },
@@ -56,12 +56,16 @@ export default defineConfig({
         test: {
           name: 'guardas',
           include: ['tests/integracao/guardas/**/*.teste.ts'],
-          // Os guards escrevem fixtures na árvore real de src/ e rodam eslint/depcruise de
-          // verdade contra ela inteira (scan completo, não por arquivo) — por isso disputam o
-          // mesmo recurso mutável real e têm que rodar em sequência. O resto de integracao/ usa
-          // tmpdir isolado por teste e não disputa nada (projeto separado acima, com
-          // paralelismo padrão). Ver S0-T6 em docs/PLANO-DE-ENTREGA.md.
-          fileParallelism: false,
+          // SEM fileParallelism: false aqui, de propósito (S1-T0). O S0-T6 serializou este
+          // projeto porque os guards escrevem fixtures na árvore real de src/ e disputavam o
+          // mesmo recurso mutável — mas serializar só ESCONDEU uma corrida real (commit 6899f99,
+          // CI vermelho em Linux/macOS, verde por sorte de timing no Windows). A correção certa
+          // foi tornar os testes insensíveis ao estado da árvore (fixture isolada por arquivo de
+          // teste, dependency-cruiser escopado à própria fixture — ver tests/integracao/guardas/
+          // _apoio.ts), não impedir a concorrência de acontecer. NÃO reintroduza
+          // `fileParallelism: false` para "resolver" uma falha aqui: rodando em paralelo, o
+          // Vitest é o que EXPÕE uma corrida nova o mais cedo possível; serializado, ela dorme
+          // até alguém mexer nesta config, exatamente como aconteceu da primeira vez.
         },
       },
       {
