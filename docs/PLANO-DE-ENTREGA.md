@@ -143,7 +143,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* a saída real da máquina Linux (fixture) é aceita, com a entrada de background
       preservada; e um array com uma entrada boa e uma inválida devolve a boa e reporta a outra.
 
-- [~] **S1-T1 — `nucleo/` de domínio.** Tipos, portas e as regras puras de elegibilidade e de
+- [x] **S1-T1 — `nucleo/` de domínio.** Tipos, portas e as regras puras de elegibilidade e de
       classificação viva/ociosa/encerrada. Sem I/O.
       **Requisito de D-024, vindo do review de S1-T0c:** o tipo de sessão descoberta é uma **união
       discriminada**, não um tipo único com `pid` opcional. Uma forma carrega `pid` garantido, a
