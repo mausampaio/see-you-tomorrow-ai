@@ -121,7 +121,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       **Limite honesto, escrito no README:** cobre Linux, não macOS — não existe container de
       macOS. O CI nos 3 SOs e a bateria manual do S5-T4 continuam obrigatórios.
 
-- [ ] **S1-T0c — Corrigir os schemas contra dado real de outra máquina.** Os schemas do S0-T5
+- [~] **S1-T0c — Corrigir os schemas contra dado real de outra máquina.** Os schemas do S0-T5
       foram escritos contra o `~/.claude` de **uma** máquina (Windows, uso pessoal). Testados
       contra a saída real de uma segunda máquina, Linux, **rejeitam**:
       ```
