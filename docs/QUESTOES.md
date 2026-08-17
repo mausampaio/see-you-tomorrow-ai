@@ -177,7 +177,37 @@ teria de ser por `pid`, que as duas origens têm para sessão viva.
 3. se não estiver → enumerar processos é mais barato que varrer worktrees, porque não exige saber
    quais repositórios olhar
 
-**Resposta:** aguardando a comparação entre o diretório e a saída do `agents --json`.
+**Resposta:** **FECHADA em 2026-08-17 — cenário 3 confirmado, e a solução é mais barata do que eu
+estimava.** A medição de três fontes foi feita. O que ela mostrou:
+
+O SO lista as sessões autônomas vivas, cada uma filha de um script:
+```
+bash -c /<caminho>/.<agente>-run.sh; ...
+  └─ /bin/bash /<caminho>/.<agente>-run.sh
+       └─ claude --dangerously-skip-permissions /<comando>:triage --item <N>
+```
+
+Cruzando os PIDs dessas sessões com o diretório `~/.claude/sessions/`:
+
+| PID | `<pid>.json` | `<pid>.<hash>.key` |
+|---|---|---|
+| interativas comuns | **sim** | às vezes |
+| **as duas autônomas ativas** | **não** | **sim** |
+
+**Elas não são invisíveis — registram-se de outra forma.** Só o `.key`, sem o `.json`. Eu havia
+visto esses dois `.key` sem par e os descartei como "resíduo órfão de limpeza incompleta". Estava
+errado: eram exatamente as sessões vivas, PID a PID.
+
+Isso descarta a necessidade de descoberta por worktree, que eu tinha estimado em um sprint. A
+solução é D-023: `.key` sem `.json` dá o PID por listagem de diretório; a enumeração de processos
+confirma que está vivo e entrega `cwd` e linha de comando. E a linha de comando traz o item de
+trabalho, que é handoff de verdade para uma sessão sem transcript.
+
+**Uma divergência que fica registrada e não resolvida:** no Spike E, a mesma topologia no Windows
+— script chamando `claude` com prompt e sem `-p` — **criou** `<pid>.json`. No Linux, não cria.
+Pode ser diferença de plataforma, de versão, ou de como o prompt é passado. Não bloqueia nada:
+D-023 usa o SO como fonte de verdade justamente por não depender de qual arquivo o Claude Code
+decidiu escrever. Fica anotado para quem implementar S1-T3 não se surpreender.
 
 ---
 

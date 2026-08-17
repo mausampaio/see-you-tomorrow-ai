@@ -155,10 +155,27 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       reversível com segurança.
       *Aceite:* sessão headless — que não aparece no registro — é descoberta. Um `~/.claude`
       falso com 500 transcripts é filtrado sem parse de conteúdo.
-- [ ] **S1-T9 — Fusão das duas estratégias.** União deduplicada por `sessionId`; sessão vista só
-      pela varredura entra com `pid: null` e estado `desconhecido`, e nunca é candidata a
-      encerramento de processo.
-      *Aceite:* sessão presente nas duas origens aparece **uma** vez, com os campos fundidos.
+- [ ] **S1-T10 — Terceira estratégia: processo e `.key` sem `.json` (D-023).** Cobre o agente de
+      execução autônomo, que as duas estratégias anteriores não veem: sem `.json` no registro e
+      sem transcript.
+      - listar `~/.claude/sessions/` e achar `<pid>.<hash>.key` **sem** `<pid>.json` — só o nome
+        do arquivo. O `.key` é material sensível (modo 600): **nunca ler o conteúdo**
+      - confirmar liveness e obter `cwd` + linha de comando enumerando processos: Linux por
+        `/proc/<pid>/cwd`, macOS por `lsof`, Windows sem `cwd` (degrada, e lá essas sessões
+        produzem `.json` de qualquer forma)
+      - extrair da linha de comando o que serve de handoff: o comando e o item de trabalho
+      - sessão vinda só desta origem entra com `sessionId: null` e nunca é candidata a
+        encerramento de processo
+      *Aceite:* uma sessão lançada por script com prompt como argumento é descoberta, com `cwd` e
+      linha de comando, num `~/.claude` falso + processo de teste. E um `.key` cujo PID **não**
+      está vivo é ignorado, não reportado como sessão.
+
+- [ ] **S1-T9 — Fusão das três estratégias.** União deduplicada: por `sessionId` quando existe,
+      por **PID** quando a origem não fornece `sessionId` (D-023). Sessão vista só pela varredura
+      de transcripts entra com `pid: null`; a vinda só do processo entra com `sessionId: null`.
+      Nenhuma das duas é candidata a encerramento de processo.
+      *Aceite:* sessão presente em duas ou três origens aparece **uma** vez, com os campos
+      fundidos, e o teste cobre as três combinações de par.
 - [ ] **S1-T4 — `adaptadores/transcricao`.** Parser streaming; últimos prompts, arquivos
       tocados, última atividade.
 - [ ] **S1-T7 — Detecção precoce de sessão sem transcript.** Notificação uma vez por
