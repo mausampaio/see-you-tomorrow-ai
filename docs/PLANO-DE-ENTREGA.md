@@ -60,9 +60,9 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
 ## Sprint 1 — Enxergar as sessões
 
-- [~] **S1-T0 — Tornar os guards insensíveis ao estado da árvore.** Vem antes de tudo: guard
-      instável mina toda tarefa seguinte, porque um vermelho que ninguém confia vira um vermelho
-      que todo mundo ignora.
+- [x] **S1-T0 — Tornar os guards insensíveis ao estado da árvore.** Aprovado no review em
+      2026-08-16, após 6 rodadas. Vem antes de tudo: guard instável mina toda tarefa seguinte,
+      porque um vermelho que ninguém confia vira um vermelho que todo mundo ignora.
       **O que aconteceu:** no commit `6899f99` o CI falhou em Linux e macOS e passou no Windows.
       O teste que caiu foi o controle de D-019 (`aprova new Date(valor)`), com
       `expected 2 to be +0` — o eslint viu 2 erros onde deveria ver zero.
@@ -83,16 +83,30 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       outro arquivo acabou de escrever. `limparResiduosDeTestesDeGuarda()` piora, varrendo `src/`
       inteiro e apagando tudo com prefixo `_` — inclusive fixture em voo de outro arquivo.
 
-      **Como reproduzir** (recipe pronta, use antes e depois de corrigir):
-      ```
-      npx vitest run --project guardas --file-parallelism
-      ```
-      - eliminar a dependência do estado global: fixture em diretório próprio por arquivo de
-        teste, limpeza restrita a esse diretório, nunca varredura da árvore inteira
-      - quando a asserção for sobre contagem, imprimir as mensagens da ferramenta na falha — o
-        log do CI trouxe `expected 2 to be +0` e nenhuma pista de quais eram os 2 erros
-      *Aceite:* `npx vitest run --project guardas --file-parallelism` passa, em Linux e Windows.
-      Aí a serialização deixa de ser correção e vira, no máximo, escolha de desempenho.
+      **Causa raiz final:** o teste que prova a âncora de segmento cria e apaga o diretório
+      `src/aplicacao-legado/` **inteiro**; a varredura de outro arquivo de teste o via listado
+      em `src/` e sumido antes de conseguir ler.
+
+      **Três soluções erradas morreram no caminho — vale saber quais, para ninguém trazê-las
+      de volta achando que são melhoria:**
+      1. `fileParallelism: false` (herdado do S0-T6) — mascarava, não corrigia. Removido: o
+         paralelismo é mais rápido **e** é o que expõe corrida nova em vez de deixá-la dormir.
+      2. Retry de 3× no `dependency-cruiser` — medido: disparava em **4 de 10** execuções, e
+         numa delas esgotou as três tentativas e falhou assim mesmo. Descartado.
+      3. Pré-listagem ingênua dos arquivos de produção — moveu o TOCTOU para o `readdirSync`
+         do próprio teste, derrubando a **suíte** (não uma asserção) com `ENOENT: scandir`.
+
+      **A correção:** tolerar `ENOENT` — e **apenas** `ENOENT` — na varredura, com o argumento
+      semântico de que diretório que sumiu é, por definição, não-produção. `ENOTDIR` e `EPERM`
+      continuam estourando. Fixtures em subdiretório próprio por arquivo, limpeza restrita a
+      ele. Asserções de contagem passaram a imprimir a saída bruta da ferramenta na falha.
+
+      **Estabilidade medida:** 40 rodadas do dev nos dois sistemas + 20 minhas, zero falhas.
+      Antes, ~1 em 3.
+      *Aceite cumprido:* `npx vitest run --project guardas --file-parallelism` passa em Linux e
+      Windows, e o guard continua reprovando violação real plantada em `src/` — verificado em
+      três camadas diferentes, incluindo o caso `aplicacao-nova`, que um filtro por prefixo
+      teria deixado passar.
 
 - [x] **S1-T0b — Pré-voo local em Linux com Docker.** Aprovado no review em 2026-08-16.
       `npm run verificar:linux` roda o portão dentro de `node:22-bookworm` via `spawnSync` com
