@@ -5,11 +5,15 @@ import {
   RAIZ_DO_PROJETO,
   TIMEOUT_PROCESSO_FILHO,
   apagarArquivoTemporario,
+  caminhoDeFixtureDoGuarda,
   escreverArquivoTemporario,
-  limparResiduosDeTestesDeGuarda,
+  limparResiduosDoGuarda,
   rodarDependencyCruiser,
+  violacoesDoFixture,
 } from './_apoio.js';
 import { CAMADAS, type Camada, type ParDeCamadas, paresOrdenados } from './_matriz-de-camadas.js';
+
+const NOME_DO_GUARDA = 'matriz-de-camadas';
 
 /**
  * O guard do guard (S0-T6). As três rodadas de review de S0-T2 acharam, cada uma, "mais um par
@@ -27,6 +31,12 @@ import { CAMADAS, type Camada, type ParDeCamadas, paresOrdenados } from './_matr
  * 2. Para cada um dos 20 pares: se a matriz diz proibido, o dependency-cruiser tem que reprovar;
  *    se diz permitido, tem que aprovar. Falta de regra (proibido devia reprovar e não reprova) e
  *    regra apertada demais (permitido devia aprovar e não aprova) são igualmente um bug aqui.
+ *
+ * S1-T0: cada fixture mora em `src/<camada>/_guarda-matriz-de-camadas/`, subdiretório reservado a
+ * ESTE arquivo (nunca compartilhado com dependency-cruiser.teste.ts), e o dependency-cruiser é
+ * chamado só com ESSE fixture como entrada (`rodarDependencyCruiser([caminhoFixture])`), não
+ * `src/` inteiro — o resultado só fala do que este teste escreveu, nunca do que outro arquivo de
+ * teste está fazendo em paralelo em outra camada. Ver `_apoio.ts` para o detalhe.
  */
 describe('guard: a matriz de 20 pares ordenados de docs/ARQUITETURA.md tem cobertura completa', () => {
   const criados: string[] = [];
@@ -37,10 +47,11 @@ describe('guard: a matriz de 20 pares ordenados de docs/ARQUITETURA.md tem cober
     }
   });
 
-  // Rede de segurança: se o processo for morto no meio de um teste (timeout de CI), o
-  // afterEach acima não roda. Varre src/ por resíduo com prefixo `_` de qualquer teste anterior.
+  // Rede de segurança: se o processo for morto no meio de um teste (timeout de CI), o afterEach
+  // acima não roda. Apaga só o subdiretório de fixture DESTE arquivo (S1-T0) — nunca a árvore
+  // inteira de src/, que apagaria fixture em voo de outro arquivo de teste rodando em paralelo.
   afterAll(() => {
-    limparResiduosDeTestesDeGuarda();
+    limparResiduosDoGuarda(NOME_DO_GUARDA);
   });
 
   it('a lista de camadas declarada bate com os diretórios reais de src/ (senão a matriz está desatualizada)', () => {
@@ -61,9 +72,15 @@ describe('guard: a matriz de 20 pares ordenados de docs/ARQUITETURA.md tem cober
     expect(pares.filter((par) => par.permitido)).toHaveLength(8);
   });
 
-  /** Caminho de import relativo do fixture de `par.de` até o `index.ts` canônico de `par.para`. */
-  function caminhoDeImportacao(de: Camada, para: Camada): string {
-    const dirDeAbsoluto = path.join(RAIZ_DO_PROJETO, 'src', de.dirFixture);
+  /**
+   * Caminho de import relativo do fixture (já dentro do seu subdiretório
+   * `_guarda-matriz-de-camadas`, S1-T0) até o `index.ts` canônico de `para`. `caminhoFixture` é
+   * relativo à raiz do projeto; a base do cálculo é o DIRETÓRIO do fixture, não `de.dirFixture`
+   * direto, porque o fixture agora mora um nível mais fundo (isolado dos outros arquivos de
+   * guard).
+   */
+  function caminhoDeImportacao(caminhoFixture: string, para: Camada): string {
+    const dirDeAbsoluto = path.dirname(path.join(RAIZ_DO_PROJETO, caminhoFixture));
     const dirParaAbsoluto = path.join(RAIZ_DO_PROJETO, 'src', para.dirAlvo);
     let relativo = path.relative(dirDeAbsoluto, dirParaAbsoluto).split(path.sep).join('/');
     if (!relativo.startsWith('.')) {
@@ -77,17 +94,19 @@ describe('guard: a matriz de 20 pares ordenados de docs/ARQUITETURA.md tem cober
     it(
       `${par.de.nome} → ${par.para.nome} é ${rotulo} [gerado da matriz]`,
       () => {
-        const nomeArquivo = `_matriz_${par.de.nome}_para_${par.para.nome}.ts`;
-        const caminhoFixture = path.join('src', par.de.dirFixture, nomeArquivo);
-        const conteudo = `import '${caminhoDeImportacao(par.de, par.para)}';\nexport {};\n`;
+        const nomeArquivo = `${par.de.nome}-para-${par.para.nome}.ts`;
+        const caminhoFixture = caminhoDeFixtureDoGuarda(NOME_DO_GUARDA, par.de.dirFixture, nomeArquivo);
+        const conteudo = `import '${caminhoDeImportacao(caminhoFixture, par.para)}';\nexport {};\n`;
         criados.push(escreverArquivoTemporario(caminhoFixture, conteudo));
 
-        const resultado = rodarDependencyCruiser();
+        const resultado = rodarDependencyCruiser([caminhoFixture]);
+        expect(resultado.jsonValido, resultado.bruto).toBe(true);
+        const violacoes = violacoesDoFixture(resultado.violacoes, caminhoFixture);
 
         if (par.permitido) {
-          expect(resultado.codigoDeSaida).toBe(0);
+          expect(violacoes, resultado.bruto).toEqual([]);
         } else {
-          expect(resultado.codigoDeSaida).not.toBe(0);
+          expect(violacoes, resultado.bruto).not.toEqual([]);
         }
       },
       TIMEOUT_PROCESSO_FILHO,

@@ -5,10 +5,21 @@ import {
   RAIZ_DO_PROJETO,
   TIMEOUT_PROCESSO_FILHO,
   apagarArquivoTemporario,
+  caminhoDeFixtureDoGuarda,
   escreverArquivoTemporario,
-  limparResiduosDeTestesDeGuarda,
+  limparResiduosDoGuarda,
   rodarDependencyCruiser,
+  rodarDependencyCruiserNaArvoreCompleta,
+  violacoesDoFixture,
+  violacoesForaDeFixturesDeGuarda,
 } from './_apoio.js';
+
+const NOME_DO_GUARDA = 'dependency-cruiser';
+
+/** Atalho para o caminho de um fixture deste arquivo, sempre isolado em src/<camada>/_guarda-dependency-cruiser/. */
+function fixture(dirDaCamada: string, nomeDoArquivo: string): string {
+  return caminhoDeFixtureDoGuarda(NOME_DO_GUARDA, dirDaCamada, nomeDoArquivo);
+}
 
 /**
  * Prova que o dependency-cruiser REPROVA cada regra de camada da tabela "De → Para" de
@@ -18,6 +29,16 @@ import {
  * árvore que o comando real (`npm run dependencias`, chamado por `npm run verificar` e pelo CI)
  * varre — roda a ferramenta de verdade como processo filho, e apaga o arquivo no `afterEach`,
  * mesmo se a asserção falhar. Nenhuma violação fica permanente no repo.
+ *
+ * S1-T0: o fixture de cada teste mora em `src/<camada>/_guarda-dependency-cruiser/`, um
+ * subdiretório reservado a ESTE arquivo de teste (nunca compartilhado com
+ * matriz-de-camadas.teste.ts ou restricoes-eslint.teste.ts). E, ainda mais importante: cada
+ * teste manda o dependency-cruiser analisar SÓ o próprio fixture (`rodarDependencyCruiser([
+ * caminho])`), não `src/` inteiro — o dependency-cruiser resolve e segue as importações a partir
+ * dali, então o resultado só fala do que o teste escreveu, nunca do que outro arquivo de teste
+ * está fazendo em paralelo em outra camada. O único teste que precisa varrer `src/` inteiro
+ * (porque não tem fixture próprio) é "aprova a árvore real, sem violação" — ver
+ * `rodarDependencyCruiserNaArvoreCompleta` em `_apoio.ts`.
  *
  * Inclui o teste do lado permitido de D-020 (cli/ importando adaptadores/ — cli/ é a única raiz
  * de composição) e, a partir de S0-T6, um controle para cada um dos 8 pares permitidos da
@@ -36,17 +57,21 @@ describe('guard: dependency-cruiser reprova violação de camada', () => {
     }
   });
 
-  // Rede de segurança: se o processo for morto no meio de um teste (timeout de CI), o
-  // afterEach acima não roda. Varre src/ por resíduo com prefixo `_` de qualquer teste anterior.
+  // Rede de segurança: se o processo for morto no meio de um teste (timeout de CI), o afterEach
+  // acima não roda. Apaga só o subdiretório de fixture DESTE arquivo (S1-T0) — nunca a árvore
+  // inteira de src/, que apagaria fixture em voo de outro arquivo de teste rodando em paralelo.
   afterAll(() => {
-    limparResiduosDeTestesDeGuarda();
+    limparResiduosDoGuarda(NOME_DO_GUARDA);
   });
 
   it(
     'aprova a árvore real, sem violação (controle)',
     () => {
-      const resultado = rodarDependencyCruiser();
-      expect(resultado.codigoDeSaida).toBe(0);
+      const resultado = rodarDependencyCruiserNaArvoreCompleta();
+      expect(resultado.jsonValido, resultado.bruto).toBe(true);
+
+      const violacoesReais = violacoesForaDeFixturesDeGuarda(resultado.violacoes);
+      expect(violacoesReais, resultado.bruto).toEqual([]);
     },
     TIMEOUT_PROCESSO_FILHO,
   );
@@ -54,17 +79,19 @@ describe('guard: dependency-cruiser reprova violação de camada', () => {
   it(
     'reprova nucleo/ importando node:*',
     () => {
+      const caminho = fixture('nucleo', 'violacao-teste-node.ts');
       criados.push(
         escreverArquivoTemporario(
-          'src/nucleo/_violacao_teste_node.ts',
+          caminho,
           "import { readFileSync } from 'node:fs';\nexport const conteudo = readFileSync('x');\n",
         ),
       );
 
-      const resultado = rodarDependencyCruiser();
+      const resultado = rodarDependencyCruiser([caminho]);
+      expect(resultado.jsonValido, resultado.bruto).toBe(true);
+      const regras = violacoesDoFixture(resultado.violacoes, caminho).map((v) => v.regra);
 
-      expect(resultado.codigoDeSaida).not.toBe(0);
-      expect(resultado.saida).toContain('nucleo-nao-importa-node');
+      expect(regras, resultado.bruto).toContain('nucleo-nao-importa-node');
     },
     TIMEOUT_PROCESSO_FILHO,
   );
@@ -72,17 +99,16 @@ describe('guard: dependency-cruiser reprova violação de camada', () => {
   it(
     'reprova nucleo/ importando outra camada do projeto',
     () => {
+      const caminho = fixture('nucleo', 'violacao-teste-camada.ts');
       criados.push(
-        escreverArquivoTemporario(
-          'src/nucleo/_violacao_teste_camada.ts',
-          "import '../adaptadores/relogio/index.js';\nexport {};\n",
-        ),
+        escreverArquivoTemporario(caminho, "import '../../adaptadores/relogio/index.js';\nexport {};\n"),
       );
 
-      const resultado = rodarDependencyCruiser();
+      const resultado = rodarDependencyCruiser([caminho]);
+      expect(resultado.jsonValido, resultado.bruto).toBe(true);
+      const regras = violacoesDoFixture(resultado.violacoes, caminho).map((v) => v.regra);
 
-      expect(resultado.codigoDeSaida).not.toBe(0);
-      expect(resultado.saida).toContain('nucleo-nao-importa-outras-camadas');
+      expect(regras, resultado.bruto).toContain('nucleo-nao-importa-outras-camadas');
     },
     TIMEOUT_PROCESSO_FILHO,
   );
@@ -90,17 +116,14 @@ describe('guard: dependency-cruiser reprova violação de camada', () => {
   it(
     'reprova adaptadores/ importando aplicacao/',
     () => {
-      criados.push(
-        escreverArquivoTemporario(
-          'src/adaptadores/relogio/_violacao_teste_aplicacao.ts',
-          "import '../../aplicacao/index.js';\nexport {};\n",
-        ),
-      );
+      const caminho = fixture('adaptadores/relogio', 'violacao-teste-aplicacao.ts');
+      criados.push(escreverArquivoTemporario(caminho, "import '../../../aplicacao/index.js';\nexport {};\n"));
 
-      const resultado = rodarDependencyCruiser();
+      const resultado = rodarDependencyCruiser([caminho]);
+      expect(resultado.jsonValido, resultado.bruto).toBe(true);
+      const regras = violacoesDoFixture(resultado.violacoes, caminho).map((v) => v.regra);
 
-      expect(resultado.codigoDeSaida).not.toBe(0);
-      expect(resultado.saida).toContain('adaptadores-nao-importa-aplicacao-cli-ou-agendador');
+      expect(regras, resultado.bruto).toContain('adaptadores-nao-importa-aplicacao-cli-ou-agendador');
     },
     TIMEOUT_PROCESSO_FILHO,
   );
@@ -108,17 +131,14 @@ describe('guard: dependency-cruiser reprova violação de camada', () => {
   it(
     'reprova adaptadores/ importando cli/',
     () => {
-      criados.push(
-        escreverArquivoTemporario(
-          'src/adaptadores/relogio/_violacao_teste_cli.ts',
-          "import '../../cli/index.js';\nexport {};\n",
-        ),
-      );
+      const caminho = fixture('adaptadores/relogio', 'violacao-teste-cli.ts');
+      criados.push(escreverArquivoTemporario(caminho, "import '../../../cli/index.js';\nexport {};\n"));
 
-      const resultado = rodarDependencyCruiser();
+      const resultado = rodarDependencyCruiser([caminho]);
+      expect(resultado.jsonValido, resultado.bruto).toBe(true);
+      const regras = violacoesDoFixture(resultado.violacoes, caminho).map((v) => v.regra);
 
-      expect(resultado.codigoDeSaida).not.toBe(0);
-      expect(resultado.saida).toContain('adaptadores-nao-importa-aplicacao-cli-ou-agendador');
+      expect(regras, resultado.bruto).toContain('adaptadores-nao-importa-aplicacao-cli-ou-agendador');
     },
     TIMEOUT_PROCESSO_FILHO,
   );
@@ -126,17 +146,14 @@ describe('guard: dependency-cruiser reprova violação de camada', () => {
   it(
     'reprova adaptadores/ importando agendador/',
     () => {
-      criados.push(
-        escreverArquivoTemporario(
-          'src/adaptadores/relogio/_violacao_teste_agendador.ts',
-          "import '../../agendador/index.js';\nexport {};\n",
-        ),
-      );
+      const caminho = fixture('adaptadores/relogio', 'violacao-teste-agendador.ts');
+      criados.push(escreverArquivoTemporario(caminho, "import '../../../agendador/index.js';\nexport {};\n"));
 
-      const resultado = rodarDependencyCruiser();
+      const resultado = rodarDependencyCruiser([caminho]);
+      expect(resultado.jsonValido, resultado.bruto).toBe(true);
+      const regras = violacoesDoFixture(resultado.violacoes, caminho).map((v) => v.regra);
 
-      expect(resultado.codigoDeSaida).not.toBe(0);
-      expect(resultado.saida).toContain('adaptadores-nao-importa-aplicacao-cli-ou-agendador');
+      expect(regras, resultado.bruto).toContain('adaptadores-nao-importa-aplicacao-cli-ou-agendador');
     },
     TIMEOUT_PROCESSO_FILHO,
   );
@@ -144,16 +161,14 @@ describe('guard: dependency-cruiser reprova violação de camada', () => {
   it(
     'aprova adaptadores/ importando nucleo/ (controle: implementa a porta)',
     () => {
-      criados.push(
-        escreverArquivoTemporario(
-          'src/adaptadores/relogio/_controle_teste_nucleo.ts',
-          "import '../../nucleo/index.js';\nexport {};\n",
-        ),
-      );
+      const caminho = fixture('adaptadores/relogio', 'controle-teste-nucleo.ts');
+      criados.push(escreverArquivoTemporario(caminho, "import '../../../nucleo/index.js';\nexport {};\n"));
 
-      const resultado = rodarDependencyCruiser();
+      const resultado = rodarDependencyCruiser([caminho]);
+      expect(resultado.jsonValido, resultado.bruto).toBe(true);
+      const violacoes = violacoesDoFixture(resultado.violacoes, caminho);
 
-      expect(resultado.codigoDeSaida).toBe(0);
+      expect(violacoes, resultado.bruto).toEqual([]);
     },
     TIMEOUT_PROCESSO_FILHO,
   );
@@ -161,17 +176,14 @@ describe('guard: dependency-cruiser reprova violação de camada', () => {
   it(
     'reprova aplicacao/ importando cli/',
     () => {
-      criados.push(
-        escreverArquivoTemporario(
-          'src/aplicacao/_violacao_teste_cli.ts',
-          "import '../cli/index.js';\nexport {};\n",
-        ),
-      );
+      const caminho = fixture('aplicacao', 'violacao-teste-cli.ts');
+      criados.push(escreverArquivoTemporario(caminho, "import '../../cli/index.js';\nexport {};\n"));
 
-      const resultado = rodarDependencyCruiser();
+      const resultado = rodarDependencyCruiser([caminho]);
+      expect(resultado.jsonValido, resultado.bruto).toBe(true);
+      const regras = violacoesDoFixture(resultado.violacoes, caminho).map((v) => v.regra);
 
-      expect(resultado.codigoDeSaida).not.toBe(0);
-      expect(resultado.saida).toContain('aplicacao-nao-importa-adaptadores-cli-ou-agendador');
+      expect(regras, resultado.bruto).toContain('aplicacao-nao-importa-adaptadores-cli-ou-agendador');
     },
     TIMEOUT_PROCESSO_FILHO,
   );
@@ -179,17 +191,14 @@ describe('guard: dependency-cruiser reprova violação de camada', () => {
   it(
     'reprova aplicacao/ importando agendador/',
     () => {
-      criados.push(
-        escreverArquivoTemporario(
-          'src/aplicacao/_violacao_teste_agendador.ts',
-          "import '../agendador/index.js';\nexport {};\n",
-        ),
-      );
+      const caminho = fixture('aplicacao', 'violacao-teste-agendador.ts');
+      criados.push(escreverArquivoTemporario(caminho, "import '../../agendador/index.js';\nexport {};\n"));
 
-      const resultado = rodarDependencyCruiser();
+      const resultado = rodarDependencyCruiser([caminho]);
+      expect(resultado.jsonValido, resultado.bruto).toBe(true);
+      const regras = violacoesDoFixture(resultado.violacoes, caminho).map((v) => v.regra);
 
-      expect(resultado.codigoDeSaida).not.toBe(0);
-      expect(resultado.saida).toContain('aplicacao-nao-importa-adaptadores-cli-ou-agendador');
+      expect(regras, resultado.bruto).toContain('aplicacao-nao-importa-adaptadores-cli-ou-agendador');
     },
     TIMEOUT_PROCESSO_FILHO,
   );
@@ -197,17 +206,14 @@ describe('guard: dependency-cruiser reprova violação de camada', () => {
   it(
     'reprova aplicacao/ importando adaptadores/ (D-020: só cli/ nomeia adapter concreto)',
     () => {
-      criados.push(
-        escreverArquivoTemporario(
-          'src/aplicacao/_violacao_teste_adaptadores.ts',
-          "import '../adaptadores/git/index.js';\nexport {};\n",
-        ),
-      );
+      const caminho = fixture('aplicacao', 'violacao-teste-adaptadores.ts');
+      criados.push(escreverArquivoTemporario(caminho, "import '../../adaptadores/git/index.js';\nexport {};\n"));
 
-      const resultado = rodarDependencyCruiser();
+      const resultado = rodarDependencyCruiser([caminho]);
+      expect(resultado.jsonValido, resultado.bruto).toBe(true);
+      const regras = violacoesDoFixture(resultado.violacoes, caminho).map((v) => v.regra);
 
-      expect(resultado.codigoDeSaida).not.toBe(0);
-      expect(resultado.saida).toContain('aplicacao-nao-importa-adaptadores-cli-ou-agendador');
+      expect(regras, resultado.bruto).toContain('aplicacao-nao-importa-adaptadores-cli-ou-agendador');
     },
     TIMEOUT_PROCESSO_FILHO,
   );
@@ -215,16 +221,14 @@ describe('guard: dependency-cruiser reprova violação de camada', () => {
   it(
     'aprova aplicacao/ importando nucleo/ (controle)',
     () => {
-      criados.push(
-        escreverArquivoTemporario(
-          'src/aplicacao/_controle_teste_nucleo.ts',
-          "import '../nucleo/index.js';\nexport {};\n",
-        ),
-      );
+      const caminho = fixture('aplicacao', 'controle-teste-nucleo.ts');
+      criados.push(escreverArquivoTemporario(caminho, "import '../../nucleo/index.js';\nexport {};\n"));
 
-      const resultado = rodarDependencyCruiser();
+      const resultado = rodarDependencyCruiser([caminho]);
+      expect(resultado.jsonValido, resultado.bruto).toBe(true);
+      const violacoes = violacoesDoFixture(resultado.violacoes, caminho);
 
-      expect(resultado.codigoDeSaida).toBe(0);
+      expect(violacoes, resultado.bruto).toEqual([]);
     },
     TIMEOUT_PROCESSO_FILHO,
   );
@@ -232,17 +236,14 @@ describe('guard: dependency-cruiser reprova violação de camada', () => {
   it(
     'reprova agendador/ importando adaptadores/ (D-020: recebe injetado do cli/)',
     () => {
-      criados.push(
-        escreverArquivoTemporario(
-          'src/agendador/_violacao_teste_adaptadores.ts',
-          "import '../adaptadores/git/index.js';\nexport {};\n",
-        ),
-      );
+      const caminho = fixture('agendador', 'violacao-teste-adaptadores.ts');
+      criados.push(escreverArquivoTemporario(caminho, "import '../../adaptadores/git/index.js';\nexport {};\n"));
 
-      const resultado = rodarDependencyCruiser();
+      const resultado = rodarDependencyCruiser([caminho]);
+      expect(resultado.jsonValido, resultado.bruto).toBe(true);
+      const regras = violacoesDoFixture(resultado.violacoes, caminho).map((v) => v.regra);
 
-      expect(resultado.codigoDeSaida).not.toBe(0);
-      expect(resultado.saida).toContain('agendador-nao-importa-adaptadores');
+      expect(regras, resultado.bruto).toContain('agendador-nao-importa-adaptadores');
     },
     TIMEOUT_PROCESSO_FILHO,
   );
@@ -250,17 +251,14 @@ describe('guard: dependency-cruiser reprova violação de camada', () => {
   it(
     'reprova agendador/ importando cli/ (D-020: cli/ é quem injeta o agendador, nunca o contrário)',
     () => {
-      criados.push(
-        escreverArquivoTemporario(
-          'src/agendador/_violacao_teste_cli.ts',
-          "import '../cli/index.js';\nexport {};\n",
-        ),
-      );
+      const caminho = fixture('agendador', 'violacao-teste-cli.ts');
+      criados.push(escreverArquivoTemporario(caminho, "import '../../cli/index.js';\nexport {};\n"));
 
-      const resultado = rodarDependencyCruiser();
+      const resultado = rodarDependencyCruiser([caminho]);
+      expect(resultado.jsonValido, resultado.bruto).toBe(true);
+      const regras = violacoesDoFixture(resultado.violacoes, caminho).map((v) => v.regra);
 
-      expect(resultado.codigoDeSaida).not.toBe(0);
-      expect(resultado.saida).toContain('agendador-nao-importa-cli');
+      expect(regras, resultado.bruto).toContain('agendador-nao-importa-cli');
     },
     TIMEOUT_PROCESSO_FILHO,
   );
@@ -268,16 +266,14 @@ describe('guard: dependency-cruiser reprova violação de camada', () => {
   it(
     'aprova agendador/ importando nucleo/ (controle)',
     () => {
-      criados.push(
-        escreverArquivoTemporario(
-          'src/agendador/_controle_teste_nucleo.ts',
-          "import '../nucleo/index.js';\nexport {};\n",
-        ),
-      );
+      const caminho = fixture('agendador', 'controle-teste-nucleo.ts');
+      criados.push(escreverArquivoTemporario(caminho, "import '../../nucleo/index.js';\nexport {};\n"));
 
-      const resultado = rodarDependencyCruiser();
+      const resultado = rodarDependencyCruiser([caminho]);
+      expect(resultado.jsonValido, resultado.bruto).toBe(true);
+      const violacoes = violacoesDoFixture(resultado.violacoes, caminho);
 
-      expect(resultado.codigoDeSaida).toBe(0);
+      expect(violacoes, resultado.bruto).toEqual([]);
     },
     TIMEOUT_PROCESSO_FILHO,
   );
@@ -285,16 +281,14 @@ describe('guard: dependency-cruiser reprova violação de camada', () => {
   it(
     'aprova agendador/ importando aplicacao/ (controle: agendador orquestra aplicacao/ no tempo)',
     () => {
-      criados.push(
-        escreverArquivoTemporario(
-          'src/agendador/_controle_teste_aplicacao.ts',
-          "import '../aplicacao/index.js';\nexport {};\n",
-        ),
-      );
+      const caminho = fixture('agendador', 'controle-teste-aplicacao.ts');
+      criados.push(escreverArquivoTemporario(caminho, "import '../../aplicacao/index.js';\nexport {};\n"));
 
-      const resultado = rodarDependencyCruiser();
+      const resultado = rodarDependencyCruiser([caminho]);
+      expect(resultado.jsonValido, resultado.bruto).toBe(true);
+      const violacoes = violacoesDoFixture(resultado.violacoes, caminho);
 
-      expect(resultado.codigoDeSaida).toBe(0);
+      expect(violacoes, resultado.bruto).toEqual([]);
     },
     TIMEOUT_PROCESSO_FILHO,
   );
@@ -302,16 +296,14 @@ describe('guard: dependency-cruiser reprova violação de camada', () => {
   it(
     'aprova cli/ importando adaptadores/ (controle: cli/ é a única raiz de composição, D-020)',
     () => {
-      criados.push(
-        escreverArquivoTemporario(
-          'src/cli/_controle_teste_adaptadores.ts',
-          "import '../adaptadores/git/index.js';\nexport {};\n",
-        ),
-      );
+      const caminho = fixture('cli', 'controle-teste-adaptadores.ts');
+      criados.push(escreverArquivoTemporario(caminho, "import '../../adaptadores/git/index.js';\nexport {};\n"));
 
-      const resultado = rodarDependencyCruiser();
+      const resultado = rodarDependencyCruiser([caminho]);
+      expect(resultado.jsonValido, resultado.bruto).toBe(true);
+      const violacoes = violacoesDoFixture(resultado.violacoes, caminho);
 
-      expect(resultado.codigoDeSaida).toBe(0);
+      expect(violacoes, resultado.bruto).toEqual([]);
     },
     TIMEOUT_PROCESSO_FILHO,
   );
@@ -319,16 +311,14 @@ describe('guard: dependency-cruiser reprova violação de camada', () => {
   it(
     'aprova cli/ importando nucleo/ (controle)',
     () => {
-      criados.push(
-        escreverArquivoTemporario(
-          'src/cli/_controle_teste_nucleo.ts',
-          "import '../nucleo/index.js';\nexport {};\n",
-        ),
-      );
+      const caminho = fixture('cli', 'controle-teste-nucleo.ts');
+      criados.push(escreverArquivoTemporario(caminho, "import '../../nucleo/index.js';\nexport {};\n"));
 
-      const resultado = rodarDependencyCruiser();
+      const resultado = rodarDependencyCruiser([caminho]);
+      expect(resultado.jsonValido, resultado.bruto).toBe(true);
+      const violacoes = violacoesDoFixture(resultado.violacoes, caminho);
 
-      expect(resultado.codigoDeSaida).toBe(0);
+      expect(violacoes, resultado.bruto).toEqual([]);
     },
     TIMEOUT_PROCESSO_FILHO,
   );
@@ -336,16 +326,14 @@ describe('guard: dependency-cruiser reprova violação de camada', () => {
   it(
     'aprova cli/ importando aplicacao/ (controle)',
     () => {
-      criados.push(
-        escreverArquivoTemporario(
-          'src/cli/_controle_teste_aplicacao.ts',
-          "import '../aplicacao/index.js';\nexport {};\n",
-        ),
-      );
+      const caminho = fixture('cli', 'controle-teste-aplicacao.ts');
+      criados.push(escreverArquivoTemporario(caminho, "import '../../aplicacao/index.js';\nexport {};\n"));
 
-      const resultado = rodarDependencyCruiser();
+      const resultado = rodarDependencyCruiser([caminho]);
+      expect(resultado.jsonValido, resultado.bruto).toBe(true);
+      const violacoes = violacoesDoFixture(resultado.violacoes, caminho);
 
-      expect(resultado.codigoDeSaida).toBe(0);
+      expect(violacoes, resultado.bruto).toEqual([]);
     },
     TIMEOUT_PROCESSO_FILHO,
   );
@@ -353,16 +341,14 @@ describe('guard: dependency-cruiser reprova violação de camada', () => {
   it(
     'aprova cli/ importando agendador/ (controle: cli/ constrói e injeta o agendador)',
     () => {
-      criados.push(
-        escreverArquivoTemporario(
-          'src/cli/_controle_teste_agendador.ts',
-          "import '../agendador/index.js';\nexport {};\n",
-        ),
-      );
+      const caminho = fixture('cli', 'controle-teste-agendador.ts');
+      criados.push(escreverArquivoTemporario(caminho, "import '../../agendador/index.js';\nexport {};\n"));
 
-      const resultado = rodarDependencyCruiser();
+      const resultado = rodarDependencyCruiser([caminho]);
+      expect(resultado.jsonValido, resultado.bruto).toBe(true);
+      const violacoes = violacoesDoFixture(resultado.violacoes, caminho);
 
-      expect(resultado.codigoDeSaida).toBe(0);
+      expect(violacoes, resultado.bruto).toEqual([]);
     },
     TIMEOUT_PROCESSO_FILHO,
   );
@@ -371,16 +357,15 @@ describe('guard: dependency-cruiser reprova violação de camada', () => {
     'não reprova src/aplicacao-legado/ por engano (ancoragem por segmento, S0-T6): ' +
       '^src/aplicacao sem âncora casaria com esse prefixo e bloquearia uma camada que nem existe',
     () => {
-      const caminho = escreverArquivoTemporario(
-        'src/aplicacao-legado/_ancoragem_teste.ts',
-        "import '../adaptadores/git/index.js';\nexport {};\n",
-      );
+      const caminho = fixture('aplicacao-legado', 'ancoragem-teste.ts');
+      escreverArquivoTemporario(caminho, "import '../../adaptadores/git/index.js';\nexport {};\n");
       try {
-        const resultado = rodarDependencyCruiser();
+        const resultado = rodarDependencyCruiser([caminho]);
+        expect(resultado.jsonValido, resultado.bruto).toBe(true);
+        const violacoes = violacoesDoFixture(resultado.violacoes, caminho);
 
-        expect(resultado.codigoDeSaida).toBe(0);
+        expect(violacoes, resultado.bruto).toEqual([]);
       } finally {
-        apagarArquivoTemporario(caminho);
         rmSync(path.join(RAIZ_DO_PROJETO, 'src', 'aplicacao-legado'), {
           recursive: true,
           force: true,
@@ -393,23 +378,16 @@ describe('guard: dependency-cruiser reprova violação de camada', () => {
   it(
     'reprova ciclo de dependência entre dois módulos',
     () => {
-      criados.push(
-        escreverArquivoTemporario(
-          'src/adaptadores/relogio/_ciclo_teste_a.ts',
-          "import './_ciclo_teste_b.js';\nexport {};\n",
-        ),
-      );
-      criados.push(
-        escreverArquivoTemporario(
-          'src/adaptadores/relogio/_ciclo_teste_b.ts',
-          "import './_ciclo_teste_a.js';\nexport {};\n",
-        ),
-      );
+      const caminhoA = fixture('adaptadores/relogio', 'ciclo-teste-a.ts');
+      const caminhoB = fixture('adaptadores/relogio', 'ciclo-teste-b.ts');
+      criados.push(escreverArquivoTemporario(caminhoA, "import './ciclo-teste-b.js';\nexport {};\n"));
+      criados.push(escreverArquivoTemporario(caminhoB, "import './ciclo-teste-a.js';\nexport {};\n"));
 
-      const resultado = rodarDependencyCruiser();
+      const resultado = rodarDependencyCruiser([caminhoA, caminhoB]);
+      expect(resultado.jsonValido, resultado.bruto).toBe(true);
+      const regras = violacoesDoFixture(resultado.violacoes, caminhoA).map((v) => v.regra);
 
-      expect(resultado.codigoDeSaida).not.toBe(0);
-      expect(resultado.saida).toContain('sem-dependencia-circular');
+      expect(regras, resultado.bruto).toContain('sem-dependencia-circular');
     },
     TIMEOUT_PROCESSO_FILHO,
   );
