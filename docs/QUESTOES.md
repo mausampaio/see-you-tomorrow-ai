@@ -95,11 +95,34 @@ autônoma trabalhando sem confirmação humana. Encerrar processo dessas é mais
 normal — o default de D-002 (só capturar e avisar) é o certo aqui, e marcar `podeEncerrar: true`
 num projeto que roda agente-interno merece pensar duas vezes.
 
-**Confirmação de um comando, quando puder** (na segunda máquina, com agente-interno rodando):
+**REABERTA em 2026-08-17 — a inferência acima estava ERRADA.** O usuário rodou
+`claude agents --json --all` na segunda máquina: a **única** sessão do agente-interno listada é a
+**pai**, a que subiu a UI (`kind: "background"`, `state: "blocked"`,
+`cwd: …/.claude/agente-interno/ui`). As sessões **filhas**, as que rodam `/agente-interno:dev`, **não
+aparecem**.
+
+Ou seja: ser interativa não garantiu registro visível, e minha cadeia de raciocínio tinha um furo.
+O cenário de sessão invisível voltou.
+
+**O que a saída real já ensinou, independente da questão:** existe uma segunda forma de entrada,
+a de background, sem `pid` e com `state` em vez de `status`. Ela quebra o schema atual e derrubaria
+a lista inteira → D-022 e S1-T0c.
+
+**A medição que decide, e ela é de um comando.** Falta distinguir dois mundos muito diferentes:
+
+| Se… | Então |
+|---|---|
+| a filha ESTÁ em `~/.claude/sessions/` mas `claude agents --json` a filtra | o `seeya` lê o **diretório direto**, não o CLI. D-016 funciona e nada muda de arquitetura. |
+| a filha NÃO está no diretório | cenário C: descoberta por registro é cega para ela. Aí sobra descoberta por **worktree**, que é trabalho novo e provavelmente um sprint. |
+
+**Comando, com uma sessão do agente-interno rodando:**
 ```
-claude agents --json --all
+ls -la ~/.claude/sessions/ && cat ~/.claude/sessions/*.json
 ```
-Se a sessão do agente-interno aparecer na lista, está confirmado por execução e não só por inferência.
+Compare os `sessionId` que aparecem ali com os de `claude agents --json --all`. Se houver algum a
+mais no diretório, é o primeiro mundo.
+
+**Resposta:** aguardando essa comparação.
 
 ---
 

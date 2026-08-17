@@ -121,6 +121,28 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       **Limite honesto, escrito no README:** cobre Linux, não macOS — não existe container de
       macOS. O CI nos 3 SOs e a bateria manual do S5-T4 continuam obrigatórios.
 
+- [ ] **S1-T0c — Corrigir os schemas contra dado real de outra máquina.** Os schemas do S0-T5
+      foram escritos contra o `~/.claude` de **uma** máquina (Windows, uso pessoal). Testados
+      contra a saída real de uma máquina Linux, **rejeitam**:
+      ```
+      esquemaSaidaAgentsJson.safeParse(saidaReal) -> REJEITA
+        0.pid : expected number, received undefined
+      ```
+      A entrada é uma sessão `kind: "background"` com esta forma — diferente das interativas:
+      ```jsonc
+      { "id": "1a2b3c4d", "cwd": "…/.claude/agente-interno/ui", "kind": "background",
+        "startedAt": 1780000000000, "sessionId": "1a2b3c4d-…",
+        "name": "pare o ui do agente-interno", "state": "blocked" }   // sem pid; state, não status
+      ```
+      - `pid` passa a opcional; aceitar `id` e `state` da variante de background
+      - validação **por item** conforme D-022: item ruim é descartado com registro, não derruba
+        a lista
+      - item sem `pid` nunca é candidato a encerramento de processo (igual a D-016)
+      - a suíte de contrato passa a incluir esta amostra real como fixture anonimizada, para a
+        regressão não voltar
+      *Aceite:* a saída real da máquina Linux (fixture) é aceita, com a entrada de background
+      preservada; e um array com uma entrada boa e uma inválida devolve a boa e reporta a outra.
+
 - [ ] **S1-T1 — `nucleo/` de domínio.** Tipos, portas e as regras puras de elegibilidade e de
       classificação viva/ociosa/encerrada. Sem I/O.
 - [ ] **S1-T2 — `adaptadores/processo`.** Liveness com desempate por `procStart`, nos 3 SOs.
