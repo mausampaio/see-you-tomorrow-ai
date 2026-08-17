@@ -9,14 +9,19 @@ const versao = obterVersaoDoClaudeCode();
  * `sessionId`, `cwd`." Comando local (D-016) — enumera processos já em execução na máquina, não
  * toca rede. Não roda no CI padrão — só via `npm run test:contrato`.
  *
- * A validação é item por item (D-022, S1-T0c): uma entrada que o schema não reconheça — ex. uma
- * variante nova, do jeito que a variante "background" apareceu numa segunda máquina — não pode
- * derrubar o teste inteiro. Este teste falha só se **nenhum** item validar, porque nesse caso o
- * schema não está mais confirmado contra nada real; um rejeitado isolado é registrado na saída
- * do teste, não é falha.
+ * `validarSaidaAgentsJson` é item por item (D-022) — mas a tolerância de D-022 é para o
+ * **produto**: o `seeya sessoes` do usuário não pode cair por causa de uma entrada estranha, e
+ * por isso o adapter descarta o item ruim e segue. **Este teste tem o propósito oposto**: ele
+ * existe para gritar quando a realidade divergir do schema, porque a suíte de contrato não roda
+ * no CI (só via `npm run test:contrato`) e uma falha aqui é o único sinal que um humano tem para
+ * ir investigar. Se aplicássemos a mesma tolerância aqui, uma variante nova seria descartada em
+ * silêncio e ninguém saberia — o alarme viraria amortecedor, e "contrato verde" deixaria de
+ * provar o que promete provar. Por isso `rejeitados` precisa estar **vazio**, não só `aceitos`
+ * maior que zero: qualquer item que o schema não reconheça falha o teste, com o JSON bruto do
+ * item na mensagem.
  */
 describe(`contrato: claude agents --json (claude ${versao})`, () => {
-  it('devolve pelo menos uma sessão com pid, sessionId e cwd — item por item, nunca em bloco', () => {
+  it('devolve só sessões que o schema reconhece — nenhuma pode ser descartada em silêncio', () => {
     const resultado = executarClaude(['agents', '--json']);
 
     expect(
@@ -36,14 +41,22 @@ describe(`contrato: claude agents --json (claude ${versao})`, () => {
 
     const { aceitos, rejeitados } = validarSaidaAgentsJson(json);
 
-    // Um item rejeitado isolado não falha o teste: D-022 existe exatamente para que uma entrada
-    // estranha não derrube a suíte inteira. `rejeitados` fica disponível na asserção abaixo caso
-    // `aceitos` também vá a zero — aí sim algo está errado o bastante para investigar.
+    // Estrito, ao contrário do adapter: qualquer rejeitado aqui é a realidade divergindo do
+    // schema, e o teste precisa gritar com o item bruto visível — não engolir em silêncio.
+    expect(
+      rejeitados,
+      'esquemaItemDeAgentsJson rejeitou item(ns) da saída real de `claude agents --json`. A ' +
+        'realidade mudou — registre em docs/QUESTOES.md com esta saída bruta, não afrouxe o ' +
+        `schema.\n\nRejeitados: ${JSON.stringify(rejeitados, null, 2)}`,
+    ).toEqual([]);
+
+    // Caso diferente do anterior: nenhum item rejeitado, mas também nenhum aceito — não há
+    // sessão aberta para confirmar que o schema bate com a realidade.
     expect(
       aceitos.length,
-      'Nenhum item de `claude agents --json` validou (aceitos vazio) — não dá para confirmar ' +
-        'que o schema bate com a realidade. Rode a suíte de contrato com pelo menos uma sessão ' +
-        `aberta. Rejeitados: ${JSON.stringify(rejeitados, null, 2)}`,
+      'Nenhuma sessão ativa retornada por `claude agents --json` — não dá para confirmar que ' +
+        'os itens têm pid/sessionId/cwd. Rode a suíte de contrato com pelo menos uma sessão ' +
+        'aberta.',
     ).toBeGreaterThan(0);
   });
 
