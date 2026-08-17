@@ -145,6 +145,15 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
 - [ ] **S1-T1 — `nucleo/` de domínio.** Tipos, portas e as regras puras de elegibilidade e de
       classificação viva/ociosa/encerrada. Sem I/O.
+      **Requisito de D-024, vindo do review de S1-T0c:** o tipo de sessão descoberta é uma **união
+      discriminada**, não um tipo único com `pid` opcional. Uma forma carrega `pid` garantido, a
+      outra não tem PID nenhum. A política de encerramento (D-002) aceita só a primeira, e o
+      compilador recusa a segunda.
+      *Por que importa:* foi medido que `item.pid!` compila sem erro. Comentário avisando "não
+      encerre sem PID" não impede ninguém; tipo impede.
+      *Aceite:* existe um teste que **não compila** se alguém tentar passar a forma sem PID para a
+      função de encerramento — ou, se um teste de compilação for caro demais, a função de
+      encerramento aceita exclusivamente o tipo com `pid` garantido e isso está exercitado.
 - [ ] **S1-T2 — `adaptadores/processo`.** Liveness com desempate por `procStart`, nos 3 SOs.
 - [ ] **S1-T3 — `adaptadores/descoberta`, estratégia por registro.** Lê
       `~/.claude/sessions/*.json`, tolerante a arquivo corrompido. Exclui forks de `forks.json`
