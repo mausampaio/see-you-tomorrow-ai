@@ -22,6 +22,7 @@ import { fileURLToPath } from 'node:url';
 const raizDoRepo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ARQUIVO_DE_TERMOS = path.join(raizDoRepo, '.termos-locais');
 
+/** @returns {string[]} */
 function lerTermos() {
   if (!existsSync(ARQUIVO_DE_TERMOS)) {
     return [];
@@ -100,13 +101,23 @@ const UUIDS_PUBLICOS = new Set([
   '1ac14e77-02e7-4e5d-b744-2eb1ae5198b7',
 ]);
 
-/** Um UUID de exemplo é aceitável se for obviamente sintético: no máximo 4 símbolos distintos. */
+/**
+ * Um UUID de exemplo é aceitável se for obviamente sintético: no máximo 4 símbolos distintos.
+ * Ex.: `11111111-1111-4111-8111-111111111111` tem 3 (`1`, `4`, `8`).
+ * @param {string} uuid
+ * @returns {boolean}
+ */
 function pareceSintetico(uuid) {
   const distintos = new Set(uuid.toLowerCase().replace(/-/g, ''));
   return distintos.size <= 4;
 }
 
+/**
+ * @param {string} conteudo
+ * @returns {{ nome: string, valor: string }[]}
+ */
 function acharPadroesSuspeitos(conteudo) {
+  /** @type {{ nome: string, valor: string }[]} */
   const achados = [];
   for (const { nome, regex } of PADROES_SUSPEITOS) {
     for (const ocorrencia of conteudo.matchAll(regex)) {
@@ -122,6 +133,11 @@ function acharPadroesSuspeitos(conteudo) {
   return achados;
 }
 
+/**
+ * @param {string} titulo
+ * @param {string[]} itens
+ * @param {string} orientacao
+ */
 function reportar(titulo, itens, orientacao) {
   console.error('');
   console.error(`Commit recusado: ${titulo}`);
