@@ -1,11 +1,11 @@
 /**
  * Regra pura de elegibilidade para o encerramento (docs/ESPECIFICACAO.md § "Elegibilidade").
  * Cinco condições, todas em "e" (a sessão só entra se as cinco passarem). Nenhuma delas depende
- * de I/O aqui — todo dado externo (config, `forks.json`, o handoff de hoje) chega já resolvido
- * em `CriteriosDeElegibilidade`, montado por quem chama (fora do núcleo).
+ * de I/O aqui — todo dado externo (config, `forks.json`, a assinatura da captura de hoje) chega
+ * já resolvido em `CriteriosDeElegibilidade`, montado por quem chama (fora do núcleo).
  */
 import type { SessaoDescoberta } from './tipos.js';
-import { mesmoInstante } from './tempo.js';
+import { mesmaEvidencia, type AssinaturaDeEvidencia } from './evidencia.js';
 
 /**
  * Por que cada sessão é inelegível, na mesma ordem em que as condições aparecem na spec.
@@ -22,18 +22,19 @@ export type MotivoDeInelegibilidade =
 
 /**
  * O que se sabe sobre uma captura já feita hoje para esta sessão, só o suficiente para decidir
- * anti-duplicidade (docs/ESPECIFICACAO.md: "não tem handoff do dia corrente com transcript
- * inalterado desde então"). Não é o `Handoff` inteiro — esse tipo é escopo de S2-T3/S2-T4, fora
- * desta tarefa (docs/PLANO-DE-ENTREGA.md S1-T1). `null` (no lugar deste tipo) significa "não há
- * handoff de hoje para esta sessão".
+ * anti-duplicidade (docs/ESPECIFICACAO.md § "Elegibilidade": "não tem handoff do dia corrente com
+ * a evidência inalterada desde então"; a regra de comparação em si é D-026). Não é o `Handoff`
+ * inteiro — esse tipo é escopo de S2-T3/S2-T4, fora desta tarefa. `null` (no lugar deste tipo, em
+ * `CriteriosDeElegibilidade.capturaAnteriorHoje`) significa "não há handoff de hoje para esta
+ * sessão".
  */
 export interface CapturaAnteriorHoje {
   /**
-   * O valor de `ultimaEscritaNoTranscript` da sessão no momento em que a captura de hoje foi
-   * feita. Comparado com o valor atual via `mesmoInstante` — mesmo valor (incluindo os dois
-   * `null`, sessão sem transcript nas duas capturas) significa "nada mudou", logo duplicada.
+   * A assinatura da evidência (D-026) no momento em que a captura de hoje foi feita — comparada
+   * com `CriteriosDeElegibilidade.assinaturaAtual` via `mesmaEvidencia`. O formato de cada token
+   * é decidido por quem monta a assinatura (fora do núcleo); esta regra só compara.
    */
-  readonly ultimaEscritaNoTranscriptNaCaptura: Date | null;
+  readonly assinatura: AssinaturaDeEvidencia;
 }
 
 export interface CriteriosDeElegibilidade {
@@ -52,6 +53,13 @@ export interface CriteriosDeElegibilidade {
   readonly forksConhecidos: ReadonlySet<string>;
   /** Ver `CapturaAnteriorHoje`. `null` quando não há handoff de hoje para esta sessão. */
   readonly capturaAnteriorHoje: CapturaAnteriorHoje | null;
+  /**
+   * A assinatura da evidência (D-026) **agora**, no momento desta avaliação — não só o
+   * transcript da `SessaoDescoberta`: cobre todas as fontes de D-013 disponíveis (transcript
+   * quando existe, git a partir de S2-T1, etc.). Montada por quem chama; comparada com
+   * `capturaAnteriorHoje.assinatura` para decidir `duplicadaNoDia`.
+   */
+  readonly assinaturaAtual: AssinaturaDeEvidencia;
 }
 
 export interface ResultadoDeElegibilidade {
@@ -64,13 +72,17 @@ export interface ResultadoDeElegibilidade {
  *
  * As duas primeiras condições da spec — "pelo menos uma fonte de evidência respondeu" e "teve
  * atividade nas últimas `horasDeRelevancia` ... medida pela fonte mais recente disponível" — são
- * as duas faces do mesmo campo, `sessao.ultimaAtividade` (docs/ESPECIFICACAO.md D-013: "medida
- * pela fonte mais recente disponível, não só pelo transcript" é literalmente a fusão que esse
- * campo representa). Sem nenhuma fonte respondendo, não há como calcular "a fonte mais recente"
- * — logo `ultimaAtividade === null` já é as duas coisas ao mesmo tempo: zero evidência **e**,
- * por consequência, zero atividade comprovadamente recente. Por isso as duas condições são
- * mutuamente exclusivas aqui (nunca os dois motivos juntos): sem evidência é reportado como
- * `semEvidencia`; com evidência, mas fora da janela, como `semAtividadeRecente`.
+ * as duas faces do mesmo campo, `sessao.ultimaAtividade`. Sem nenhuma fonte respondendo, não há
+ * como calcular "a fonte mais recente" — logo `ultimaAtividade === null` já é as duas coisas ao
+ * mesmo tempo: zero evidência **e**, por consequência, zero atividade comprovadamente recente.
+ * Por isso as duas condições são mutuamente exclusivas aqui (nunca os dois motivos juntos): sem
+ * evidência é reportado como `semEvidencia`; com evidência, mas fora da janela, como
+ * `semAtividadeRecente`.
+ *
+ * A quinta condição, anti-duplicidade (D-026), compara `criterios.assinaturaAtual` com a
+ * assinatura da última captura de hoje via `mesmaEvidencia` — nunca `sessao.ultimaEscritaNoTranscript`
+ * diretamente, porque isso prendia como "duplicada" o dia inteiro qualquer sessão sem transcript
+ * cuja árvore git tivesse mudado (o caso exato do agente de execução autônomo, D-013).
  */
 export function avaliarElegibilidade(
   sessao: SessaoDescoberta,
@@ -98,10 +110,7 @@ export function avaliarElegibilidade(
 
   if (
     criterios.capturaAnteriorHoje !== null &&
-    mesmoInstante(
-      criterios.capturaAnteriorHoje.ultimaEscritaNoTranscriptNaCaptura,
-      sessao.ultimaEscritaNoTranscript,
-    )
+    mesmaEvidencia(criterios.capturaAnteriorHoje.assinatura, criterios.assinaturaAtual)
   ) {
     motivos.push('duplicadaNoDia');
   }
