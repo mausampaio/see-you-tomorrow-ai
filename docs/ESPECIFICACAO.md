@@ -180,7 +180,9 @@ Uma sessão entra no encerramento se, e somente se:
   recente disponível, não só pelo transcript; **e**
 - o `sessionId` não é um fork criado pelo próprio `seeya` (D-012); **e**
 - o `cwd` não está na lista `ignorar` da config; **e**
-- não tem handoff do dia corrente com transcript inalterado desde então (anti-duplicidade).
+- não tem handoff do dia corrente com a **evidência inalterada** desde então (anti-duplicidade,
+  D-026). Evidência, não transcript: sessão sem transcript cuja árvore git mudou **não** é
+  duplicada.
 
 ## Formato do handoff
 
