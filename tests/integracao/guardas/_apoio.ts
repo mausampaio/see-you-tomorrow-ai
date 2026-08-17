@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync, type Dirent } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -134,15 +134,56 @@ export function rodarDependencyCruiser(entradas: readonly string[]): ResultadoDe
   return { violacoes, jsonValido, bruto: resultado.saida };
 }
 
+function ehErroComCodigo(erro: unknown, codigo: string): boolean {
+  return ehRegistro(erro) && erro.code === codigo;
+}
+
+/**
+ * `readdirSync(diretorio)`, ou lista vazia se o diretório sumiu entre o pai listar essa entrada e
+ * esta chamada tentar ler o conteúdo dela.
+ *
+ * S1-T0, segunda rodada: a primeira versão de `listarArquivosDeProducaoTs` chamava `readdirSync`
+ * direto, sem tolerar isso, e o PO reproduziu a suíte (não o teste — a SUÍTE) derrubando com
+ * `ENOENT: ... scandir`. O TOCTOU não tinha sido eliminado do dependency-cruiser: tinha sido
+ * MOVIDO um nível acima, para esta varredura. Ex.: o teste "não reprova src/aplicacao-legado/ por
+ * engano" (dependency-cruiser.teste.ts) cria `src/aplicacao-legado/` e apaga o diretório inteiro
+ * no `finally` — se esta varredura, rodando em paralelo, listar `src/` e enxergar
+ * `aplicacao-legado` a tempo, mas só chegar para ler o CONTEÚDO dele depois desse `finally` já ter
+ * rodado, o `readdirSync` recursivo aqui dentro estoura.
+ *
+ * Por que tolerar isso é a resposta CORRETA e não um `catch` preguiçoso escondendo instabilidade
+ * (a mesma armadilha do retry que já descartamos): o único tipo de diretório que pode sumir no
+ * meio desta varredura é um artefato transiente de outro arquivo de teste de guard — seja um
+ * `_guarda-*` (que já pulamos por nome de qualquer forma) ou uma camada sintética inteira como
+ * `aplicacao-legado/`, criada e apagada por um único teste. Nenhum diretório de PRODUÇÃO de
+ * verdade é apagado durante a suíte. Então "sumiu entre eu listar o pai e eu tentar ler ele" é,
+ * por definição, "não é produção" — devolver lista vazia para esse ramo é a leitura semanticamente
+ * certa, não uma tolerância a falha.
+ *
+ * Por isso o `catch` verifica o `code` do erro: só ENOENT vira lista vazia. Qualquer outro erro
+ * (permissão, disco cheio, o que for) continua estourando — se a varredura falhar de verdade, o
+ * guard tem que gritar, não fingir que está tudo bem.
+ */
+function listarEntradasOuVazio(diretorio: string): Dirent[] {
+  try {
+    return readdirSync(diretorio, { withFileTypes: true });
+  } catch (erro) {
+    if (ehErroComCodigo(erro, 'ENOENT')) {
+      return [];
+    }
+    throw erro;
+  }
+}
+
 /**
  * Lista (recursivamente, caminhos relativos à raiz do projeto, sempre com `/`) todo `.ts` de
  * PRODUÇÃO dentro de `diretorio`, pulando por completo qualquer subdiretório de fixture de guard
- * (`_guarda-*`, ver `subdiretorioDoGuarda`).
+ * (`_guarda-*`, ver `subdiretorioDoGuarda`) — e tolerando um diretório (de teste, nunca de
+ * produção) que suma no meio do caminho, ver `listarEntradasOuVazio`.
  */
 function listarArquivosDeProducaoTs(diretorio: string): string[] {
   const resultado: string[] = [];
-  const entradas = readdirSync(diretorio, { withFileTypes: true });
-  for (const entrada of entradas) {
+  for (const entrada of listarEntradasOuVazio(diretorio)) {
     if (entrada.name.startsWith('_guarda-')) {
       continue;
     }
