@@ -2,6 +2,7 @@ import { readdirSync } from 'node:fs';
 import path from 'node:path';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import {
+  NOME_DE_CAMADA_SINTETICA_DE_TESTE,
   RAIZ_DO_PROJETO,
   TIMEOUT_PROCESSO_FILHO,
   apagarArquivoTemporario,
@@ -55,9 +56,20 @@ describe('guard: a matriz de 20 pares ordenados de docs/ARQUITETURA.md tem cober
   });
 
   it('a lista de camadas declarada bate com os diretórios reais de src/ (senão a matriz está desatualizada)', () => {
+    // S1-T0, terceira rodada de review: dependency-cruiser.teste.ts cria e apaga sozinho
+    // src/aplicacao-legado/ (ver NOME_DE_CAMADA_SINTETICA_DE_TESTE em _apoio.ts) para testar a
+    // âncora por segmento do dependency-cruiser. Se esta listagem, rodando em paralelo, pegar
+    // esse diretório no ar, a falha apontaria para o lugar ERRADO ("a matriz está desatualizada,
+    // falta uma 6ª camada") quando não existe camada nenhuma faltando — só um fixture de outro
+    // arquivo de teste em voo. Por isso filtramos por NOME EXATO antes de comparar: nunca por
+    // prefixo/regex, porque esse teste existe justamente para pegar uma 6ª camada de verdade, e
+    // um filtro largo (`startsWith('aplicacao')`, por exemplo) cegaria o teste para uma camada
+    // legítima chamada `aplicacao-nova` — trocaríamos uma corrida rara por uma cegueira
+    // permanente, que é pior. NÃO generalize este filtro.
     const diretoriosReais = readdirSync(path.join(RAIZ_DO_PROJETO, 'src'), { withFileTypes: true })
       .filter((entrada) => entrada.isDirectory())
       .map((entrada) => entrada.name)
+      .filter((nome) => nome !== NOME_DE_CAMADA_SINTETICA_DE_TESTE)
       .sort();
     const camadasDeclaradas = CAMADAS.map((camada) => camada.nome).sort();
 

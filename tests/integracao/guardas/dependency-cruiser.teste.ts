@@ -2,6 +2,7 @@ import { rmSync } from 'node:fs';
 import path from 'node:path';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import {
+  NOME_DE_CAMADA_SINTETICA_DE_TESTE,
   RAIZ_DO_PROJETO,
   TIMEOUT_PROCESSO_FILHO,
   apagarArquivoTemporario,
@@ -357,7 +358,7 @@ describe('guard: dependency-cruiser reprova violação de camada', () => {
     'não reprova src/aplicacao-legado/ por engano (ancoragem por segmento, S0-T6): ' +
       '^src/aplicacao sem âncora casaria com esse prefixo e bloquearia uma camada que nem existe',
     () => {
-      const caminho = fixture('aplicacao-legado', 'ancoragem-teste.ts');
+      const caminho = fixture(NOME_DE_CAMADA_SINTETICA_DE_TESTE, 'ancoragem-teste.ts');
       escreverArquivoTemporario(caminho, "import '../../adaptadores/git/index.js';\nexport {};\n");
       try {
         const resultado = rodarDependencyCruiser([caminho]);
@@ -366,7 +367,7 @@ describe('guard: dependency-cruiser reprova violação de camada', () => {
 
         expect(violacoes, resultado.bruto).toEqual([]);
       } finally {
-        rmSync(path.join(RAIZ_DO_PROJETO, 'src', 'aplicacao-legado'), {
+        rmSync(path.join(RAIZ_DO_PROJETO, 'src', NOME_DE_CAMADA_SINTETICA_DE_TESTE), {
           recursive: true,
           force: true,
         });

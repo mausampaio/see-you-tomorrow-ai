@@ -281,6 +281,28 @@ export function apagarArquivoTemporario(caminhoAbsoluto: string): void {
 }
 
 /**
+ * Nome do diretório sintético de topo de `src/` que `dependency-cruiser.teste.ts` cria e apaga
+ * sozinho para provar a âncora por segmento de D-020/S0-T6 ("não reprova src/aplicacao-legado/
+ * por engano"). Compartilhado aqui (S1-T0, terceira rodada de review) para que
+ * `matriz-de-camadas.teste.ts` — que lista os diretórios de topo de `src/` e compara com a
+ * matriz de camadas declarada — saiba filtrar EXATAMENTE este nome antes de comparar, em vez de
+ * arriscar uma falha (rara, mas real) apontando para o lugar errado: "a matriz está
+ * desatualizada" quando na verdade é só o fixture de outro arquivo de teste, em voo.
+ *
+ * Por que o filtro do lado de matriz-de-camadas.teste.ts tem que ser por NOME EXATO, nunca por
+ * prefixo ou regex: aquele teste existe para pegar uma 6ª camada de verdade adicionada a src/
+ * sem atualizar a matriz. Um filtro largo (ex.: `startsWith('aplicacao')`) cegaria o teste para
+ * uma camada legítima chamada `aplicacao-nova` — trocaríamos uma corrida rara por uma cegueira
+ * permanente, que é pior. Nome exato é a única forma de excluir SÓ este diretório sintético
+ * conhecido sem abrir mão do propósito do teste.
+ *
+ * Não troque o valor sem revisar `dependency-cruiser.teste.ts`: o teste de ancoragem depende do
+ * nome começar com `aplicacao` — é justamente o prefixo que uma regex sem âncora de segmento
+ * casaria por engano com a camada `aplicacao/` de verdade.
+ */
+export const NOME_DE_CAMADA_SINTETICA_DE_TESTE = 'aplicacao-legado';
+
+/**
  * Nome do subdiretório reservado a UM arquivo de teste de guard (S1-T0). Cada arquivo
  * (`dependency-cruiser.teste.ts`, `matriz-de-camadas.teste.ts`, `restricoes-eslint.teste.ts`)
  * usa um `nomeDoGuarda` diferente e só escreve/limpa dentro do seu próprio subdiretório — nunca
