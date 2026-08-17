@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync, type Dirent } from 'node:fs';
+import { mkdirSync, readdirSync, rmSync, writeFileSync, type Dirent } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -318,12 +318,24 @@ export function limparResiduosDoGuarda(nomeDoGuarda: string): void {
   apagarSubdiretoriosComNome(path.join(RAIZ_DO_PROJETO, 'src'), subdiretorioDoGuarda(nomeDoGuarda));
 }
 
+/**
+ * S1-T0, terceira rodada: esta função tinha a MESMA classe de bug que `listarEntradasOuVazio`
+ * foi escrita para corrigir em `listarArquivosDeProducaoTs` — só que sobreviveu aqui do lado,
+ * sem o mesmo tratamento (achado no review). Tinha duas coisas erradas:
+ *
+ * 1. `readdirSync` cru, sem tolerar ENOENT — o mesmo TOCTOU: outro arquivo de teste pode apagar
+ *    um subdiretório entre esta função listá-lo no pai e tentar ler o conteúdo dele.
+ * 2. o `existsSync(diretorio)` antes do `readdirSync` era ele mesmo um check-then-use: entre o
+ *    `existsSync` devolver `true` e o `readdirSync` rodar, o diretório podia sumir — o
+ *    `existsSync` não protegia nada, só passava a falsa impressão de proteger.
+ *
+ * Corrigido reaproveitando `listarEntradasOuVazio` (já tolera ENOENT do jeito certo — só ENOENT,
+ * qualquer outro erro continua estourando) e removendo o `existsSync`: ele é redundante agora,
+ * `listarEntradasOuVazio` já cobre "diretório não existe" (inclusive o caso em que nunca existiu,
+ * não só o caso em que sumiu no meio do caminho).
+ */
 function apagarSubdiretoriosComNome(diretorio: string, nomeAlvo: string): void {
-  if (!existsSync(diretorio)) {
-    return;
-  }
-  const entradas = readdirSync(diretorio, { withFileTypes: true });
-  for (const entrada of entradas) {
+  for (const entrada of listarEntradasOuVazio(diretorio)) {
     if (!entrada.isDirectory()) {
       continue;
     }
