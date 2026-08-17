@@ -123,7 +123,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
 - [ ] **S1-T0c — Corrigir os schemas contra dado real de outra máquina.** Os schemas do S0-T5
       foram escritos contra o `~/.claude` de **uma** máquina (Windows, uso pessoal). Testados
-      contra a saída real de uma máquina Linux, **rejeitam**:
+      contra a saída real de uma segunda máquina, Linux, **rejeitam**:
       ```
       esquemaSaidaAgentsJson.safeParse(saidaReal) -> REJEITA
         0.pid : expected number, received undefined

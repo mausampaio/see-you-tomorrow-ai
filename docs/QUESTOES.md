@@ -6,12 +6,11 @@ pare a tarefa** — não decida sozinho.
 Formato: uma questão por bloco, numerada, com contexto suficiente para o PO responder sem
 reabrir o código.
 
-> **Sobre o `agente-interno`.** Várias questões citam um agente de execução autônomo chamado
-> aqui de `agente-interno`. Ele é **real** — uma ferramenta interna do outro ambiente do
-> autor — e o nome verdadeiro foi trocado por este placeholder de propósito, junto com
-> identificadores e caminhos. O comportamento técnico descrito é fiel ao observado; só a origem
-> foi omitida. Ao ler, trate como caso real anonimizado, não como cenário hipotético — é a
-> diferença entre uma decisão fundamentada e uma especulação.
+> **Sobre o `agente-interno`.** Várias questões citam um agente de execução autônomo,
+> referido como `agente-interno`: um processo que roda o Claude Code sem supervisão, escreve o
+> resultado num rastreador de issues e deixa o trabalho num worktree. É uma **classe de sessão
+> que o app precisa tratar**, e o comportamento descrito vem de observação, não de suposição —
+> os números e as saídas brutas estão nos spikes.
 
 ```
 ## Q-00X — <título curto>

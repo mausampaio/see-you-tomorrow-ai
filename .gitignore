@@ -2,6 +2,11 @@ node_modules/
 dist/
 .claude/worktrees/
 .claude/settings.local.json
+
+# Termos que nunca devem ir para o repositório, e as notas que os contêm.
+# Ver scripts/verificar-termos-locais.mjs — o guard de pre-commit que usa esta lista.
+.termos-locais
+/local/
 coverage/
 *.log
 .env

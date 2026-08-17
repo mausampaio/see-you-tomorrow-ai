@@ -1,1 +1,2 @@
+node scripts/verificar-termos-locais.mjs
 npx lint-staged

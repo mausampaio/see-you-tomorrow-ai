@@ -353,7 +353,7 @@ ausentes viram `"desconhecido"`.
 ## D-022 — Lista de fonte externa valida item por item, nunca em bloco
 
 **Contexto.** `esquemaSaidaAgentsJson` era `z.array(item)`. Testado contra a saída real de uma
-máquina Linux, **rejeitou o array inteiro** por causa de uma única entrada: uma
+segunda máquina, Linux, **rejeitou o array inteiro** por causa de uma única entrada: uma
 sessão `kind: "background"` que não tem `pid` (tem `id`) e usa `state` em vez de `status`. Uma
 sessão de background e o `seeya` perderia a fonte de descoberta completa.
 

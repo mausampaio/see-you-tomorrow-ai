@@ -5,7 +5,7 @@
 
 ## Motivo
 
-Na segunda máquina, `claude agents --json --all` lista a sessão **pai** do agente-interno (a que
+Numa segunda máquina, `claude agents --json --all` lista a sessão **pai** do agente-interno (a que
 subiu a UI) mas nenhuma das **filhas** que rodam `/agente-interno:dev`. O usuário levantou uma variável
 que eu não tinha considerado: a UI não chama o `claude` diretamente, chama **um script** que
 chama o `claude`.
