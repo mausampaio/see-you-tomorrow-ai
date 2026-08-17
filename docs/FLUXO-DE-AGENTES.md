@@ -59,6 +59,16 @@ isso vale para *um* dev. O PO pode rodar tarefas independentes em paralelo, e a�
 aprovação não segue a numeração. Se a sequência parecer errada, pergunte antes de tratar como
 violação.
 
+**Nem toda instrução do PO está num documento.** Parte da orientação chega ao dev pela mensagem
+que despacha a tarefa, e essa mensagem não fica versionada em lugar nenhum. Se um comentário no
+código citar uma decisão que você não acha nos documentos, ela pode ser real e vir de lá — o
+erro é a **atribuição**, não a existência. Antes de acusar citação inventada, considere essa
+origem.
+
+Para o dev: **comentário no código não cita a mensagem da tarefa.** Ou o raciocínio se sustenta
+sozinho, ou a orientação vira decisão em `docs/DECISOES.md` e você cita a decisão. Citar algo que
+o leitor não tem como abrir é pior que não citar.
+
 ## Regra de ouro
 
 Dev e revisor nunca são a mesma execução. Se o dev "revisar o próprio trabalho", o review não
