@@ -132,7 +132,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       ```jsonc
       { "id": "1a2b3c4d", "cwd": "…/.claude/agente-interno/ui", "kind": "background",
         "startedAt": 1780000000000, "sessionId": "1a2b3c4d-…",
-        "name": "pare o ui do agente-interno", "state": "blocked" }   // sem pid; state, não status
+        "name": "pare o ui do agente", "state": "blocked" }   // sem pid; state, não status
       ```
       - `pid` passa a opcional; aceitar `id` e `state` da variante de background
       - validação **por item** conforme D-022: item ruim é descartado com registro, não derruba
