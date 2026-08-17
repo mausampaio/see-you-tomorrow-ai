@@ -19,10 +19,10 @@ export interface ParametrosDeClassificacao {
  * é reciclado pelo SO. `procStart` é usado como desempate").
  *
  * Comparação pura, sem consultar o SO — a captura dos dois valores é responsabilidade de
- * `adaptadores/processo` (S1-T2, fora do escopo desta tarefa); só a **decisão** de quando eles
- * contam como "o mesmo processo" é pura, e é isso que este módulo resolve, conforme convite
- * explícito de docs/PLANO-DE-ENTREGA.md S1-T1: "Se a decisão sobre PID reciclado com procStart
- * divergente for pura, ela pode morar aqui".
+ * `adaptadores/processo` (S1-T2, fora do escopo desta tarefa). A função em si é um predicado
+ * puro (string para boolean, sem I/O e sem estado): não há razão para ela morar fora de
+ * `nucleo/`, e a matriz de camadas de docs/ARQUITETURA.md não proíbe uma decisão pura de viver
+ * aqui só porque o dado que ela compara também alimenta um adapter.
  *
  * Igualdade de string, não numérica: os dois lados vêm como string por excederem
  * `Number.MAX_SAFE_INTEGER` (mesma razão de `adaptadores/descoberta/esquemas.ts`), e comparar
@@ -36,12 +36,19 @@ export function pidRepresentaMesmoProcesso(
 }
 
 /**
- * Sem escrita no transcript há mais de `minutosParaOcioso`? `null` (sem transcript, ou transcript
- * nunca escreveu — D-013) conta como "sim, ociosa": não há nenhuma evidência de atividade recente
- * para justificar `viva`, e "ociosa" é a leitura literal de "sessão viva sem escrita no
- * transcript há mais de minutosParaOcioso" no caso degenerado em que não há escrita nenhuma para
- * medir. Ver docs/QUESTOES.md Q-004 — a alternativa (tratar `null` como `viva`, por falta de
- * evidência contrária) foi considerada e descartada por não ter apoio textual tão direto.
+ * Sem escrita no transcript há mais de `minutosParaOcioso`? **`null` devolve `false` (D-025).**
+ * `ociosa` é uma afirmação — "sem escrita há mais de X minutos" — e essa afirmação só pode ser
+ * feita a partir de um timestamp real que já passou do limite. `null` não é um timestamp muito
+ * antigo, é a ausência de qualquer dado sobre escrita (sem transcript, ou transcript suprimido —
+ * D-013): não há como estabelecer "sem escrita há mais de X minutos" quando não há como
+ * estabelecer nada sobre escrita. Tratar `null` como "ociosa" converteria "não sei" numa
+ * afirmação positiva — exatamente o que D-025 proíbe para o domínio inteiro. `viva` (o chamador
+ * devolve `viva` quando esta função devolve `false`) é o estado menos específico que o processo
+ * vivo já sustenta sozinho, e é isso que sobra quando a evidência de escrita falta.
+ *
+ * Caso concreto que motivou a correção: sessão sem transcript por D-013 é justamente o agente de
+ * execução autônomo, que tem tudo para estar trabalhando a todo vapor. Marcá-lo `ociosa` sem
+ * nenhuma evidência de inatividade mentiria com confiança sobre o caso que mais importa.
  */
 function estaOciosaPeloTranscript(
   ultimaEscritaNoTranscript: Date | null,
@@ -49,7 +56,7 @@ function estaOciosaPeloTranscript(
   minutosParaOcioso: number,
 ): boolean {
   if (ultimaEscritaNoTranscript === null) {
-    return true;
+    return false;
   }
   const minutosDesdeAUltimaEscrita =
     (agora.getTime() - ultimaEscritaNoTranscript.getTime()) / 60_000;
@@ -61,7 +68,9 @@ function estaOciosaPeloTranscript(
  *
  * Sem PID (`SessaoSemPid`, D-016): sempre `desconhecida` — não há liveness para checar. Com PID:
  * processo morto (entrada obsoleta ou processo que terminou de verdade) é `encerrada`; processo
- * vivo com transcript recente é `viva`; processo vivo sem escrita recente é `ociosa`.
+ * vivo é `ociosa` só quando há um timestamp real de última escrita além de `minutosParaOcioso`,
+ * e `viva` em todos os outros casos — inclusive sem transcript nenhum (D-025, ver
+ * `estaOciosaPeloTranscript`).
  */
 export function classificarEstado(
   sessao: SessaoDescoberta,

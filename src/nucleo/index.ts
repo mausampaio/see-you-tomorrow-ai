@@ -8,7 +8,7 @@
  * (ex. `nucleo/classificacao.js`) — os dois caminhos funcionam.
  */
 export * from './tipos.js';
-export * from './tempo.js';
+export * from './evidencia.js';
 export * from './classificacao.js';
 export * from './elegibilidade.js';
 export * from './encerramento.js';

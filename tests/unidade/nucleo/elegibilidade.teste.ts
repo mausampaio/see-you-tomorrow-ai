@@ -14,6 +14,7 @@ function criterios(sobrescritas: Partial<CriteriosDeElegibilidade> = {}): Criter
     cwdsIgnorados: new Set<string>(),
     forksConhecidos: new Set<string>(),
     capturaAnteriorHoje: null,
+    assinaturaAtual: {},
     ...sobrescritas,
   };
 }
@@ -121,23 +122,26 @@ describe('avaliarElegibilidade', () => {
     });
   });
 
-  describe('condição 5 — anti-duplicidade (handoff do dia com transcript inalterado)', () => {
-    it('sem captura anterior hoje, a sessão é elegível independente do transcript', () => {
+  describe('condição 5 — anti-duplicidade compara a assinatura da evidência (D-026)', () => {
+    it('sem captura anterior hoje, a sessão é elegível independente da assinatura atual', () => {
       const sessao = criarSessaoComPid();
 
-      const resultado = avaliarElegibilidade(sessao, criterios({ capturaAnteriorHoje: null }));
+      const resultado = avaliarElegibilidade(
+        sessao,
+        criterios({ capturaAnteriorHoje: null, assinaturaAtual: { transcript: 'abc' } }),
+      );
 
       expect(resultado.elegivel).toBe(true);
     });
 
-    it('handoff de hoje com transcript inalterado desde então torna a sessão inelegível', () => {
-      const escritaNoTranscript = new Date('2026-08-16T18:00:00.000Z');
-      const sessao = criarSessaoComPid({ ultimaEscritaNoTranscript: escritaNoTranscript });
+    it('assinatura idêntica entre a última captura e agora torna a sessão inelegível', () => {
+      const sessao = criarSessaoComPid();
 
       const resultado = avaliarElegibilidade(
         sessao,
         criterios({
-          capturaAnteriorHoje: { ultimaEscritaNoTranscriptNaCaptura: escritaNoTranscript },
+          capturaAnteriorHoje: { assinatura: { transcript: '2026-08-16T18:00:00.000Z' } },
+          assinaturaAtual: { transcript: '2026-08-16T18:00:00.000Z' },
         }),
       );
 
@@ -145,20 +149,31 @@ describe('avaliarElegibilidade', () => {
       expect(resultado.motivos).toStrictEqual(['duplicadaNoDia']);
     });
 
+    it('combinação de borda: handoff do dia existe mas a assinatura mudou — volta a ser elegível', () => {
+      const sessao = criarSessaoComPid();
+
+      const resultado = avaliarElegibilidade(
+        sessao,
+        criterios({
+          capturaAnteriorHoje: { assinatura: { transcript: '2026-08-16T18:00:00.000Z' } },
+          assinaturaAtual: { transcript: '2026-08-16T19:50:00.000Z' },
+        }),
+      );
+
+      expect(resultado.elegivel).toBe(true);
+    });
+
     it(
-      'combinação de borda: handoff do dia existe mas o transcript mudou desde então — ' +
-        'volta a ser elegível',
+      'D-026: duas capturas sem transcript, mas com git alterado entre elas, NÃO são ' +
+        'duplicadas — o caso do agente de execução autônomo (D-013)',
       () => {
-        const sessao = criarSessaoComPid({
-          ultimaEscritaNoTranscript: new Date('2026-08-16T19:50:00.000Z'),
-        });
+        const sessao = criarSessaoComPid();
 
         const resultado = avaliarElegibilidade(
           sessao,
           criterios({
-            capturaAnteriorHoje: {
-              ultimaEscritaNoTranscriptNaCaptura: new Date('2026-08-16T18:00:00.000Z'),
-            },
+            capturaAnteriorHoje: { assinatura: { transcript: null, git: 'sha-1' } },
+            assinaturaAtual: { transcript: null, git: 'sha-2' },
           }),
         );
 
@@ -166,20 +181,23 @@ describe('avaliarElegibilidade', () => {
       },
     );
 
-    it('duas capturas sem transcript (null nas duas) contam como inalterado — duplicada', () => {
-      const sessao = criarSessaoComPid({
-        temTranscript: false,
-        ultimaEscritaNoTranscript: null,
-      });
+    it(
+      'duas capturas com todas as fontes ausentes (null) nos dois lados NÃO são tratadas como ' +
+        'duplicadas — ausência de dado não vira afirmação positiva (D-025/D-026)',
+      () => {
+        const sessao = criarSessaoComPid();
 
-      const resultado = avaliarElegibilidade(
-        sessao,
-        criterios({ capturaAnteriorHoje: { ultimaEscritaNoTranscriptNaCaptura: null } }),
-      );
+        const resultado = avaliarElegibilidade(
+          sessao,
+          criterios({
+            capturaAnteriorHoje: { assinatura: { transcript: null, git: null } },
+            assinaturaAtual: { transcript: null, git: null },
+          }),
+        );
 
-      expect(resultado.elegivel).toBe(false);
-      expect(resultado.motivos).toStrictEqual(['duplicadaNoDia']);
-    });
+        expect(resultado.elegivel).toBe(true);
+      },
+    );
   });
 
   it('acumula todos os motivos aplicáveis, não só o primeiro', () => {
