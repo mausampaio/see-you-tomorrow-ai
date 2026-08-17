@@ -3,19 +3,21 @@
  * (docs/ARQUITETURA.md § "Princípio"). `nucleo/` declara a interface; `adaptadores/` implementa;
  * `cli/` é a única raiz de composição que nomeia a implementação concreta e injeta (D-020).
  *
- * **Só as três portas que o Sprint 1 precisa.** docs/ARQUITETURA.md já esboça sete portas
- * (o desenho de arquitetura inteiro), mas declarar aqui as que só entram em uso dois ou três
- * sprints à frente seria escopo adiantado — exatamente o que docs/PLANO-DE-ENTREGA.md pede para
- * evitar nesta tarefa. As que faltam, e por quê:
+ * **Só as três portas que o Sprint 1 precisa.** docs/ARQUITETURA.md já esboça sete portas (o
+ * desenho de arquitetura inteiro), mas as quatro que faltam aqui têm todas o mesmo problema
+ * concreto: a assinatura de cada uma referencia um tipo que ainda não existe neste projeto.
+ * Declará-las agora seria inventar esses tipos cedo demais, só para preencher uma assinatura, ou
+ * declarar a porta com `unknown` — pior que não declarar. As quatro, e o tipo que falta em cada
+ * uma:
  *
  * - `LeitorDeTranscricao` — devolve `FatosDaSessao`, tipo que só nasce em S2-T3/S2-T4 (fora do
  *   escopo desta tarefa). A leitura barata de transcript que o Sprint 1 usa (S1-T8, varredura
  *   por mtime) não passa por aqui: é `stat`, não parse de conteúdo.
  * - `GeradorDeHandoff` — devolve `EntendimentoGerado`, também um tipo de handoff. Implementação
  *   em S2-T2.
- * - `Notificador` — implementação em S4-T1, três sprints à frente. A regra pura de S1-T7
- *   ("notifica uma vez por sessionId") não precisa da porta inteira para ser pura; quem
- *   implementar S1-T7 decide a forma mínima que basta para aquela regra.
+ * - `Notificador` — implementação em S4-T1. A regra pura de S1-T7 (notificar uma vez por
+ *   `sessionId`, sem repetir) não precisa da porta inteira para ser pura; quem implementar
+ *   S1-T7 decide a forma mínima que basta para aquela regra.
  * - `Armazenamento` — a assinatura de docs/ARQUITETURA.md usa `Handoff`, `Briefing`,
  *   `EstadoDoDia`, nenhum dos quais existe ainda. S1-T5 declara aqui o que precisar, do tamanho
  *   que tiver naquele momento (provavelmente `lerConfig`/`salvarEstado` primeiro, crescendo em
@@ -51,7 +53,8 @@ export interface ControleDeProcesso {
  * Descoberta de sessões (D-016, D-023). Implementada em `adaptadores/descoberta/`, fundindo as
  * estratégias de S1-T3 (registro), S1-T8 (varredura de transcripts) e S1-T10 (processo + `.key`)
  * numa lista deduplicada só de `SessaoDescoberta` — `listar()` devolve a união já fundida, nunca
- * a concatenação bruta das três origens (D-016: "a interface já é desenhada para isso").
+ * a concatenação bruta das três origens: quem chama não deveria precisar saber quantas
+ * estratégias existem por baixo, nem deduplicar por conta própria.
  */
 export interface ProvedorDeSessoes {
   listar(): Promise<SessaoDescoberta[]>;

@@ -19,10 +19,10 @@ export interface ParametrosDeClassificacao {
  * é reciclado pelo SO. `procStart` é usado como desempate").
  *
  * Comparação pura, sem consultar o SO — a captura dos dois valores é responsabilidade de
- * `adaptadores/processo` (S1-T2, fora do escopo desta tarefa); só a **decisão** de quando eles
- * contam como "o mesmo processo" é pura, e é isso que este módulo resolve, conforme convite
- * explícito de docs/PLANO-DE-ENTREGA.md S1-T1: "Se a decisão sobre PID reciclado com procStart
- * divergente for pura, ela pode morar aqui".
+ * `adaptadores/processo` (S1-T2, fora do escopo desta tarefa). A função em si é um predicado
+ * puro (string para boolean, sem I/O e sem estado): não há razão para ela morar fora de
+ * `nucleo/`, e a matriz de camadas de docs/ARQUITETURA.md não proíbe uma decisão pura de viver
+ * aqui só porque o dado que ela compara também alimenta um adapter.
  *
  * Igualdade de string, não numérica: os dois lados vêm como string por excederem
  * `Number.MAX_SAFE_INTEGER` (mesma razão de `adaptadores/descoberta/esquemas.ts`), e comparar
