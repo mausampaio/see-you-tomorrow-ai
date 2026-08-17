@@ -13,12 +13,23 @@
  * jeito nenhum. A política de encerramento de processo (D-002) só aceita a primeira forma —
  * ver `nucleo/encerramento.ts#dadosParaEncerrarProcesso`, que só tipa para `SessaoComPid`. Quem
  * tem uma `SessaoDescoberta` (a união) precisa estreitar com `if (sessao.temPid)` antes de poder
- * chamar aquela função; o compilador recusa a chamada sem o estreitamento, sem `!` e sem `as`.
+ * chamar aquela função; o compilador recusa a chamada sem o estreitamento, sem `!` na chamada.
  *
  * **Por que `temPid` e não inferir a partir da presença de `pid`.** Um discriminante explícito
  * (`temPid: true | false`) deixa o `switch`/`if` óbvio para quem lê e para o TypeScript, e evita
  * depender de `'pid' in sessao` ou de checar `pid !== undefined` espalhado pelo código — o
  * discriminante é o único lugar que decide a forma.
+ *
+ * **Limitação conhecida, no mesmo espírito da de D-019.** O tipo cobre o descuido — passar uma
+ * `SessaoSemPid`, ou a união sem estreitar, direto para `dadosParaEncerrarProcesso` — não o
+ * contorno deliberado: `{ temPid: true } as SessaoComPid` compila, e
+ * `{ ...sessaoSemPid, temPid: true } as SessaoComPid` também. Isso é o comportamento do `as`
+ * sobre um literal de objeto no TypeScript, não um furo deste desenho — só o cast direto de um
+ * valor já tipado (`sessaoSemPid as SessaoComPid`, sem espalhar) é recusado, porque `SessaoSemPid`
+ * e `SessaoComPid` não se sobrepõem o bastante para o compilador aceitar a conversão direta. O
+ * que D-024 promete, e o que este tipo cumpre, é que `item.pid!` e o narrowing sem `if` não
+ * compilem — não que nenhum `as` no projeto inteiro consiga produzir um valor mentiroso. Contorno
+ * deliberado com `as` passa por review, igual a qualquer outro `as` do projeto.
  *
  * **Escopo consciente, para quem for mexer aqui em S1-T9/S1-T10.** D-024 pede duas formas
  * baseadas em PID, e é só isso que esta tarefa (S1-T1) resolve. D-016 (varredura de transcript,
