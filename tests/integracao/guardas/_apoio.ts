@@ -108,20 +108,20 @@ function extrairViolacoes(saidaJson: string): { violacoes: ViolacaoDependencyCru
  * (`--output-type json`) em vez do texto humano que o comando real (`npm run dependencias`) usa —
  * só a chamada de teste muda, a regra continua a mesma.
  *
- * `entradas` (S1-T0): por padrão `['src']`, a árvore inteira — mas todo teste que escreve o
- * PRÓPRIO fixture deve passar `[caminhoDoFixture]` (ou os poucos caminhos relevantes, como o
- * teste de ciclo) em vez do default. Analisar só o fixture (que o dependency-cruiser resolve e
- * segue as importações dele) em vez de `src` inteiro tem duas vantagens sobre só filtrar o
- * resultado depois: (1) o teste nunca enxerga violação de outro arquivo de teste rodando em
- * paralelo, porque nunca visita os arquivos dele; (2) elimina uma corrida mais sutil observada em
- * S1-T0 — dependency-cruiser varrendo `src/` inteiro pode listar um arquivo temporário de OUTRO
- * arquivo de teste e, um instante depois, tentar abri-lo para analisar — se esse outro teste já
- * tiver apagado o próprio fixture nesse meio-tempo (`afterEach` normal, nada de errado com ele),
- * o dependency-cruiser reporta um erro de I/O em vez do relatório. Só a árvore real inteira
- * ("aprova a árvore real, sem violação") precisa continuar escaneando tudo — ver
- * `rodarDependencyCruiserNaArvoreCompleta`, que tem a rede de segurança para esse caso.
+ * `entradas` (S1-T0): todo teste que escreve o PRÓPRIO fixture passa `[caminhoDoFixture]` (ou os
+ * poucos caminhos relevantes, como o teste de ciclo) — nunca `src` inteiro. Analisar só o
+ * fixture (que o dependency-cruiser resolve e segue as importações dele) em vez de `src` inteiro
+ * tem duas vantagens sobre só filtrar o resultado depois: (1) o teste nunca enxerga violação de
+ * outro arquivo de teste rodando em paralelo, porque nunca visita os arquivos dele; (2) elimina
+ * uma corrida mais sutil observada em S1-T0 — dependency-cruiser varrendo um DIRETÓRIO pode
+ * listar um arquivo temporário de OUTRO arquivo de teste e, um instante depois, tentar abri-lo
+ * para analisar; se esse outro teste já tiver apagado o próprio fixture nesse meio-tempo
+ * (`afterEach` normal, nada de errado com ele), o dependency-cruiser reporta um erro de I/O em
+ * vez do relatório. Por isso esta função nunca aceita um diretório como padrão — quem precisa da
+ * árvore real inteira usa `rodarDependencyCruiserNaArvoreCompleta`, que já entrega uma lista de
+ * ARQUIVOS (nunca o diretório `src`) para não reabrir esse mesmo problema.
  */
-export function rodarDependencyCruiser(entradas: readonly string[] = ['src']): ResultadoDependencyCruiser {
+export function rodarDependencyCruiser(entradas: readonly string[]): ResultadoDependencyCruiser {
   const binario = path.join(
     RAIZ_DO_PROJETO,
     'node_modules',
@@ -135,21 +135,54 @@ export function rodarDependencyCruiser(entradas: readonly string[] = ['src']): R
 }
 
 /**
- * Roda o dependency-cruiser contra `src/` inteiro (única invocação desta suíte que precisa disso
- * de verdade — o controle "aprova a árvore real, sem violação" não tem fixture próprio para
- * escopar a entrada). Tenta de novo algumas vezes se a saída não vier como JSON válido: como
- * descrito em `rodarDependencyCruiser`, isso pode ser o dependency-cruiser tropeçando num
- * arquivo temporário de outro arquivo de teste, apagado por ELE (legitimamente) entre a listagem
- * e a leitura — uma corrida inofensiva entre dois testes bem-comportados, não uma falha real da
- * árvore (S1-T0).
+ * Lista (recursivamente, caminhos relativos à raiz do projeto, sempre com `/`) todo `.ts` de
+ * PRODUÇÃO dentro de `diretorio`, pulando por completo qualquer subdiretório de fixture de guard
+ * (`_guarda-*`, ver `subdiretorioDoGuarda`).
  */
-export function rodarDependencyCruiserNaArvoreCompleta(): ResultadoDependencyCruiser {
-  const TENTATIVAS = 3;
-  let resultado = rodarDependencyCruiser(['src']);
-  for (let tentativa = 1; tentativa < TENTATIVAS && !resultado.jsonValido; tentativa += 1) {
-    resultado = rodarDependencyCruiser(['src']);
+function listarArquivosDeProducaoTs(diretorio: string): string[] {
+  const resultado: string[] = [];
+  const entradas = readdirSync(diretorio, { withFileTypes: true });
+  for (const entrada of entradas) {
+    if (entrada.name.startsWith('_guarda-')) {
+      continue;
+    }
+    const caminhoAbsoluto = path.join(diretorio, entrada.name);
+    if (entrada.isDirectory()) {
+      resultado.push(...listarArquivosDeProducaoTs(caminhoAbsoluto));
+    } else if (entrada.isFile() && entrada.name.endsWith('.ts')) {
+      resultado.push(path.relative(RAIZ_DO_PROJETO, caminhoAbsoluto).split(path.sep).join('/'));
+    }
   }
   return resultado;
+}
+
+/**
+ * Roda o dependency-cruiser contra a árvore real de produção inteira — único uso desta suíte que
+ * precisa disso de verdade, para o controle "aprova a árvore real, sem violação" (não tem fixture
+ * próprio para escopar a entrada como os outros testes).
+ *
+ * S1-T0, história desta função: a primeira versão passava o DIRETÓRIO `src` para o
+ * dependency-cruiser (como o comando real faz) e reprovava com um `ENOENT` intermitente — o
+ * TOCTOU descrito em `rodarDependencyCruiser`. A correção testada primeiro foi reexecutar até 3
+ * vezes quando a saída não viesse como JSON válido. Medido de verdade (10 rodadas de
+ * `--file-parallelism`, ver commit): o retry disparou em **4 de 10**, e numa delas as 3
+ * tentativas se esgotaram e o teste reprovou mesmo assim. Isso está bem acima do que o PO definiu
+ * como "mitigação razoável" (1 em 10) — retry escondendo instabilidade era exatamente o problema
+ * que esta tarefa existe para resolver, não para reproduzir num lugar novo. Descartado.
+ *
+ * A correção real: em vez de mandar o dependency-cruiser LISTAR o diretório (e correr o risco de
+ * listar um arquivo que outro teste apaga um instante depois), esta função lista os `.ts` de
+ * produção ela mesma primeiro (`listarArquivosDeProducaoTs`), pulando todo subdiretório
+ * `_guarda-*` — e entrega ao dependency-cruiser só essa lista explícita de ARQUIVOS. Como
+ * nenhuma fixture de guard nunca entra nessa lista, o dependency-cruiser nunca chega a saber que
+ * ela existiu, então nunca tenta abri-la: o TOCTOU desaparece por construção, não por sorte de
+ * retry. Só arquivo de produção é churn-livre (nada além dos testes de guard cria/apaga arquivo
+ * em `src/` durante a suíte, e eles só mexem dentro do próprio `_guarda-*`), então a nossa
+ * própria listagem não tem essa corrida para herdar.
+ */
+export function rodarDependencyCruiserNaArvoreCompleta(): ResultadoDependencyCruiser {
+  const entradas = listarArquivosDeProducaoTs(path.join(RAIZ_DO_PROJETO, 'src'));
+  return rodarDependencyCruiser(entradas);
 }
 
 /**
