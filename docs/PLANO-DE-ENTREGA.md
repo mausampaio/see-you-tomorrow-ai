@@ -154,6 +154,25 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* existe um teste que **não compila** se alguém tentar passar a forma sem PID para a
       função de encerramento — ou, se um teste de compilação for caro demais, a função de
       encerramento aceita exclusivamente o tipo com `pid` garantido e isso está exercitado.
+- [ ] **S1-T0d — Migrar o código para inglês (D-028).** Vem **antes do S1-T2**, senão ele escreve
+      código novo em português que teria de ser migrado logo depois.
+      Escopo: identificadores, comentários de código, README, comandos e saída do CLI. `docs/`
+      **não** muda — continua em português, e é por isso que o glossário existe.
+      - use **exatamente** o glossário de `AGENTS.md` § Idioma. Termo que não estiver lá: **pare
+        e pergunte**, não invente tradução. Deriva de termo é o único risco real desta migração.
+      - renomear os diretórios de camada (`nucleo` → `core` etc.) tem raio de alcance grande:
+        `.dependency-cruiser.cjs`, a matriz de 20 pares em
+        `tests/integracao/guardas/_matriz-de-camadas.ts`, os testes de guarda, os limites de
+        cobertura por diretório em `vitest.config.ts`, e os caminhos em `tests/`. Confira cada um.
+      - `docs/ARQUITETURA.md` continua em português **mas cita os diretórios reais** — atualize só
+        os nomes de caminho lá, não o texto.
+      - o teste de sanidade da matriz compara os diretórios reais de `src/` com a lista declarada:
+        ele **tem** que reprovar durante a migração e voltar a passar no fim. Se passar o tempo
+        todo, alguma das duas pontas não foi migrada.
+      *Aceite:* `npm run verificar` verde; `npx vitest run --project guardas --file-parallelism`
+      verde; nenhum identificador em português em `src/` e `tests/`; `docs/` intocado exceto os
+      nomes de caminho.
+
 - [ ] **S1-T2 — `adaptadores/processo`.** Liveness com desempate por `procStart`, nos 3 SOs.
 - [ ] **S1-T3 — `adaptadores/descoberta`, estratégia por registro.** Lê
       `~/.claude/sessions/*.json`, tolerante a arquivo corrompido. Exclui forks de `forks.json`

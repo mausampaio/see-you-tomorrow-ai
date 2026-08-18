@@ -256,8 +256,52 @@ descobria quais eram os 2 erros até alguém instrumentar à mão.
 
 # Idioma
 
-Tudo em português: identificadores, comentários, commits, docs e texto do CLI. Campos de JSON
-que vêm do Claude Code mantêm a grafia original.
+**Inglês no que é público, português no que é interno** (D-028).
+
+| | Idioma |
+|---|---|
+| Identificadores e comentários de código | **inglês** |
+| README, comandos e saída do CLI | **inglês** |
+| Mensagens de commit | **inglês** |
+| `docs/` — decisões, spec, arquitetura, plano, spikes, questões | **português** |
+
+Campos de JSON que vêm do Claude Code (`sessionId`, `cwd`, `procStart`, `startedAt`) mantêm a
+grafia original — são dados de fora, não nomes nossos.
+
+## Glossário de domínio — tradução fixa
+
+O risco desta divisão é deriva: `elegibilidade` no documento, `eligibility` no código, e alguém
+inventando um terceiro nome daqui a três meses. **Use exatamente estes termos. Termo novo entra
+aqui antes de entrar no código.**
+
+| Documento (pt) | Código (en) |
+|---|---|
+| núcleo / adaptadores / aplicação / agendador | `core` / `adapters` / `application` / `scheduler` |
+| sessão descoberta | `DiscoveredSession` |
+| sessão com PID / sem PID | `SessionWithPid` / `SessionWithoutPid` |
+| estado da sessão | `SessionState` |
+| viva / ociosa / encerrada / desconhecida | `alive` / `idle` / `ended` / `unknown` |
+| elegibilidade | `eligibility` |
+| evidência / assinatura de evidência | `evidence` / `EvidenceSignature` |
+| captura | `capture` |
+| handoff / briefing | `handoff` / `briefing` (já em inglês) |
+| encerrar o dia / iniciar o dia | `endDay` / `startDay` |
+| encerrar processo | `terminate` (nunca `close` nem `kill`) |
+| fatos / fontes | `facts` / `sources` |
+| relógio | `Clock` |
+| controle de processo | `ProcessControl` |
+| provedor de sessões | `SessionProvider` |
+| aceitos / rejeitados | `accepted` / `rejected` |
+
+**Nomes de decisão não se traduzem.** `D-021` é `D-021` em qualquer idioma, e é assim que o
+código aponta para o porquê.
+
+## Texto voltado ao usuário
+
+O CLI nasce em inglês, e configuração de idioma é trabalho futuro (`docs/FORA-DE-ESCOPO.md`).
+Para que ela seja extração e não arqueologia: **texto voltado ao usuário fica concentrado, nunca
+espalhado em `console.log` pelo meio da lógica.** É a única parte da i18n que custa caro se for
+deixada para depois.
 
 # Comandos
 

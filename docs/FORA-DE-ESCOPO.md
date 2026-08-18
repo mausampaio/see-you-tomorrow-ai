@@ -36,6 +36,11 @@ Pare e registre em `docs/QUESTOES.md`.
 
 Registradas para não se perderem. **Não implementar sem decisão nova.**
 
+- **Configuração de idioma do CLI.** Ele nasce em inglês (D-028), o que deixa o mantenedor
+  digitando comandos e lendo saída num idioma que não é o dele. A dívida é assumida e a saída é
+  configuração — nomes de comando e mensagens por locale. Só é barata se o texto voltado ao
+  usuário estiver **concentrado** desde já, e não espalhado pela lógica; essa parte já é regra em
+  `AGENTS.md` § Idioma.
 - `seeya ontem` para reler handoffs antigos formatados.
 - Captura periódica de segurança durante o dia (snapshot a cada N horas), para o caso de a
   máquina morrer antes do encerramento.
