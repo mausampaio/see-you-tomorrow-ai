@@ -242,7 +242,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* nenhum identificador em português sobra fora de bloco histórico, a prosa continua
       em português, e `npm run verificar` verde.
 
-- [~] **S1-T2 — `adapters/process`.** Liveness com desempate por `procStart`, nos 3 SOs.
+- [x] **S1-T2 — `adapters/process`.** Liveness com desempate por `procStart`, nos 3 SOs.
       **Leia o `docs/spikes/F-procstart-por-so.md` antes de começar.** O formato do `procStart`
       é diferente nos três SOs e eles não se comparam entre si — no macOS nem é numérico. Aquele
       spike já rastreou os três, mas os achados **não foram verificados de forma independente**:

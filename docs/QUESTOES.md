@@ -437,7 +437,25 @@ rodasse em macOS, provavelmente concluindo que o app "não acha sessão nenhuma"
 de data no macOS. B) o campo perde o `regex` e vira `z.string().min(1)`, deixando a interpretação
 para quem compara (o adapter de processo), que é quem sabe a forma do seu próprio SO. C) o campo
 aceita os dois formatos numa união, sem saber de plataforma.
-**Resposta:** *(em aberto — PO)*
+**Resposta:** **FECHADA — opção B.** `procStart` vira `z.string().min(1)`, e quem compara
+decide a forma.
+
+O motivo não é preferência de estilo: **este schema não tem como saber em que SO o registro foi
+escrito.** Ele valida a forma de um arquivo externo; a plataforma é conhecimento do adapter de
+processo, que observa o valor atual na máquina onde está rodando. Codificar aqui um formato
+específico de plataforma faz o schema reprovar registro legítimo de um SO em que ninguém pensou na
+hora de escrever a linha — e por D-022 a validação é por item, então o efeito é a sessão sumir da
+lista **em silêncio**, no SO inteiro. É o modo de falha que D-021 e D-025 existem para impedir.
+
+A opção A (validação por plataforma) espalha o mesmo conhecimento por dois lugares que teriam de
+concordar para sempre. A opção C (união dos dois formatos) fixa no schema a suposição de que só
+existem dois, que é justamente a suposição que produziu este defeito.
+
+Isso encaixa com o que S1-T2 já construiu: um `procStart` que o adapter não sabe comparar vira
+`unavailable`, e por D-025 `unavailable` **nunca** vira `false`. Ou seja, valor inesperado degrada
+para "não sei desempatar", que é seguro — em vez de "sessão não existe", que não é.
+
+Comentário do campo deve dizer por que não há `regex`, senão alguém "conserta" isso de volta.
 
 ---
 
