@@ -103,7 +103,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
       **Estabilidade medida:** 40 rodadas do dev nos dois sistemas + 20 minhas, zero falhas.
       Antes, ~1 em 3.
-      *Aceite cumprido:* `npx vitest run --project guardas --file-parallelism` passa em Linux e
+      *Aceite cumprido:* `npx vitest run --project guards --file-parallelism` passa em Linux e
       Windows, e o guard continua reprovando violação real plantada em `src/` — verificado em
       três camadas diferentes, incluindo o caso `aplicacao-nova`, que um filtro por prefixo
       teria deixado passar.
@@ -154,7 +154,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* existe um teste que **não compila** se alguém tentar passar a forma sem PID para a
       função de encerramento — ou, se um teste de compilação for caro demais, a função de
       encerramento aceita exclusivamente o tipo com `pid` garantido e isso está exercitado.
-- [~] **S1-T0d — Migrar o código para inglês (D-028).** Vem **antes do S1-T2**, senão ele escreve
+- [x] **S1-T0d — Migrar o código para inglês (D-028).** Vem **antes do S1-T2**, senão ele escreve
       código novo em português que teria de ser migrado logo depois.
       Escopo: identificadores, comentários de código, README, comandos e saída do CLI. `docs/`
       **não** muda — continua em português, e é por isso que o glossário existe.
@@ -172,6 +172,24 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* `npm run verificar` verde; `npx vitest run --project guards --file-parallelism`
       verde; nenhum identificador em português em `src/` e `tests/`; `docs/` intocado exceto os
       nomes de caminho.
+
+- [ ] **S1-T0e — Fechar o buraco do `passWithNoTests`.** Achado durante o S1-T0d, e é da pior
+      classe: **falso verde**.
+      `passWithNoTests: true` está ligado globalmente desde S0-T1, quando as faixas ainda estavam
+      vazias. Consequência hoje: **qualquer projeto cujo glob deixe de casar passa verde, sem
+      rodar teste nenhum.** Durante a migração, renomear o diretório antes de atualizar o config
+      produziu `No test files found, exiting with code 0` — o portão teria aprovado uma migração
+      pela metade.
+      Não dá para simplesmente desligar: `tests/e2e/` está legitimamente vazio até S1-T6.
+      - guard que afirma que **cada projeto do vitest resolve para pelo menos um arquivo de
+        teste**, dirigido por uma lista declarada — mesmo padrão da matriz de camadas
+      - a lista declara explicitamente quais faixas podem estar vazias **e por quê** (hoje só
+        `e2e`, até S1-T6)
+      - **simétrico**: o teste falha também se uma faixa declarada como vazia deixar de estar.
+        Sem isso, a exceção do `e2e` vira permanente sem ninguém notar quando o primeiro e2e
+        chegar.
+      *Aceite:* renomear um diretório de teste sem atualizar o `vitest.config.ts` **reprova** o
+      portão. Provado por execução, não por leitura.
 
 - [ ] **S1-T2 — `adaptadores/processo`.** Liveness com desempate por `procStart`, nos 3 SOs.
 - [ ] **S1-T3 — `adaptadores/descoberta`, estratégia por registro.** Lê
