@@ -8,7 +8,7 @@ import type { SessionState, DiscoveredSession } from './types.js';
 export interface ClassificationParams {
   /** The current instant, obtained from the `Clock` port by the caller — never read here (D-019). */
   readonly now: Date;
-  /** `minutosParaOcioso` from `config.json` (docs/ARQUITETURA.md § Config). */
+  /** `idleMinutes` from `config.json` (docs/ARQUITETURA.md § Config). */
   readonly idleMinutes: number;
 }
 
