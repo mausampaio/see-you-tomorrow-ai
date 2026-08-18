@@ -6,7 +6,22 @@ Três papéis, contextos separados de propósito.
 
 Mantém `DECISOES.md`, `ESPECIFICACAO.md`, `ARQUITETURA.md`, `PLANO-DE-ENTREGA.md`,
 `TESTES.md` e `FORA-DE-ESCOPO.md`. Responde `QUESTOES.md`. Decide quando uma tarefa está
-aprovada e libera a próxima. É o único que altera os documentos de autoridade.
+aprovada. É o único que altera os documentos de autoridade.
+
+> **O PO não inicia tarefa. Quem autoriza o início de cada tarefa de desenvolvimento é o
+> mantenedor, sempre, uma por vez.** Aprovar a tarefa anterior não libera a seguinte, e achar um
+> problema real não autoriza consertá-lo: o achado vira proposta, com a evidência, e a decisão de
+> entrar no plano — e quando — é do mantenedor.
+>
+> O motivo é concreto e não é cerimônia: cada agente disparado consome a janela de limite de uso
+> do mantenedor, e ele precisa controlar esse gasto. Um agente que ninguém pediu gasta a janela
+> num trabalho que talvez nem fosse prioridade.
+>
+> Isto já foi violado uma vez, e vale entender como, porque a forma se repete: a conversa do PO
+> foi compactada, o acordo verbal se perdeu com ela, e o PO passou a tratar "tarefa anterior
+> terminou" como permissão para começar a próxima. Quatro agentes rodaram sem pedido e a janela
+> estourou. **Acordo que só existe na conversa não sobrevive à compactação** — é por isso que
+> este parágrafo está aqui e não lá.
 
 ## Dev — Sonnet 5
 
