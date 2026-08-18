@@ -22,7 +22,7 @@
     "dependencias": "depcruise src --config .dependency-cruiser.cjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "verificar": "tsc -p tsconfig.json --noEmit && npm run lint && npm run dependencias && npm run build && npm run cobertura",
+    "verificar": "npm run format:check && tsc -p tsconfig.json --noEmit && npm run lint && npm run dependencias && npm run build && npm run cobertura",
     "verificar:linux": "node scripts/verificar-linux.mjs",
     "prepare": "husky"
   },
