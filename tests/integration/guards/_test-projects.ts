@@ -51,7 +51,7 @@ export const DECLARED_PROJECTS: readonly DeclaredProject[] = [
       kind: 'empty-by-design',
       reason:
         'tests/integration/ only has files under guards/ today, and the `integration` project ' +
-        "excludes that subtree by design (guards/ writes fixtures into the real src/ tree and " +
+        'excludes that subtree by design (guards/ writes fixtures into the real src/ tree and ' +
         'runs as its own project below, see the `guards` project comment in vitest.config.ts). ' +
         'The real adapter integration suites (discovery/, storage/, git/, process/, ' +
         'notification/, generation/) have not landed yet.',
