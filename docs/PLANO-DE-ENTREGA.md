@@ -173,7 +173,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       verde; nenhum identificador em português em `src/` e `tests/`; `docs/` intocado exceto os
       nomes de caminho.
 
-- [~] **S1-T0e — Fechar o buraco do `passWithNoTests`.** Achado durante o S1-T0d, e é da pior
+- [x] **S1-T0e — Fechar o buraco do `passWithNoTests`.** Achado durante o S1-T0d, e é da pior
       classe: **falso verde**.
       `passWithNoTests: true` está ligado globalmente desde S0-T1, quando as faixas ainda estavam
       vazias. Consequência hoje: **qualquer projeto cujo glob deixe de casar passa verde, sem
@@ -196,8 +196,49 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* renomear um diretório de teste sem atualizar o `vitest.config.ts` **reprova** o
       portão. Provado por execução, não por leitura.
 
-- [ ] **S1-T2 — `adaptadores/processo`.** Liveness com desempate por `procStart`, nos 3 SOs.
-- [ ] **S1-T3 — `adaptadores/descoberta`, estratégia por registro.** Lê
+- [ ] **S1-T0f — O prettier não é aplicado em lugar nenhum.** Achado ao investigar um efeito
+      colateral do S1-T0e. Medido, não suposto:
+      - `core.autocrlf` está `true` nesta máquina e **não existe `.gitattributes`**, então a
+        árvore de trabalho é CRLF
+      - o prettier usa `endOfLine: "lf"` por padrão, então `format:check` acusa **todos** os
+        arquivos
+      - confirmado que a divergência é só fim de linha: a saída do prettier comparada com o
+        arquivo, ignorando CR, é idêntica. Não há problema de formatação real
+      - `format:check` **não está** no `verificar`, e o `lint-staged.config.js` roda
+        `eslint --fix` e `tsc` — **não roda prettier**
+      Ou seja: há `.prettierrc.json`, `.prettierignore`, dois scripts npm e uma seção de
+      formatação no `AGENTS.md`, e **nada disso é verificado**. É padrão que existe no papel. Pior,
+      o único comando que o checaria está permanentemente vermelho num checkout Windows, o que
+      garante que ninguém passe a usá-lo: quem roda uma vez conclui que está quebrado.
+      - fazer `format:check` passar num checkout Windows sem alterar conteúdo
+      - **aplicar em algum lugar** — portão ou pre-commit. Decida qual e justifique; um padrão que
+        ninguém verifica volta a divergir sozinho
+      - se for preciso reformatar em massa, **commit separado** do commit que liga a verificação,
+        senão o diff fica irrevisável
+      *Aceite:* `npm run format:check` verde nesta máquina, e um `.ts` deliberadamente mal
+      formatado em stage é barrado ou corrigido no commit. Provado por execução.
+
+- [ ] **S1-T0g — As docs internas não alcançaram o D-028.** Precisa entrar **antes do S1-T6**, que
+      é onde os nomes de comando viram código.
+      O D-028 decidiu inglês para código e README. O README já fixa `seeya sessions`,
+      `seeya end-day` e `seeya start-day`, e o plano já usa `seeya init` — mas as docs internas
+      ainda dizem `seeya sessoes`, `encerrar-dia`, `iniciar-dia`, `adiar`, `pular-hoje`, `ontem`.
+      Um agente que ler a doc e não o README nomeia o comando errado, e aí o nome errado está em
+      código.
+      Mesmo problema com identificadores: `docs/ARQUITETURA.md` descreve os casos de uso como
+      `encerrarDia, iniciarDia, capturarSessao`.
+      - traduzir **só o que é ou vira identificador**: nome de comando, de diretório, de módulo,
+        de caso de uso, de porta e de tipo. Prosa continua em português
+      - **não reescrever registro histórico**: o que está dentro de tarefa já marcada `[x]`, e os
+        spikes, descrevem o que era verdade na época e ficam como estão
+      - os que ainda não têm equivalente: `adiar` → `snooze`, `pular-hoje` → `skip-today`,
+        `ontem` → `yesterday`. Os três primeiros comandos seguem o README, que tem precedência
+      - todo nome novo entra no glossário do `AGENTS.md`, que é onde eles passam a ser reservados
+      *Aceite:* buscar `seeya <nome em português>` nas docs só encontra ocorrência dentro de bloco
+      histórico. Glossário atualizado com cada nome novo.
+
+- [ ] **S1-T2 — `adapters/process`.** Liveness com desempate por `procStart`, nos 3 SOs.
+- [ ] **S1-T3 — `adapters/discovery`, estratégia por registro.** Lê
       `~/.claude/sessions/*.json`, tolerante a arquivo corrompido. Exclui forks de `forks.json`
       (D-012). Sessão sem transcript entra normalmente, com `temTranscript: false` (D-013).
 - [ ] **S1-T8 — Estratégia por varredura de transcripts (D-016).** Varre
@@ -233,13 +274,13 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       Nenhuma das duas é candidata a encerramento de processo.
       *Aceite:* sessão presente em duas ou três origens aparece **uma** vez, com os campos
       fundidos, e o teste cobre as três combinações de par.
-- [ ] **S1-T4 — `adaptadores/transcricao`.** Parser streaming; últimos prompts, arquivos
+- [ ] **S1-T4 — `adapters/transcript`.** Parser streaming; últimos prompts, arquivos
       tocados, última atividade.
 - [ ] **S1-T7 — Detecção precoce de sessão sem transcript.** Notificação uma vez por
       `sessionId`, disparada quando a sessão é vista, não no encerramento (D-013).
       *Aceite:* sessão registrada sem `.jsonl` gera exatamente uma notificação, e a segunda
       passagem da descoberta não repete.
-- [ ] **S1-T5 — `adaptadores/armazenamento`.** Raiz injetável, escrita atômica, config com
+- [ ] **S1-T5 — `adapters/storage`.** Raiz injetável, escrita atômica, config com
       defaults, `versaoDoEsquema`.
 - [ ] **S1-T6 — `seeya sessoes` e `seeya status`.**
       *Aceite do sprint:* `seeya sessoes` lista corretamente as sessões reais desta máquina,
@@ -249,11 +290,11 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
 ## Sprint 2 — Encerrar o dia
 
-- [ ] **S2-T1 — `adaptadores/git`.** Branch, status, commits do dia e **enumeração de
+- [ ] **S2-T1 — `adapters/git`.** Branch, status, commits do dia e **enumeração de
       worktrees** com o estado de cada um (D-013). Sem quebrar quando o `cwd` não é repo.
       *Aceite:* repo de teste com dois worktrees, um sujo e um limpo, produz o estado correto
       dos dois.
-- [ ] **S2-T2 — `adaptadores/geracao`.** Duas implementações, enxuta e profunda (D-011).
+- [ ] **S2-T2 — `adapters/generation`.** Duas implementações, enxuta e profunda (D-011).
       Contexto por stdin ou arquivo, nunca por argumento (D-015). `--tools ""`,
       `--system-prompt` curto, `--json-schema`, timeout, orçamento, `spawn` sem shell, erro
       tipado. Registro do fork em `forks.json` no modo profundo.
@@ -284,10 +325,10 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
 ## Sprint 4 — Automatizar
 
-- [ ] **S4-T1 — `adaptadores/notificacao`** conforme o Spike B, com a cadeia de fallback e o
+- [ ] **S4-T1 — `adapters/notification`** conforme o Spike B, com a cadeia de fallback e o
       contrato mínimo **sem ações**. Validação manual do `activationType="protocol"` com esquema
       `seeya://` no Windows; se não se provar, o produto segue sem ações clicáveis e nada quebra.
-- [ ] **S4-T2 — `nucleo/agenda`.** Puro: dado config + estado + agora, o que deve acontecer.
+- [ ] **S4-T2 — `core/schedule`.** Puro: dado config + estado + agora, o que deve acontecer.
       É aqui que moram os testes de horário de verão e de máquina suspensa.
 - [ ] **S4-T3 — Daemon.** Loop, lockfile de instância única, recuperação de disparo atrasado.
 - [ ] **S4-T4 — `seeya adiar`, `seeya pular-hoje`, `seeya config`.**
