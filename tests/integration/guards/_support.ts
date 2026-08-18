@@ -67,7 +67,9 @@ export interface DependencyCruiserResult {
   readonly raw: string;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+/** Exported (S1-T0e) so test-projects.test.ts can validate vitest.config.ts's shape the same
+ * defensive way this file validates dependency-cruiser's JSON — without `any`/`as`. */
+export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
@@ -267,6 +269,56 @@ export function violationsOutsideGuardFixtures(
 export function runVitestWithCoverage(fixtureDirectory: string): CommandResult {
   const binary = path.join(PROJECT_ROOT, 'node_modules', 'vitest', 'vitest.mjs');
   return run([binary, 'run', '--coverage'], { cwd: fixtureDirectory });
+}
+
+export interface ProjectFileListResult {
+  /** Test file paths vitest would run for the project, exactly as `vitest list` resolved them. */
+  readonly files: readonly string[];
+  /**
+   * `false` when `vitest list --json`'s output couldn't be parsed as the array it should
+   * produce (e.g. the project name doesn't exist in vitest.config.ts, which prints a "No
+   * projects matched" error instead of JSON). `files` comes back empty in that case too, but
+   * that does NOT mean "zero test files" — see `raw` for what actually happened (S1-T0e, same
+   * pattern as `DependencyCruiserResult.jsonValid` above).
+   */
+  readonly jsonValid: boolean;
+  /** Raw stdout+stderr from the process, only for diagnostics in a failure message. */
+  readonly raw: string;
+}
+
+/**
+ * Asks the real vitest CLI which test files it would run for `projectName`, without running any
+ * of them (`vitest list --filesOnly`) — the same resolution `npm test` itself uses, so this can
+ * never disagree with the real gate about what an `include` glob matches (S1-T0e). This is
+ * deliberately NOT a hand-rolled glob match against `include`/`exclude`: a reimplementation could
+ * drift from vitest's own matching rules (dotfiles, `configDefaults.exclude`, project-level
+ * overrides) and turn into either a false green (guard says "has tests", vitest says "none") or a
+ * false alarm (the reverse) — both worse than the small cost of a real subprocess.
+ *
+ * Confirmed by hand before writing this: `vitest list --project <name> --filesOnly --json`
+ * prints `[]` (exit 0) for a project whose glob matches nothing, and a non-JSON "No projects
+ * matched the filter" error (non-zero exit) for a project name that doesn't exist in
+ * vitest.config.ts at all — two different situations `jsonValid` tells apart, same as
+ * `runDependencyCruiser`'s does for tool-failure-vs-empty-result.
+ */
+export function listProjectTestFiles(projectName: string): ProjectFileListResult {
+  const binary = path.join(PROJECT_ROOT, 'node_modules', 'vitest', 'vitest.mjs');
+  const result = run([binary, 'list', '--project', projectName, '--filesOnly', '--json']);
+  try {
+    const data: unknown = JSON.parse(result.output);
+    if (!Array.isArray(data)) {
+      return { files: [], jsonValid: false, raw: result.output };
+    }
+    const files: string[] = [];
+    for (const entry of data as unknown[]) {
+      if (isRecord(entry) && typeof entry.file === 'string') {
+        files.push(entry.file);
+      }
+    }
+    return { files, jsonValid: true, raw: result.output };
+  } catch {
+    return { files: [], jsonValid: false, raw: result.output };
+  }
 }
 
 /**

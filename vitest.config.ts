@@ -3,8 +3,15 @@ import { configDefaults, defineConfig } from 'vitest/config';
 /**
  * Test projects split by track (see docs/TESTES.md). `unit` and `integration` run in
  * `npm test`; `e2e` and `contract` are opt-in via `npm run test:e2e` / `npm run test:contrato`.
- * All of them may be empty in this task (S0-T1) — `passWithNoTests` (a global option, not per
- * project) avoids a failure from a track having no tests yet.
+ *
+ * `passWithNoTests` (S0-T1) is a global option, not per project, and stays on: `integration` and
+ * `e2e` are legitimately empty right now (their adapters/commands haven't landed yet), and
+ * turning it off would make `npm test` red for no real defect. What it can't do on its own is
+ * tell "legitimately empty" apart from "glob stopped matching by accident" — that gap is exactly
+ * what bit S1-T0d (a directory rename before updating this file exited 0 with zero tests run).
+ * `tests/integration/guards/test-projects.test.ts` is what closes it: it declares, independently
+ * of this file, which project is expected to be empty and why, and fails if any project's real
+ * file count disagrees (S1-T0e).
  */
 export default defineConfig({
   test: {
