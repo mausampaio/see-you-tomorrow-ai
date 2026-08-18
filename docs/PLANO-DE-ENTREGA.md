@@ -220,22 +220,27 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
 - [ ] **S1-T0g — As docs internas não alcançaram o D-028.** Precisa entrar **antes do S1-T6**, que
       é onde os nomes de comando viram código.
-      O D-028 decidiu inglês para código e README. O README já fixa `seeya sessions`,
-      `seeya end-day` e `seeya start-day`, e o plano já usa `seeya init` — mas as docs internas
-      ainda dizem `seeya sessoes`, `encerrar-dia`, `iniciar-dia`, `adiar`, `pular-hoje`, `ontem`.
-      Um agente que ler a doc e não o README nomeia o comando errado, e aí o nome errado está em
-      código.
-      Mesmo problema com identificadores: `docs/ARQUITETURA.md` descreve os casos de uso como
-      `encerrarDia, iniciarDia, capturarSessao`.
-      - traduzir **só o que é ou vira identificador**: nome de comando, de diretório, de módulo,
-        de caso de uso, de porta e de tipo. Prosa continua em português
-      - **não reescrever registro histórico**: o que está dentro de tarefa já marcada `[x]`, e os
-        spikes, descrevem o que era verdade na época e ficam como estão
-      - os que ainda não têm equivalente: `adiar` → `snooze`, `pular-hoje` → `skip-today`,
-        `ontem` → `yesterday`. Os três primeiros comandos seguem o README, que tem precedência
-      - todo nome novo entra no glossário do `AGENTS.md`, que é onde eles passam a ser reservados
-      *Aceite:* buscar `seeya <nome em português>` nas docs só encontra ocorrência dentro de bloco
-      histórico. Glossário atualizado com cada nome novo.
+      O escopo real é maior do que "nome de comando": a especificação inteira estava escrita com
+      identificadores em português — chaves do `config.json`, chaves do handoff, layout de pastas
+      em `~/.seeya/`, valores de enum e nomes de caso de uso.
+      **Já feito pelo PO** (os dois documentos que o agente dev não altera): `ESPECIFICACAO.md` e
+      `DECISOES.md` normalizados, 52 trocas, e o mapeamento inteiro fixado no glossário do
+      `AGENTS.md` § Idioma, incluindo a tabela dos identificadores que vão para disco.
+      **Falta**, e é o escopo desta tarefa:
+      - `ARQUITETURA.md` — o bloco de `config.json` tem 11 chaves em português, e os casos de uso
+        estão como `encerrarDia, iniciarDia, capturarSessao`
+      - `PLANO-DE-ENTREGA.md`, `TESTES.md`, `FORA-DE-ESCOPO.md`, `QUESTOES.md` — nomes de comando
+        e flags (`--sessao`, `--todas`, `--parar`)
+      - `src/core/eligibility.ts:48` cita `~/.see-you-tomorrow/forks.json`, pasta que o D-027
+        substituiu por `~/.seeya/`. É comentário apontando para caminho que não existe
+      **O glossário manda.** Não invente nome: se faltar algum, pare e pergunte, para não haver
+      dois nomes para a mesma coisa em dois arquivos.
+      Duas coisas que **não** se traduzem: prosa em português (palavras como "fatos", "origem" e
+      "caminho" também são texto corrido — trocar por busca cega destrói o documento; troque só
+      dentro de crase, de chave JSON e de bloco de código), e registro histórico (o que está
+      dentro de tarefa já `[x]` e os spikes descrevem o que era verdade na época).
+      *Aceite:* nenhum identificador em português sobra fora de bloco histórico, a prosa continua
+      em português, e `npm run verificar` verde.
 
 - [ ] **S1-T2 — `adapters/process`.** Liveness com desempate por `procStart`, nos 3 SOs.
 - [ ] **S1-T3 — `adapters/discovery`, estratégia por registro.** Lê

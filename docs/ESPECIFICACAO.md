@@ -21,7 +21,7 @@ retoma as sessões de onde pararam.
 |---|---|
 | **Sessão** | Uma sessão do Claude Code, identificada por `sessionId` (UUID), com um `cwd`. |
 | **Sessão viva** | Sessão cujo processo está em execução agora. |
-| **Sessão ociosa** | Sessão viva sem escrita no transcript há mais de `minutosParaOcioso`. |
+| **Sessão ociosa** | Sessão viva sem escrita no transcript há mais de `idleMinutes`. |
 | **Captura** | Ler o estado de uma sessão e produzir um handoff. |
 | **Handoff** | Documento por sessão: fatos + entendimento + pendências + plano de amanhã. |
 | **Encerramento** | O ato de capturar todas as sessões elegíveis e produzir o resumo do dia. |
@@ -46,7 +46,7 @@ Regras:
 
 ## Comandos
 
-### `seeya sessoes`
+### `seeya sessions`
 
 Lista as sessões conhecidas: nome, `cwd`, estado (viva / ociosa / encerrada), última atividade,
 política de encerramento aplicada. Não escreve nada. É o comando de diagnóstico.
@@ -56,7 +56,7 @@ política de encerramento aplicada. Não escreve nada. É o comando de diagnóst
 Mostra o horário de encerramento configurado para hoje, quanto falta, adiamentos aplicados,
 se o dia foi pulado, se o daemon está rodando, e quantas sessões estão elegíveis.
 
-### `seeya encerrar-dia [--dry-run] [--sessao <id|cwd>]`
+### `seeya end-day [--dry-run] [--session <id|cwd>]`
 
 Executa o encerramento manual. Idêntico ao automático (D-001).
 
@@ -64,23 +64,23 @@ Executa o encerramento manual. Idêntico ao automático (D-001).
 2. Para cada uma, em paralelo com limite de concorrência: coleta fatos → gera entendimento →
    grava handoff. Falha em uma sessão não aborta as outras.
 3. Grava o briefing do dia consolidando todos os handoffs.
-4. Para sessões marcadas `podeEncerrar` (D-002), e só depois do handoff verificado em disco,
+4. Para sessões marcadas `canTerminate` (D-002), e só depois do handoff verificado em disco,
    termina o processo graciosamente.
 5. Notifica o resultado e imprime o resumo.
 
 `--dry-run` executa tudo menos escrever e terminar processos: mostra o que faria.
-`--sessao` limita a uma sessão.
+`--session` limita a uma sessão.
 
-### `seeya iniciar-dia [--sessao <id>] [--todas]`
+### `seeya start-day [--session <id>] [--all]`
 
 1. Lê o briefing mais recente que ainda tem pendências.
 2. Mostra o plano consolidado.
-3. Pergunta quais sessões retomar (ou `--todas`).
+3. Pergunta quais sessões retomar (ou `--all`).
 4. Para cada escolhida, executa `claude --resume <sessionId>` no `cwd` original, injetando o
    plano daquela sessão como primeiro prompt (D-004).
 5. Marca o briefing como retomado.
 
-### `seeya adiar [+15m|+30m|+1h]` e `seeya pular-hoje`
+### `seeya snooze [+15m|+30m|+1h]` e `seeya skip-today`
 
 Atuam sobre o encerramento automático de hoje (D-006). Funcionam com ou sem daemon rodando —
 o estado é persistido, não guardado em memória.
@@ -90,7 +90,7 @@ o estado é persistido, não guardado em memória.
 Lê e escreve `config.json`. Subcomandos para horário, antecedências de notificação, política
 por `cwd`, modelo usado na captura, e limites.
 
-### `seeya daemon [--parar] [--status]`
+### `seeya daemon [--stop] [--status]`
 
 Sobe o processo de longa duração (D-005). Instância única.
 
@@ -163,7 +163,7 @@ apenas quais fontes responderam.
   Ver D-018.
 - **Captura.** Cai para git + registro. Com worktree ativo o handoff continua bom: qual
   worktree, qual branch, o que foi commitado hoje, o que ficou sujo.
-- **Marcação.** `origem: "semTranscript"`. Não é erro, não polui a saída com aviso de falha.
+- **Marcação.** `origem: "noTranscript"`. Não é erro, não polui a saída com aviso de falha.
 
 ### Worktrees
 
@@ -176,53 +176,53 @@ commits do dia. Isso é o que salva o caso do agente de execução.
 Uma sessão entra no encerramento se, e somente se:
 
 - pelo menos uma fonte de evidência respondeu; **e**
-- teve atividade nas últimas `horasDeRelevancia` (default 12 h) — medida pela fonte mais
+- teve atividade nas últimas `relevanceHours` (default 12 h) — medida pela fonte mais
   recente disponível, não só pelo transcript; **e**
 - o `sessionId` não é um fork criado pelo próprio `seeya` (D-012); **e**
-- o `cwd` não está na lista `ignorar` da config; **e**
+- o `cwd` não está na lista `ignore` da config; **e**
 - não tem handoff do dia corrente com a **evidência inalterada** desde então (anti-duplicidade,
   D-026). Evidência, não transcript: sessão sem transcript cuja árvore git mudou **não** é
   duplicada.
 
 ## Formato do handoff
 
-`~/.seeya/dias/<AAAA-MM-DD>/sessoes/<sessionId>.json`
+`~/.seeya/days/<YYYY-MM-DD>/sessions/<sessionId>.json`
 
 ```jsonc
 {
-  "versaoDoEsquema": 1,
+  "schemaVersion": 1,
   "sessionId": "uuid",
   "cwd": "c:\\code\\projeto",
-  "nome": "projeto-03",
-  "capturadoEm": "2026-08-16T21:00:04.120Z",
-  "estadoDaSessao": "viva" | "ociosa" | "encerrada" | "desconhecida",
-  "capturadoDuranteTurnoAtivo": false,
-  "origem": "modelo" | "deterministico" | "semTranscript",
-  "modoDaCaptura": "enxuto" | "profundo",
-  "fontes": ["git", "transcript", "registro"],
-  "fatos": {
-    "ultimaAtividade": "2026-08-16T20:41:11.000Z",
-    "ultimosPrompts": ["...", "..."],
-    "arquivosTocados": ["src/a.ts"],
+  "name": "projeto-03",
+  "capturedAt": "2026-08-16T21:00:04.120Z",
+  "sessionState": "alive" | "idle" | "ended" | "unknown",
+  "capturedDuringActiveTurn": false,
+  "source": "model" | "deterministic" | "noTranscript",
+  "captureMode": "lean" | "deep",
+  "sources": ["git", "transcript", "registry"],
+  "facts": {
+    "lastActivity": "2026-08-16T20:41:11.000Z",
+    "lastPrompts": ["...", "..."],
+    "touchedFiles": ["src/a.ts"],
     "git": {
       "branch": "main",
-      "sujo": true,
-      "arquivosModificados": ["src/a.ts"],
-      "commitsDoDia": [{ "sha": "1b7fd99", "titulo": "docs: especificação inicial" }],
+      "dirty": true,
+      "modifiedFiles": ["src/a.ts"],
+      "commitsToday": [{ "sha": "1b7fd99", "title": "docs: especificação inicial" }],
       "worktrees": [
-        { "caminho": "c:\\code\\projeto\\.wt\\issue-42", "branch": "issue-42",
-          "sujo": false, "commitsDoDia": 3 }
+        { "path": "c:\\code\\projeto\\.wt\\issue-42", "branch": "issue-42",
+          "dirty": false, "commitsToday": 3 }
       ]
     }
   },
-  "entendimento": "texto livre",
-  "pendencias": ["..."],
-  "planoAmanha": ["..."],
-  "erroNaGeracao": null
+  "understanding": "texto livre",
+  "pendingItems": ["..."],
+  "tomorrowPlan": ["..."],
+  "generationError": null
 }
 ```
 
-O briefing do dia (`resumo.md`) é gerado a partir dos handoffs, em markdown legível.
+O briefing do dia (`summary.md`) é gerado a partir dos handoffs, em markdown legível.
 
 ## Notificações
 
@@ -232,10 +232,10 @@ caiu.
 
 **Nenhum caso de uso depende de ação clicável na notificação.** O Spike B mostrou que ações são
 inconsistentes entre os três SOs e caras em dois deles. Toda notificação é informativa e sempre
-diz o comando equivalente (`seeya adiar +30m`). Onde a ação for barata e confiável, entra como
+diz o comando equivalente (`seeya snooze +30m`). Onde a ação for barata e confiável, entra como
 conveniência — nunca como único caminho.
 
-`Notificador` tem contrato mínimo **sem ações**; ações são capacidade opcional que o backend
+`Notifier` tem contrato mínimo **sem ações**; ações são capacidade opcional que o backend
 declara. Se nenhuma notificação nativa estiver disponível, cai para stderr e nunca quebra o
 fluxo.
 
@@ -250,5 +250,5 @@ fluxo.
 ## Sugestões minhas para depois da v1
 
 Registradas aqui para não serem esquecidas nem implementadas agora — ver `docs/FORA-DE-ESCOPO.md`:
-métricas de foco por projeto, `seeya ontem` para reler handoffs antigos, captura periódica de
+métricas de foco por projeto, `seeya yesterday` para reler handoffs antigos, captura periódica de
 segurança durante o dia, e integração com o issue tracker para virar pendência rastreável.

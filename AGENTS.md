@@ -306,6 +306,48 @@ justamente para que quem os implementar não invente nome:
 | armazenamento | `Storage` | S1-T5 |
 | estado do dia | `DayState` | S4-T2 |
 
+**Identificadores que vão para disco.** Chaves de `config.json`, chaves do handoff e o layout de
+pastas em `~/.seeya/`. Estes são os mais caros de errar: uma vez que o app grava um arquivo, o
+nome da chave vira formato, e renomear depois quebra o que já está em disco na máquina de quem
+usa. Fixados em S1-T0g, antes de qualquer um deles existir em código.
+
+| Documento (pt) | Em disco (en) | Onde |
+|---|---|---|
+| versão do esquema | `schemaVersion` | config e handoff |
+| horário de encerramento | `endOfDayTime` | config |
+| antecedências em minutos | `leadTimesInMinutes` | config |
+| horas de relevância | `relevanceHours` | config |
+| minutos para ocioso | `idleMinutes` | config |
+| modelo da captura | `captureModel` | config |
+| orçamento por sessão | `budgetPerSessionUsd` | config |
+| concorrência da captura | `captureConcurrency` | config |
+| ignorar | `ignore` | config |
+| política por projeto | `projectPolicy` | config |
+| pode encerrar | `canTerminate` | config |
+| capturado em | `capturedAt` | handoff |
+| estado da sessão | `sessionState` | handoff |
+| capturado durante turno ativo | `capturedDuringActiveTurn` | handoff |
+| origem | `source` | handoff |
+| modo da captura | `captureMode` | handoff |
+| última atividade | `lastActivity` | handoff |
+| últimos prompts | `lastPrompts` | handoff |
+| arquivos tocados | `touchedFiles` | handoff |
+| sujo | `dirty` | handoff (git) |
+| arquivos modificados | `modifiedFiles` | handoff (git) |
+| commits do dia | `commitsToday` | handoff (git) |
+| pendências | `pendingItems` | handoff |
+| plano de amanhã | `tomorrowPlan` | handoff |
+| erro na geração | `generationError` | handoff |
+| dias / sessões / resumo | `days/` / `sessions/` / `summary.md` | layout |
+
+Valores de enum seguem a mesma regra: `alive` / `idle` / `ended` / `unknown` (já em
+`src/core/types.ts`), `model` / `deterministic` / `noTranscript`, `lean` / `deep`, e
+`git` / `transcript` / `registry`.
+
+Nomes de comando e flags do CLI: `sessions`, `end-day`, `start-day`, `snooze`, `skip-today`,
+`status`, `config`, `daemon`, `init`, e `--session`, `--all`, `--stop`, `--dry-run`. Os três
+primeiros vieram do README, que já os tinha fixado e tem precedência.
+
 **Nomes de decisão não se traduzem.** `D-021` é `D-021` em qualquer idioma, e é assim que o
 código aponta para o porquê.
 

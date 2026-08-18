@@ -56,7 +56,7 @@ com sucesso.
    Claude headless a partir dos fatos + transcript.
 
 **Decisão de falha.** Se a camada 2 falhar (rede, cota, timeout, binário ausente), o handoff é
-gravado **mesmo assim**, só com os fatos, e marcado `origem: "deterministico"`. O encerramento
+gravado **mesmo assim**, só com os fatos, e marcado `origem: "deterministic"`. O encerramento
 do dia nunca falha inteiro por causa do modelo.
 
 **Consequências.** A camada 1 é testável sem rede e é o que os testes cobrem com rigor. A
@@ -66,7 +66,7 @@ camada 2 é sempre mockada nos testes.
 
 ## D-004 — "Iniciar o dia" retoma a sessão original
 
-**Decisão.** `seeya iniciar-dia` executa `claude --resume <sessionId>` no `cwd` original de cada
+**Decisão.** `seeya start-day` executa `claude --resume <sessionId>` no `cwd` original de cada
 sessão pendente, injetando o plano do dia anterior como primeiro prompt.
 
 **Consequências.**
@@ -110,7 +110,7 @@ de escape explícita, então forçar um teto seria redundante.
 **Decisão.** Config, estado, handoffs e histórico ficam em `~/.seeya/`. O app
 **nunca** escreve dentro dos repositórios das sessões capturadas.
 
-**Consequências.** O `iniciar-dia` lê tudo de uma fonte só. Nenhum `.gitignore` de terceiro
+**Consequências.** O `start-day` lê tudo de uma fonte só. Nenhum `.gitignore` de terceiro
 precisa ser tocado. O caminho raiz é injetável para que os testes rodem em `tmpdir`.
 
 ---
@@ -120,7 +120,7 @@ precisa ser tocado. O caminho raiz é injetável para que os testes rodem em `tm
 **Decisão.** Node 22 LTS, TypeScript estrito, ESM. Identificadores, comentários, mensagens de
 commit, documentação e texto do CLI em português.
 
-**Consequências.** Nomes de módulo e de função em PT (`descoberta`, `capturarSessao`). Nomes que
+**Consequências.** Nomes de módulo e de função em PT (`descoberta`, `captureSession`). Nomes que
 vêm de fora — campos de JSON do Claude Code, APIs de bibliotecas — mantêm a grafia original.
 
 ---
@@ -172,7 +172,7 @@ tentaria capturá-los, gerando novos forks — laço de realimentação.
 
 **Decisão.** Todo `sessionId` de fork criado pelo `seeya` é registrado em
 `~/.seeya/forks.json`. A descoberta **exclui** esses IDs. Forks com mais de
-`diasParaLimparForks` (default 7) são apagados.
+`forkCleanupDays` (default 7) são apagados.
 
 **Consequências.** Apagar arquivo dentro de `~/.claude/projects/` é a **única** exceção à regra
 "nunca escreva em `~/.claude/`", e vale exclusivamente para forks que o próprio `seeya` criou e
@@ -212,7 +212,7 @@ do dia, e notifica na hora — quando ainda dá para reagir.
 **Consequências.**
 - `adaptadores/git` cresce: precisa enumerar worktrees (`git worktree list`), não só o `cwd`.
 - O handoff ganha `fontes: []` declarando de onde cada informação veio.
-- `origem: "semTranscript"` é um estado normal, não um erro.
+- `origem: "noTranscript"` é um estado normal, não um erro.
 
 ---
 
@@ -259,7 +259,7 @@ agente de execução, que é justamente o caso que mais precisa de handoff.
 1. **Registro** — `~/.claude/sessions/*.json`. Dá `pid`, liveness, `kind`, `name`. Só enxerga
    interativas.
 2. **Varredura de transcripts** — `~/.claude/projects/**/*.jsonl` filtrado por mtime dentro de
-   `horasDeRelevancia`. Enxerga headless também. Não dá `pid` nem liveness.
+   `relevanceHours`. Enxerga headless também. Não dá `pid` nem liveness.
 
 Sessão vista pelas duas tem os dados fundidos; sessão vista só pela varredura entra com
 `pid: null` e estado `desconhecido` — nunca é candidata a encerramento de processo (D-002).
@@ -352,7 +352,7 @@ ausentes viram `"desconhecido"`.
 
 ## D-022 — Lista de fonte externa valida item por item, nunca em bloco
 
-**Contexto.** `esquemaSaidaAgentsJson` era `z.array(item)`. Testado contra a saída real de uma
+**Contexto.** `agentsJsonOutputSchema` era `z.array(item)`. Testado contra a saída real de uma
 segunda máquina, Linux, **rejeitou o array inteiro** por causa de uma única entrada: uma
 sessão `kind: "background"` que não tem `pid` (tem `id`) e usa `state` em vez de `status`. Uma
 sessão de background e o `seeya` perderia a fonte de descoberta completa.
@@ -371,8 +371,8 @@ itens inválidos são registrados e descartados individualmente, e a operação 
 
 **Consequências.**
 - O tipo de retorno declara os dois lados: os itens aceitos **e** os rejeitados com o motivo, para
-  que o `seeya sessoes` possa dizer "3 sessões, 1 entrada ignorada" em vez de mentir por omissão.
-- `esquemaItemDeAgentsJson` ganha `pid` opcional e aceita a variante de background (`id`,
+  que o `seeya sessions` possa dizer "3 sessões, 1 entrada ignorada" em vez de mentir por omissão.
+- `agentsJsonItemSchema` ganha `pid` opcional e aceita a variante de background (`id`,
   `state`). Item sem `pid` nunca é candidato a encerramento de processo, igual à sessão vinda só
   da varredura (D-016).
 - Teste obrigatório: um array com uma entrada boa e uma inválida devolve a boa e reporta a outra.
@@ -460,13 +460,13 @@ não perder. Exigir `pid` ou `id` reintroduziria o bug que D-021 corrigiu.
 **Contexto.** Ao classificar o estado de uma sessão viva cuja última escrita no transcript é
 `null` — porque não há transcript —, a implementação de S1-T1 retornou **`ociosa`**, com o
 argumento de que é a leitura literal de "sessão viva sem escrita no transcript há mais de
-`minutosParaOcioso`" no caso degenerado.
+`idleMinutes`" no caso degenerado.
 
 **Decisão. Está errado, e a resposta correta é `viva`.** O próprio glossário resolve:
 
 - **`viva`** = "sessão cujo processo está em execução agora". É exatamente o que se sabe quando o
   PID está vivo.
-- **`ociosa`** = "sessão **viva** sem escrita no transcript há mais de `minutosParaOcioso`". É um
+- **`ociosa`** = "sessão **viva** sem escrita no transcript há mais de `idleMinutes`". É um
   **refinamento** de `viva`, e depende de evidência de não-escrita.
 
 Com `null` não há transcript, logo não há como estabelecer "sem escrita há mais de X minutos" —
@@ -476,10 +476,10 @@ dado**. Converter uma na outra é o erro.
 **Por que isso importa mais do que parece.** `null` é precisamente o caso de D-013: transcript
 suprimido, que é o agente de execução autônomo. Marcá-lo como `ociosa` diria "não está fazendo
 nada" justamente sobre a sessão com maior probabilidade de estar trabalhando a todo vapor e
-invisível. O `seeya sessoes` mentiria com confiança, e sobre o caso que mais importa.
+invisível. O `seeya sessions` mentiria com confiança, e sobre o caso que mais importa.
 
 **Consequências.**
-- `classificarEstado` devolve `viva` quando o processo está vivo e `ultimaEscritaNoTranscript` é
+- `classifyState` devolve `viva` quando o processo está vivo e `lastTranscriptWrite` é
   `null`. Só devolve `ociosa` com um timestamp real que já passou do limite.
 - Vale como princípio geral do domínio: **nenhuma regra converte "não sei" em afirmação
   positiva.** Quando faltar dado, o resultado é o estado menos específico que a evidência
