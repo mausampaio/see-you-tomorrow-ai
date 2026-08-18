@@ -412,3 +412,29 @@ padrão de `endDay`/`startDay`) já estava no glossário, mesmo a linha não est
 regra que o PO tinha em mente ao afirmar "todos estão no glossário" em S1-T0g. `seeya ontem` →
 `seeya yesterday` estava certo por ser tradução literal de palavra comum, não termo de domínio.
 `captureSession` acrescentado à tabela 1 de `AGENTS.md` § Idioma, junto de `endDay`/`startDay`.
+
+---
+
+## Q-006 — O schema rejeita todo `procStart` de macOS
+**Tarefa:** encontrada no S1-T2, mas o defeito está em código de S1-T3 já integrado.
+**Bloqueia:** não hoje — o projeto só roda em Windows nesta máquina. Bloqueia o primeiro uso real
+em macOS, e bloqueia qualquer teste de descoberta em macOS antes disso.
+**Contexto:** `src/adapters/discovery/schemas.ts` declara
+`procStart: z.string().regex(/^\d+$/, 'procStart must be a digits-only string')`. O comentário
+acima explica bem por que o campo é `string` e não `number` (os valores reais passam de
+`Number.MAX_SAFE_INTEGER`), e isso continua certo. O problema é o `regex`.
+
+O Spike F rastreou como o Claude Code produz esse valor em cada plataforma, lendo os três builds
+da mesma versão. No macOS ele vem de `ps -o lstart=`, ou seja, uma **data legível** como
+`Mon Aug 17 14:23:01 2026` — não dígitos. O `regex` reprova, e por D-022 a validação é por item,
+então o efeito não é um crash: **a sessão simplesmente some da lista**, em silêncio, no SO inteiro.
+
+Isso é exatamente o modo de falha que D-021 e D-025 existem para impedir — dado que não bate com o
+esperado virando invisibilidade em vez de aviso. E o pior detalhe: só apareceria quando alguém
+rodasse em macOS, provavelmente concluindo que o app "não acha sessão nenhuma".
+
+**Opções:** A) o `regex` vira uma validação por plataforma — dígitos em Windows e Linux, formato
+de data no macOS. B) o campo perde o `regex` e vira `z.string().min(1)`, deixando a interpretação
+para quem compara (o adapter de processo), que é quem sabe a forma do seu próprio SO. C) o campo
+aceita os dois formatos numa união, sem saber de plataforma.
+**Resposta:** *(em aberto — PO)*

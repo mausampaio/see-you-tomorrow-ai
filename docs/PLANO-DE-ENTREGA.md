@@ -243,6 +243,14 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       em português, e `npm run verificar` verde.
 
 - [ ] **S1-T2 — `adapters/process`.** Liveness com desempate por `procStart`, nos 3 SOs.
+      **Leia o `docs/spikes/F-procstart-por-so.md` antes de começar.** O formato do `procStart`
+      é diferente nos três SOs e eles não se comparam entre si — no macOS nem é numérico. Aquele
+      spike já rastreou os três, mas os achados **não foram verificados de forma independente**:
+      confirme antes de construir em cima.
+      Duas armadilhas registradas lá e aqui: no Windows o `SIGTERM` do Node chama
+      `TerminateProcess`, que mata sem o processo salvar nada — usar isso viola D-002 parecendo
+      cumpri-lo. E `EPERM` em `process.kill(pid, 0)` significa **vivo**, não morto.
+      Quando o desempate não puder ser avaliado, `isAlive` **não** responde `false` (D-025).
 - [ ] **S1-T3 — `adapters/discovery`, estratégia por registro.** Lê
       `~/.claude/sessions/*.json`, tolerante a arquivo corrompido. Exclui forks de `forks.json`
       (D-012). Sessão sem transcript entra normalmente, com `hasTranscript: false` (D-013).
