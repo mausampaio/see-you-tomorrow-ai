@@ -196,7 +196,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* renomear um diretório de teste sem atualizar o `vitest.config.ts` **reprova** o
       portão. Provado por execução, não por leitura.
 
-- [ ] **S1-T0f — O prettier não é aplicado em lugar nenhum.** Achado ao investigar um efeito
+- [~] **S1-T0f — O prettier não é aplicado em lugar nenhum.** Achado ao investigar um efeito
       colateral do S1-T0e. Medido, não suposto:
       - `core.autocrlf` está `true` nesta máquina e **não existe `.gitattributes`**, então a
         árvore de trabalho é CRLF
