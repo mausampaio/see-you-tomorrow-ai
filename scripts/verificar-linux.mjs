@@ -58,8 +58,8 @@ function dockerEstaRodando() {
 
 function main() {
   if (!dockerEstaRodando()) {
-    // console.* solto é proibido em código de produto (CLAUDE.md § Qualidade — "use o
-    // logger"). Este arquivo é ferramental fora de src/, sem logger de produto disponível;
+    // console.* solto é proibido em código de produto (AGENTS.md § "Registro e saída"). Este
+    // arquivo é ferramental fora de src/, e nem existe logger de produto ainda;
     // mesmo precedente de tests/contrato/_versao-global-setup.ts.
     console.error(
       [
