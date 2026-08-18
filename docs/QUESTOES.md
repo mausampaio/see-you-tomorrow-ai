@@ -502,6 +502,23 @@ logger). B) a config ou o `seeya config` avisam/recusam `canTerminate: true` qua
 Windows. C) documentar a limitação no README e não mexer em mais nada agora — v2 fica livre para
 resolver com dependência nativa (ex.: um pequeno addon nativo ou `bun:ffi` se o projeto migrar de
 runtime, o que o próprio Claude Code faz).
+> **CORREÇÃO (2026-08-18), posterior à resposta abaixo.** A premissa desta questão — "não existe
+> encerramento gracioso no Windows" — **estava errada**, e o erro foi do PO. Existe: um evento de
+> console `CTRL_BREAK_EVENT`, entregue por `AttachConsole` + `GenerateConsoleCtrlEvent`, faz o
+> Claude Code sair graciosamente. Medido contra sessão real: ele descarrega estado no caminho da
+> saída, deixa o transcript íntegro e limpa o próprio registro de sessão — os três sinais de saída
+> graciosa segundo o Spike E. O shell hospedeiro sobrevive. Sem dependência nova: é a mesma técnica
+> de P/Invoke que o adapter de notificação já usa.
+>
+> A ideia foi do mantenedor. O S1-T2 tinha descartado essa via **por raciocínio, não por medição** —
+> alegando dano colateral ao shell — e o raciocínio não sobreviveu ao teste. Ver
+> `docs/spikes/G-ctrl-break-no-windows.md`.
+>
+> **O que continua valendo da resposta abaixo:** a exigência de o app **dizer** quando não conseguir
+> encerrar. Ela não some — só muda de frequência. Deixa de ser "sempre no Windows" e passa a ser o
+> caso em que não há console para anexar (sessão iniciada com `DETACHED_PROCESS`), onde o
+> `AttachConsole` falha e a resposta honesta segue sendo "não encerrei".
+
 **Resposta:** **FECHADA — opção A, com a correção que a torna aceitável: o app avisa na hora.**
 Decisão do mantenedor.
 
