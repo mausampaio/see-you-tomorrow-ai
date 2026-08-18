@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 /**
- * Teste trivial só para provar que a suíte de unidade roda (S0-T1). Nenhuma lógica de negócio
- * existe ainda — isso entra a partir do Sprint 1.
+ * Trivial test, only to prove the unit suite runs (S0-T1). No business logic exists yet — that
+ * comes in starting at Sprint 1.
  */
-describe('suíte de testes', () => {
-  it('executa e calcula corretamente', () => {
+describe('test suite', () => {
+  it('runs and computes correctly', () => {
     expect(1 + 1).toBe(2);
   });
 });

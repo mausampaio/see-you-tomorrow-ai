@@ -1,9 +1,9 @@
 import { defineConfig } from 'vitest/config';
 
 /**
- * Irmã de ../cobertura-abaixo-do-limite/: mesmo sut, mas com os dois ramos cobertos. É o
- * controle positivo — prova que o guard de cobertura não reprova sempre, só quando falta
- * cobertura de verdade.
+ * Sibling of ../coverage-below-threshold/: same sut, but with both branches covered. This is the
+ * positive control — it proves the coverage guard doesn't always reject, only when coverage is
+ * really missing.
  */
 export default defineConfig({
   test: {
