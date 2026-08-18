@@ -316,6 +316,9 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 - [ ] **S2-T3 — Caso de uso `endDay`.** Coleta multi-fonte com `sources[]` (D-013),
       concorrência limitada, isolamento de falha por sessão, fallback determinístico,
       anti-duplicidade, guarda de turno ativo. Handoff válido com qualquer fonte respondendo.
+      **Q-007:** `terminateGracefully` devolvendo `false` com o processo ainda vivo não é erro e
+      não aborta nada, mas **precisa aparecer no resultado do dia**, nomeando a sessão e o motivo.
+      Silêncio aqui faz quem marcou `canTerminate: true` acreditar que a sessão fechou.
 - [ ] **S2-T6 — Limpeza de forks.** Apaga forks próprios com mais de `forkCleanupDays`.
       *Aceite:* apaga apenas IDs presentes em `forks.json`; um teste prova que nenhum outro
       arquivo de `~/.claude/projects/` é tocado.
@@ -341,6 +344,9 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 - [ ] **S4-T1 — `adapters/notification`** conforme o Spike B, com a cadeia de fallback e o
       contrato mínimo **sem ações**. Validação manual do `activationType="protocol"` com esquema
       `seeya://` no Windows; se não se provar, o produto segue sem ações clicáveis e nada quebra.
+      **Q-007:** quando `canTerminate: true` estiver ligado e a terminação não acontecer (hoje,
+      sempre no Windows), o aviso diz **qual sessão não foi encerrada e por quê**. Não é falha da
+      captura — o handoff foi gravado; só a terminação não ocorreu.
 - [ ] **S4-T2 — `core/schedule`.** Puro: dado config + estado + agora, o que deve acontecer.
       É aqui que moram os testes de horário de verão e de máquina suspensa.
 - [ ] **S4-T3 — Daemon.** Loop, lockfile de instância única, recuperação de disparo atrasado.

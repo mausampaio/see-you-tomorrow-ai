@@ -502,7 +502,25 @@ logger). B) a config ou o `seeya config` avisam/recusam `canTerminate: true` qua
 Windows. C) documentar a limitação no README e não mexer em mais nada agora — v2 fica livre para
 resolver com dependência nativa (ex.: um pequeno addon nativo ou `bun:ffi` se o projeto migrar de
 runtime, o que o próprio Claude Code faz).
-**Resposta:** *(em aberto — PO)*
+**Resposta:** **FECHADA — opção A, com a correção que a torna aceitável: o app avisa na hora.**
+Decisão do mantenedor.
+
+A config continua aceitando `canTerminate: true` em qualquer plataforma — não vale empurrar
+conhecimento de plataforma para a camada de config, que ainda nem existe, para resolver algo que só
+se manifesta no momento do encerramento. Mas o comportamento de hoje sozinho (retornar `false` e
+seguir) não pode ficar: é exatamente o modo de falha que este projeto combate em todo lugar —
+silêncio lido como sucesso. Quem marcou a opção acredita que a sessão vai fechar, e nada acontece.
+
+**O que fica exigido, e onde:** quando `canTerminate: true` estiver ligado e
+`terminateGracefully` devolver `false` com o processo ainda vivo, o encerramento do dia **diz
+isso explicitamente** — qual sessão não foi encerrada e por quê. Não é erro nem falha da captura: o
+handoff foi gravado normalmente, só a terminação não aconteceu. Registrado em S2-T3 (`endDay`) e
+S4-T1 (notificação).
+
+A limitação em si é do Windows, não do Node: o SO não tem sinais POSIX, e as vias que existem para
+"pedir para fechar" dependem de janela própria ou de grupo de processo próprio — nenhuma das duas
+existe para uma sessão de console comum aberta pelo usuário. A v2 fica livre para resolver com
+dependência nativa.
 
 **Nota lateral, sem relação com o Windows:** ao implementar isto encontrei
 `tsconfig.build.json` (usado por `npm run build`) resolvendo sem `@types/node`, enquanto
