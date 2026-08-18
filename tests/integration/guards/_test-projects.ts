@@ -37,27 +37,17 @@ export interface DeclaredProject {
 
 /**
  * The 5 projects from vitest.config.ts. As of S1-T0e, `integration` and `e2e` both legitimately
- * resolve to zero files — not just `e2e` as originally written in the S1-T0e plan entry before
- * anyone counted (corrected there in the same change that added this guard). When a project here
- * goes from `empty-by-design` to `has-tests` for real, `test-projects.test.ts` starts failing
- * for that entry until this file is updated to match — that's requirement (b), the direction
- * nobody tests by hand.
+ * resolved to zero files — not just `e2e` as originally written in the S1-T0e plan entry before
+ * anyone counted (corrected there in the same change that added this guard). S1-T2
+ * (tests/integration/process/) filled `integration` in first, as planned; `e2e` still waits on
+ * S1-T6. When a project here goes from `empty-by-design` to `has-tests` for real,
+ * `test-projects.test.ts` starts failing for that entry until this file is updated to match —
+ * that's requirement (b), the direction nobody tests by hand.
  */
 export const DECLARED_PROJECTS: readonly DeclaredProject[] = [
   { name: 'unit', expectation: { kind: 'has-tests' } },
-  {
-    name: 'integration',
-    expectation: {
-      kind: 'empty-by-design',
-      reason:
-        'tests/integration/ only has files under guards/ today, and the `integration` project ' +
-        'excludes that subtree by design (guards/ writes fixtures into the real src/ tree and ' +
-        'runs as its own project below, see the `guards` project comment in vitest.config.ts). ' +
-        'The real adapter integration suites (discovery/, storage/, git/, process/, ' +
-        'notification/, generation/) have not landed yet.',
-      filledBy: 'S1-T2',
-    },
-  },
+  // S1-T2 filled this in (tests/integration/process/): the exemption below no longer applies.
+  { name: 'integration', expectation: { kind: 'has-tests' } },
   { name: 'guards', expectation: { kind: 'has-tests' } },
   {
     name: 'e2e',

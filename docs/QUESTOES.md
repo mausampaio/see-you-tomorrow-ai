@@ -438,3 +438,68 @@ de data no macOS. B) o campo perde o `regex` e vira `z.string().min(1)`, deixand
 para quem compara (o adapter de processo), que é quem sabe a forma do seu próprio SO. C) o campo
 aceita os dois formatos numa união, sem saber de plataforma.
 **Resposta:** *(em aberto — PO)*
+
+---
+
+## Q-007 — Não existe encerramento gracioso no Windows sem dependência nova; `canTerminate` fica sem efeito lá em v1
+**Tarefa:** S1-T2
+**Bloqueia:** não a entrega desta tarefa (o comportamento abaixo é consequência direta de D-002 já
+aplicado ao que foi medido) — **bloqueia**, na prática, o recurso `canTerminate: true` (D-002) para
+qualquer sessão Windows, hoje e enquanto isto não mudar.
+**Contexto:** a tarefa pedia investigar, com medição, o que existe de fato no Windows para pedir
+encerramento gracioso a um processo de console — e parar para avisar se a conclusão fosse "não
+existe". A conclusão foi essa. Testado nesta máquina, contra um processo Node real (console comum,
+com e sem console próprio/grupo de processo), com um handler de `SIGTERM` instalado que grava um
+arquivo antes de sair (prova de que o handler rodou até o fim, não só que o processo morreu):
+
+| Caminho tentado | Resultado medido |
+|---|---|
+| `process.kill(pid, 'SIGTERM')` (PID externo, sem `ChildProcess`) | `TerminateProcess` na hora — handler nunca roda, arquivo nunca é gravado. É exatamente a armadilha 1 da tarefa, reproduzida. |
+| `process.kill(pid, 'SIGBREAK')` (PID externo) | lança `ENOSYS` — o `uv_kill` do libuv não suporta esse sinal para um PID arbitrário. |
+| `child.kill('SIGBREAK')` (via handle do `ChildProcess`, processo criado com `detached: true`) | também mata na hora, sem rodar o handler — e de qualquer forma não se aplica ao caso real: as sessões que este port termina nunca foram criadas pelo `seeya`, foram descobertas já em execução. |
+| `taskkill /PID <pid>` sem `/F` | o próprio Windows recusa: *"A finalização deste processo só pode ser forçada (com a opção /F)"*. Reproduzido duas vezes (processo com console próprio e processo compartilhando console com o pai) — mesma recusa, mesmo texto. |
+| `Stop-Process -Id <pid>` sem `-Force` (PowerShell) | mesmo comportamento de `TerminateProcess` por baixo — sem atraso, sem handler. |
+| `GenerateConsoleCtrlEvent` via P/Invoke (mesma técnica já usada em `notification/` para o toast, sem dependência nova) | **não dá para mirar um único processo arbitrário**: o parâmetro é um *grupo* de processos — `0` manda para todo mundo anexado ao console (atingiria o shell do usuário inteiro), e um grupo específico só existe se o processo alvo tiver sido criado com `CREATE_NEW_PROCESS_GROUP`, decisão de quem abriu o Claude Code (o shell do usuário), não do `seeya`. |
+
+Não há caminho gracioso confiável para um PID que o `seeya` não criou, sem dependência nativa nova
+(FFI ou addon). Isso não é o Node sendo limitado por acidente: é o próprio Windows não ter
+sinais POSIX, e as ferramentas que existem para "pedir para fechar" (WM_CLOSE via `taskkill`,
+`GenerateConsoleCtrlEvent`) dependerem de janela própria ou de grupo de processo próprio — nenhum
+dos dois existe para uma sessão de console comum aberta pelo usuário.
+
+**O que a implementação faz com essa conclusão.** D-002 proíbe kill forçado na v1. Sem caminho
+gracioso e com o forçado banido, não sobra nada que `terminateGracefully` tenha permissão de fazer
+com uma sessão Windows: `src/adapters/process/termination.ts` não envia sinal nenhum lá, só
+relata se o processo já estava morto (`false` quando ainda está vivo — nunca finge sucesso, nunca
+força). Em Linux/macOS o `SIGTERM` real é enviado normalmente e é gracioso de verdade (POSIX).
+
+**Pergunta para o PO:** o comportamento acima (retornar sempre `false` no Windows enquanto o
+processo estiver vivo) é o default aceitável para a v1, ou o produto deveria impedir
+`canTerminate: true` de ser configurado para sessões Windows de forma mais explícita (erro na
+config, ou aviso no `seeya config`), em vez de deixar a opção existir sabendo que nunca fará
+efeito lá? Não decidi isso sozinho porque é política de produto, não implementação.
+**Opções que enxergo:** A) fica como está — `canTerminate: true` é aceito em qualquer plataforma,
+e no Windows simplesmente nunca termina nada (o usuário percebe pelo handoff/log, quando existir
+logger). B) a config ou o `seeya config` avisam/recusam `canTerminate: true` quando a sessão é
+Windows. C) documentar a limitação no README e não mexer em mais nada agora — v2 fica livre para
+resolver com dependência nativa (ex.: um pequeno addon nativo ou `bun:ffi` se o projeto migrar de
+runtime, o que o próprio Claude Code faz).
+**Resposta:** *(em aberto — PO)*
+
+**Nota lateral, sem relação com o Windows:** ao implementar isto encontrei
+`tsconfig.build.json` (usado por `npm run build`) resolvendo sem `@types/node`, enquanto
+`tsconfig.json` (usado pelo `tsc --noEmit` avulso do `verificar`) resolvia com — porque
+`tsconfig.json` inclui `vitest.config.ts`, e algo nessa cadeia de import puxa `@types/node`
+para dentro do programa; `tsconfig.build.json` restringe `include` a `src` e não herda esse
+acaso. Nenhum adapter usava `node:*`/`process`/`Buffer` de verdade antes desta tarefa, então o
+`build` nunca tinha exercitado isso. Corrigido com `"types": ["node"]` explícito no
+`tsconfig.json` raiz (herdado por `tsconfig.build.json`) — remove a dependência de qual arquivo
+não relacionado calha de estar no programa. Não abro isso como bloqueante porque já está
+corrigido e coberto por `npm run verificar`/`verificar:linux`, só registrando para quem revisar
+não estranhar o diff em `tsconfig.json`.
+
+**Nota lateral sobre macOS:** a captura de `procStart` ali (`ps -o lstart= -p <pid>` com
+`LC_ALL=C`/`TZ=UTC`) segue exatamente o que o Spike F documentou, mas **não foi verificada nesta
+tarefa** — não havia máquina macOS disponível. Only Linux (container Docker) e Windows (esta
+máquina) foram confirmados por medição direta. Ver o relatório da tarefa para o que foi
+confirmado e como.
