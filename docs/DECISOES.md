@@ -152,7 +152,7 @@ alias é publicado na v1. Toda documentação e todo texto de ajuda usam `seeya`
 (dos quais ~12 k tokens são piso fixo do próprio Claude Code, não o nosso texto).
 
 **Decisão.** O padrão é **enxuto**: o `seeya` lê o transcript, extrai o que importa e manda para
-uma sessão nova. Projetos marcados com `capturaProfunda: true` na config usam `--resume`
+uma sessão nova. Projetos marcados com `deepCapture: true` na config usam `--resume`
 completo.
 
 **Consequências.**

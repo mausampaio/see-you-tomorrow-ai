@@ -218,7 +218,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* `npm run format:check` verde nesta máquina, e um `.ts` deliberadamente mal
       formatado em stage é barrado ou corrigido no commit. Provado por execução.
 
-- [~] **S1-T0g — As docs internas não alcançaram o D-028.** Precisa entrar **antes do S1-T6**, que
+- [x] **S1-T0g — As docs internas não alcançaram o D-028.** Precisa entrar **antes do S1-T6**, que
       é onde os nomes de comando viram código.
       O escopo real é maior do que "nome de comando": a especificação inteira estava escrita com
       identificadores em português — chaves do `config.json`, chaves do handoff, layout de pastas
