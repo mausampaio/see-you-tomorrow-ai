@@ -100,15 +100,15 @@ CI; o CI nos 3 SOs e a bateria manual do S5-T4 continuam obrigatórios.
 
 ### Antes de escrever código
 
-Leia [`CLAUDE.md`](CLAUDE.md). É o contrato de trabalho do projeto: as fronteiras de camada, o
-que nunca fazer, e quando parar e perguntar em vez de decidir sozinho. Vale tanto para agente
-quanto para humano.
+Leia [`AGENTS.md`](AGENTS.md). É o contrato de trabalho do projeto: as fronteiras de camada, o
+estilo de código, o que nunca fazer, e quando parar e perguntar em vez de decidir sozinho. Vale
+tanto para agente quanto para humano. `CLAUDE.md` só aponta para ele.
 
 ## Documentação
 
 | Arquivo | O que é |
 |---|---|
-| [`CLAUDE.md`](CLAUDE.md) | Contrato de trabalho e regras inegociáveis |
+| [`AGENTS.md`](AGENTS.md) | Contrato de trabalho, regras inegociáveis e estilo de código |
 | [`docs/DECISOES.md`](docs/DECISOES.md) | Decisões travadas, numeradas e com o porquê |
 | [`docs/ESPECIFICACAO.md`](docs/ESPECIFICACAO.md) | Comportamento de cada comando |
 | [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) | Camadas e a matriz de dependências permitidas |

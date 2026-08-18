@@ -10,7 +10,7 @@ aprovada e libera a próxima. É o único que altera os documentos de autoridade
 
 ## Dev — Sonnet 5
 
-Implementa **uma tarefa por vez** do plano de entrega. Lê `CLAUDE.md` no início de cada tarefa.
+Implementa **uma tarefa por vez** do plano de entrega. Lê `AGENTS.md` no início de cada tarefa.
 Não altera documento de autoridade. Não decide comportamento não especificado — escreve em
 `QUESTOES.md` e para.
 
@@ -19,13 +19,13 @@ marcada `[~]`, e um resumo curto do que fez e do que deixou fora.
 
 ## Revisor — Sonnet 5, contexto limpo
 
-Recebe apenas: o diff da tarefa, `CLAUDE.md`, o trecho relevante da spec e o item do plano.
+Recebe apenas: o diff da tarefa, `AGENTS.md`, o trecho relevante da spec e o item do plano.
 **Não recebe o histórico do dev** — é justamente essa ignorância que faz o review valer.
 
 Checklist do revisor:
 
 1. O diff implementa o que a spec pede para esta tarefa, nem mais nem menos?
-2. Alguma regra inegociável de `CLAUDE.md` foi violada? (fronteiras, relógio, zod, escrita fora
+2. Alguma regra inegociável de `AGENTS.md` foi violada? (fronteiras, relógio, zod, escrita fora
    de `~/.see-you-tomorrow/`, `spawn` com shell, `any`)
 3. Os testes cobrem os casos que `TESTES.md` exige para esta faixa, ou só os caminhos felizes?
 4. Algum teste toca rede, relógio real ou o `~/.claude` real?
