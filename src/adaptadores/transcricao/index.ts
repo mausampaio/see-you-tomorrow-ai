@@ -1,7 +1,7 @@
 /**
- * Adapter de transcrição: parseia o JSONL do transcript, implementa `LeitorDeTranscricao`. Ver
+ * Transcript adapter: parses the transcript's JSONL, implements `LeitorDeTranscricao`. See
  * docs/ARQUITETURA.md.
  *
- * Ainda vazio — entra em S1-T4.
+ * Still empty — comes in at S1-T4.
  */
 export {};

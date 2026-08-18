@@ -1,7 +1,7 @@
 /**
- * Adapter de descoberta: lê `~/.claude/sessions` e `~/.claude/projects`, implementa
- * `ProvedorDeSessoes`. Ver docs/ARQUITETURA.md.
+ * Discovery adapter: reads `~/.claude/sessions` and `~/.claude/projects`, implements
+ * `SessionProvider`. See docs/ARQUITETURA.md.
  *
- * Ainda vazio — entra a partir de S1-T3.
+ * Still empty — comes in starting at S1-T3.
  */
 export {};

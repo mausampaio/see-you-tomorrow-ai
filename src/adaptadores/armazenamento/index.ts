@@ -1,7 +1,7 @@
 /**
- * Adapter de armazenamento: lê e grava em `~/.seeya/` (raiz injetável), implementa
- * `Armazenamento`. Ver docs/ARQUITETURA.md.
+ * Storage adapter: reads and writes to `~/.seeya/` (injectable root), implements `Armazenamento`.
+ * See docs/ARQUITETURA.md.
  *
- * Ainda vazio — entra em S1-T5.
+ * Still empty — comes in at S1-T5.
  */
 export {};

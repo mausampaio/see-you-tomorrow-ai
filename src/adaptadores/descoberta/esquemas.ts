@@ -1,88 +1,90 @@
 /**
- * Schemas zod para as duas estruturas do Claude Code que alimentam a descoberta de sessões
+ * zod schemas for the two Claude Code structures that feed session discovery
  * (docs/ESPECIFICACAO.md § "Como as sessões são descobertas"; docs/DECISOES.md D-016).
  *
- * Nenhuma das duas é API pública do Claude Code — nenhum campo aqui é garantido pelo
- * fabricante. Por isso os dois schemas seguem o princípio obrigatório de docs/TESTES.md:
- * **estritos nos campos que usamos, tolerantes com campos desconhecidos**. `z.object()` sem
- * `.strict()` já descarta silenciosamente qualquer campo fora do shape declarado, em vez de
- * falhar — é o comportamento padrão do zod e é exatamente o que se quer aqui: confirmado nesta
- * máquina que a versão 2.1.233 já grava campos que a spec original não previa (`status`,
- * `updatedAt`, `statusUpdatedAt`, `bridgeSessionId`, `nameSource`, `nameSince`, `version`,
- * `peerProtocol`) e o parse continua íntegro.
+ * Neither is public Claude Code API — no field here is guaranteed by the vendor. That's why both
+ * schemas follow the mandatory principle of docs/TESTES.md: **strict on the fields we use,
+ * tolerant of unknown fields**. `z.object()` without `.strict()` already silently drops any
+ * field outside the declared shape instead of failing — that's zod's default behavior and it's
+ * exactly what's wanted here: confirmed on this machine that version 2.1.233 already writes
+ * fields the original spec didn't foresee (`status`, `updatedAt`, `statusUpdatedAt`,
+ * `bridgeSessionId`, `nameSource`, `nameSince`, `version`, `peerProtocol`) and parsing stays
+ * intact.
  *
- * `esquemaSaidaAgentsJson` do S0-T5 era `z.array(esquemaItemDeAgentsJson)` — testado contra a
- * saída real de uma segunda máquina, Linux, uma única entrada (a variante background) derrubava
- * o array inteiro (D-022). `validarSaidaAgentsJson` substitui aquele schema por validação
- * item por item: nenhuma coleção de fonte externa pode ser tudo-ou-nada.
+ * S0-T5's `esquemaSaidaAgentsJson` was `z.array(esquemaItemDeAgentsJson)` — tested against real
+ * output from a second machine, Linux, a single entry (the background variant) took down the
+ * whole array (D-022). `validarSaidaAgentsJson` replaces that schema with item-by-item
+ * validation: no collection from an external source can be all-or-nothing.
  *
- * Os dois schemas foram confirmados contra os arquivos e a saída reais de duas máquinas antes de
- * serem escritos — ver tests/contrato/registro-de-sessoes.teste.ts e
- * tests/contrato/agents-json.teste.ts. Se um dia divergirem da realidade, a resposta é registrar
- * em docs/QUESTOES.md com a saída bruta observada, nunca afrouxar o schema para passar.
+ * Both schemas were confirmed against real files and real output from two machines before being
+ * written — see tests/contrato/registro-de-sessoes.teste.ts and tests/contrato/agents-json.teste.ts.
+ * If they ever diverge from reality, the answer is to log it in docs/QUESTOES.md with the raw
+ * output observed, never to loosen the schema to make it pass.
  */
 import { z } from 'zod';
 
 /**
- * `~/.claude/sessions/<pid>.json` — um arquivo por processo, vivo ou obsoleto. Os sete campos
- * abaixo são citados literalmente pela especificação e são os que a descoberta usa, mas nem
- * todos reprovam o registro se faltarem — D-021 divide os campos em dois grupos:
+ * `~/.claude/sessions/<pid>.json` — one file per process, alive or stale. The seven fields below
+ * are cited literally by the spec and are the ones discovery uses, but not all of them fail the
+ * record if missing — D-021 splits the fields into two groups:
  *
- * - **Identidade e liveness, obrigatórios**: `sessionId` e `cwd` (identificam e localizam a
- *   sessão), `pid` e `procStart` (desempate de liveness — PID reciclado pelo SO), `startedAt`.
- *   Sem eles não dá para saber que sessão é essa nem se ela está viva — a sessão não pode
- *   entrar na descoberta.
- * - **Classificação e exibição, opcionais**: `kind`, `entrypoint`, `name`. São cosméticos: sem
- *   eles a sessão ainda é identificável e capturável, só não tem como classificar/nomear com
- *   precisão. D-021 existe porque o schema anterior exigia os três e rejeitava o registro
- *   inteiro se um faltasse — cruzado com transcript suprimido (D-013), a sessão ficava
- *   totalmente invisível. Os padrões de exibição (`name` derivado do `cwd`, `kind`/`entrypoint`
- *   como "desconhecido") são responsabilidade do adapter em S1-T3, não deste schema.
+ * - **Identity and liveness, required**: `sessionId` and `cwd` (identify and locate the
+ *   session), `pid` and `procStart` (liveness tie-break — PID recycled by the OS), `startedAt`.
+ *   Without them there's no way to know which session this is nor whether it's alive — the
+ *   session can't enter discovery.
+ * - **Classification and display, optional**: `kind`, `entrypoint`, `name`. Cosmetic: without
+ *   them the session is still identifiable and capturable, just not precisely
+ *   classifiable/nameable. D-021 exists because the previous schema required all three and
+ *   rejected the whole record if one was missing — crossed with a suppressed transcript
+ *   (D-013), the session became totally invisible. The display defaults (`name` derived from
+ *   `cwd`, `kind`/`entrypoint` as "unknown") are the S1-T3 adapter's responsibility, not this
+ *   schema's.
  *
- * `kind` e `entrypoint` ficam como string livre, não enum: só foram observados os valores
- * "interactive" e "cli"/"claude-vscode" nesta máquina, mas a spec já assume a existência de
- * outros (`docs/DECISOES.md` D-016 fala em sessão headless, que não deixa este registro; a
- * pergunta Q-002 em docs/QUESTOES.md deixa em aberto se `kind` ganha um valor próprio para
- * ela). Travar num literal quebraria o parse no dia em que isso mudar.
+ * `kind` and `entrypoint` stay free-form strings, not an enum: only "interactive" and
+ * "cli"/"claude-vscode" have been observed on this machine, but the spec already assumes other
+ * values exist (`docs/DECISOES.md` D-016 talks about a headless session, which leaves no such
+ * record; question Q-002 in docs/QUESTOES.md leaves open whether `kind` gets its own value for
+ * it). Locking to a literal would break parsing the day that changes.
  *
- * `procStart` é string, não number: os valores reais observados (ex. "134313811658518463")
- * excedem `Number.MAX_SAFE_INTEGER` — guardar como number perderia precisão exatamente no
- * campo usado para desempate.
+ * `procStart` is a string, not a number: the real observed values (e.g. "134313811658518463")
+ * exceed `Number.MAX_SAFE_INTEGER` — storing as a number would lose precision in exactly the
+ * field used for tie-breaking.
  */
-export const esquemaRegistroDeSessao = z.object({
+export const sessionRecordSchema = z.object({
   pid: z.number().int().positive(),
   sessionId: z.uuid(),
   cwd: z.string().min(1),
   startedAt: z.number().int().positive(),
-  procStart: z.string().regex(/^\d+$/, 'procStart deve ser uma string só de dígitos'),
+  procStart: z.string().regex(/^\d+$/, 'procStart must be a digits-only string'),
   kind: z.string().min(1).optional(),
   entrypoint: z.string().min(1).optional(),
   name: z.string().min(1).optional(),
 });
 
-export type RegistroDeSessao = z.infer<typeof esquemaRegistroDeSessao>;
+export type SessionRecord = z.infer<typeof sessionRecordSchema>;
 
 /**
- * Um item da saída de `claude agents --json` (D-016). É uma fonte independente do registro em
- * disco — mesmo formato geral, mas sem `entrypoint`. `kind` e `name` seguem o mesmo tratamento de
- * D-021: cosméticos, opcionais, nunca reprovam o item.
+ * An item from the output of `claude agents --json` (D-016). An independent source from the
+ * on-disk record — mostly the same shape, but without `entrypoint`. `kind` and `name` follow the
+ * same D-021 treatment: cosmetic, optional, never fail the item.
  *
- * Existem **duas formas** de item, confirmadas contra a saída real de duas máquinas (D-022):
+ * There are **two shapes** of item, confirmed against real output from two machines (D-022):
  *
- * - **Interativa**: tem `pid` e, só às vezes, `status` (observado: sessão "busy" tem `status`,
- *   sessão ociosa não tem o campo).
- * - **Background** (segunda máquina, Linux — ex.: sessão que sobe uma UI e fica bloqueada
- *   esperando as filhas): **não tem `pid`**, usa `id` como identificador da sessão de segundo
- *   plano, e usa `state` no lugar de `status`.
+ * - **Interactive**: has `pid` and, only sometimes, `status` (observed: a "busy" session has
+ *   `status`, an idle session doesn't have the field).
+ * - **Background** (second machine, Linux — e.g. a session that brings up a UI and sits blocked
+ *   waiting on its children): **has no `pid`**, uses `id` as the background session's
+ *   identifier, and uses `state` instead of `status`.
  *
- * `pid` é opcional aqui por um motivo diferente do resto do grupo de exibição de D-021: não é
- * cosmético, é liveness — só que a variante background não fornece PID nenhum, tem `id` no
- * lugar. **Item sem `pid` nunca é candidato a encerramento de processo (D-002)**: não existe
- * como mandar sinal a um processo sem PID, e `id` não é PID. Quem for implementar a política de
- * encerramento (S1-T3 em diante) precisa checar `pid !== undefined` antes de considerar o item
- * elegível — não tem outro jeito de obter o PID de um item de background a partir desta fonte.
+ * `pid` is optional here for a different reason than the rest of D-021's display group: it isn't
+ * cosmetic, it's liveness — it's just that the background variant provides no PID at all, `id`
+ * takes its place. **An item without `pid` is never a candidate for process termination
+ * (D-002)**: there's no way to send a signal to a process with no PID, and `id` isn't a PID.
+ * Whoever implements the termination policy (S1-T3 onward) needs to check `pid !== undefined`
+ * before considering the item eligible — there's no other way to get the PID of a background item
+ * from this source.
  */
-const esquemaItemDeAgentsJson = z.object({
+const agentsJsonItemSchema = z.object({
   pid: z.number().int().positive().optional(),
   id: z.string().min(1).optional(),
   sessionId: z.uuid(),
@@ -94,61 +96,61 @@ const esquemaItemDeAgentsJson = z.object({
   state: z.string().min(1).optional(),
 });
 
-export type ItemDeAgentsJson = z.infer<typeof esquemaItemDeAgentsJson>;
+export type AgentsJsonItem = z.infer<typeof agentsJsonItemSchema>;
 
 /**
- * Um item da saída de `claude agents --json` que não passou no schema, com o motivo (D-022). O
- * valor bruto é preservado — este módulo só valida; registrar/logar a rejeição é responsabilidade
- * de quem chama (o adapter de descoberta, S1-T3).
+ * An item from the output of `claude agents --json` that didn't pass the schema, with the reason
+ * (D-022). The raw value is preserved — this module only validates; logging the rejection is the
+ * caller's responsibility (the discovery adapter, S1-T3).
  */
-export interface ItemDeAgentsJsonRejeitado {
-  bruto: unknown;
-  motivo: string;
+export interface RejectedAgentsJsonItem {
+  raw: unknown;
+  reason: string;
 }
 
 /**
- * Resultado de `validarSaidaAgentsJson`: os dois lados, sempre os dois (D-022). Sem os
- * rejeitados aqui, `seeya sessoes` mentiria por omissão em vez de poder dizer "3 sessões, 1
- * entrada ignorada".
+ * Result of `validateAgentsJsonOutput`: both sides, always both (D-022). Without the rejected
+ * ones here, `seeya sessoes` would lie by omission instead of being able to say "3 sessions, 1
+ * entry ignored".
  */
-export interface ResultadoDaValidacaoDeAgentsJson {
-  aceitos: ItemDeAgentsJson[];
-  rejeitados: ItemDeAgentsJsonRejeitado[];
+export interface AgentsJsonValidationResult {
+  accepted: AgentsJsonItem[];
+  rejected: RejectedAgentsJsonItem[];
 }
 
 /**
- * Valida a saída de `claude agents --json` (e `--json --all`) **item por item**, nunca em bloco
- * (D-022). Antes disto era `z.array(esquemaItemDeAgentsJson)` — testado contra a saída real de
- * uma segunda máquina, uma única entrada (a variante background) derrubava o array inteiro, e o
- * `seeya` perdia a fonte de descoberta completa por causa de uma sessão só. Item válido entra;
- * item inválido é reportado com o motivo e descartado individualmente; a operação segue —
- * conforme CLAUDE.md: "arquivo externo corrompido ou com campo desconhecido: registre e siga em
- * frente. Nunca derrube o comando inteiro por causa de uma entrada ruim."
+ * Validates the output of `claude agents --json` (and `--json --all`) **item by item**, never in
+ * bulk (D-022). Before this it was `z.array(agentsJsonItemSchema)` — tested against real output
+ * from a second machine, a single entry (the background variant) took down the whole array, and
+ * `seeya` lost the entire discovery source because of one session. A valid item goes in; an
+ * invalid item is reported with the reason and discarded individually; the operation continues —
+ * per CLAUDE.md: "external file corrupted or with an unknown field: log it and move on. Never
+ * take down the whole command because of one bad entry."
  *
- * Se `valor` nem for um array, o próprio valor vira o único item rejeitado: a saída documentada
- * de `claude agents --json` é sempre array (docs/TESTES.md), então essa forma indica que a
- * realidade mudou mais do que uma entrada — mas ainda assim não lança, para não derrubar quem
- * chama.
+ * If `value` isn't even an array, the value itself becomes the sole rejected item: the documented
+ * output of `claude agents --json` is always an array (docs/TESTES.md), so this shape means
+ * reality changed more than one entry — but it still doesn't throw, so as not to take down the
+ * caller.
  */
-export function validarSaidaAgentsJson(valor: unknown): ResultadoDaValidacaoDeAgentsJson {
-  if (!Array.isArray(valor)) {
+export function validateAgentsJsonOutput(value: unknown): AgentsJsonValidationResult {
+  if (!Array.isArray(value)) {
     return {
-      aceitos: [],
-      rejeitados: [{ bruto: valor, motivo: 'saída de `claude agents --json` não é um array' }],
+      accepted: [],
+      rejected: [{ raw: value, reason: '`claude agents --json` output is not an array' }],
     };
   }
 
-  const aceitos: ItemDeAgentsJson[] = [];
-  const rejeitados: ItemDeAgentsJsonRejeitado[] = [];
+  const accepted: AgentsJsonItem[] = [];
+  const rejected: RejectedAgentsJsonItem[] = [];
 
-  for (const item of valor) {
-    const resultado = esquemaItemDeAgentsJson.safeParse(item);
-    if (resultado.success) {
-      aceitos.push(resultado.data);
+  for (const item of value) {
+    const result = agentsJsonItemSchema.safeParse(item);
+    if (result.success) {
+      accepted.push(result.data);
     } else {
-      rejeitados.push({ bruto: item, motivo: z.prettifyError(resultado.error) });
+      rejected.push({ raw: item, reason: z.prettifyError(result.error) });
     }
   }
 
-  return { aceitos, rejeitados };
+  return { accepted, rejected };
 }

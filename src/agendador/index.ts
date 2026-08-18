@@ -1,7 +1,7 @@
 /**
- * Agendador: o daemon de longa duração que orquestra `aplicacao/` no tempo. Ver
- * docs/ARQUITETURA.md e D-005.
+ * Scheduler: the long-running daemon that orchestrates `aplicacao/` over time. See
+ * docs/ARQUITETURA.md and D-005.
  *
- * Ainda vazio — entra no Sprint 4.
+ * Still empty — comes in at Sprint 4.
  */
 export {};

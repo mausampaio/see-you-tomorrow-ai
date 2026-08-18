@@ -1,224 +1,224 @@
 import { describe, expect, it } from 'vitest';
 import {
-  avaliarElegibilidade,
-  type CriteriosDeElegibilidade,
+  evaluateEligibility,
+  type EligibilityCriteria,
 } from '../../../src/nucleo/elegibilidade.js';
-import { criarSessaoComPid } from './_fixtures.js';
+import { createSessionWithPid } from './_fixtures.js';
 
-const AGORA = new Date('2026-08-16T20:00:00.000Z');
+const NOW = new Date('2026-08-16T20:00:00.000Z');
 
-function criterios(sobrescritas: Partial<CriteriosDeElegibilidade> = {}): CriteriosDeElegibilidade {
+function criteria(overrides: Partial<EligibilityCriteria> = {}): EligibilityCriteria {
   return {
-    agora: AGORA,
-    horasDeRelevancia: 12,
-    cwdsIgnorados: new Set<string>(),
-    forksConhecidos: new Set<string>(),
-    capturaAnteriorHoje: null,
-    assinaturaAtual: {},
-    ...sobrescritas,
+    now: NOW,
+    relevanceHours: 12,
+    ignoredCwds: new Set<string>(),
+    knownForks: new Set<string>(),
+    previousCaptureToday: null,
+    currentSignature: {},
+    ...overrides,
   };
 }
 
-describe('avaliarElegibilidade', () => {
-  it('sessão que passa nas cinco condições é elegível, sem motivos', () => {
-    const sessao = criarSessaoComPid({ ultimaAtividade: new Date('2026-08-16T10:00:00.000Z') });
+describe('evaluateEligibility', () => {
+  it('a session that passes all five conditions is eligible, with no reasons', () => {
+    const session = createSessionWithPid({ lastActivity: new Date('2026-08-16T10:00:00.000Z') });
 
-    const resultado = avaliarElegibilidade(sessao, criterios());
+    const result = evaluateEligibility(session, criteria());
 
-    expect(resultado).toStrictEqual({ elegivel: true, motivos: [] });
+    expect(result).toStrictEqual({ eligible: true, reasons: [] });
   });
 
-  describe('condição 1 — pelo menos uma fonte de evidência respondeu', () => {
-    it('ultimaAtividade nula (nenhuma fonte respondeu) torna a sessão inelegível', () => {
-      const sessao = criarSessaoComPid({ ultimaAtividade: null });
+  describe('condition 1 — at least one evidence source answered', () => {
+    it('null lastActivity (no source answered) makes the session ineligible', () => {
+      const session = createSessionWithPid({ lastActivity: null });
 
-      const resultado = avaliarElegibilidade(sessao, criterios());
+      const result = evaluateEligibility(session, criteria());
 
-      expect(resultado.elegivel).toBe(false);
-      expect(resultado.motivos).toStrictEqual(['semEvidencia']);
-    });
-  });
-
-  describe('condição 2 — atividade dentro de horasDeRelevancia', () => {
-    it('atividade exatamente no limite de horasDeRelevancia ainda é elegível (estritamente >)', () => {
-      const exatamenteDozeHorasAtras = new Date(AGORA.getTime() - 12 * 3_600_000);
-      const sessao = criarSessaoComPid({ ultimaAtividade: exatamenteDozeHorasAtras });
-
-      const resultado = avaliarElegibilidade(sessao, criterios({ horasDeRelevancia: 12 }));
-
-      expect(resultado.elegivel).toBe(true);
-    });
-
-    it('atividade um milissegundo além do limite já é inelegível', () => {
-      const umMsAlemDoLimite = new Date(AGORA.getTime() - (12 * 3_600_000 + 1));
-      const sessao = criarSessaoComPid({ ultimaAtividade: umMsAlemDoLimite });
-
-      const resultado = avaliarElegibilidade(sessao, criterios({ horasDeRelevancia: 12 }));
-
-      expect(resultado.elegivel).toBe(false);
-      expect(resultado.motivos).toStrictEqual(['semAtividadeRecente']);
-    });
-
-    it('semEvidencia e semAtividadeRecente nunca aparecem juntos (são as duas faces do mesmo campo)', () => {
-      const sessao = criarSessaoComPid({ ultimaAtividade: null });
-
-      const resultado = avaliarElegibilidade(sessao, criterios());
-
-      expect(resultado.motivos).not.toContain('semAtividadeRecente');
+      expect(result.eligible).toBe(false);
+      expect(result.reasons).toStrictEqual(['noEvidence']);
     });
   });
 
-  describe('condição 3 — não é fork do próprio seeya (D-012)', () => {
-    it('sessionId presente em forksConhecidos torna a sessão inelegível', () => {
-      const sessao = criarSessaoComPid({ sessionId: '33333333-3333-4333-8333-333333333333' });
+  describe('condition 2 — activity within relevanceHours', () => {
+    it('activity exactly at the relevanceHours limit is still eligible (strictly >)', () => {
+      const exactlyTwelveHoursAgo = new Date(NOW.getTime() - 12 * 3_600_000);
+      const session = createSessionWithPid({ lastActivity: exactlyTwelveHoursAgo });
 
-      const resultado = avaliarElegibilidade(
-        sessao,
-        criterios({ forksConhecidos: new Set(['33333333-3333-4333-8333-333333333333']) }),
+      const result = evaluateEligibility(session, criteria({ relevanceHours: 12 }));
+
+      expect(result.eligible).toBe(true);
+    });
+
+    it('activity one millisecond past the limit is already ineligible', () => {
+      const oneMsPastTheLimit = new Date(NOW.getTime() - (12 * 3_600_000 + 1));
+      const session = createSessionWithPid({ lastActivity: oneMsPastTheLimit });
+
+      const result = evaluateEligibility(session, criteria({ relevanceHours: 12 }));
+
+      expect(result.eligible).toBe(false);
+      expect(result.reasons).toStrictEqual(['noRecentActivity']);
+    });
+
+    it('noEvidence and noRecentActivity never appear together (they are two faces of the same field)', () => {
+      const session = createSessionWithPid({ lastActivity: null });
+
+      const result = evaluateEligibility(session, criteria());
+
+      expect(result.reasons).not.toContain('noRecentActivity');
+    });
+  });
+
+  describe("condition 3 — not seeya's own fork (D-012)", () => {
+    it('sessionId present in knownForks makes the session ineligible', () => {
+      const session = createSessionWithPid({ sessionId: '33333333-3333-4333-8333-333333333333' });
+
+      const result = evaluateEligibility(
+        session,
+        criteria({ knownForks: new Set(['33333333-3333-4333-8333-333333333333']) }),
       );
 
-      expect(resultado.elegivel).toBe(false);
-      expect(resultado.motivos).toStrictEqual(['forkDoProprioSeeya']);
+      expect(result.eligible).toBe(false);
+      expect(result.reasons).toStrictEqual(['ownSeeyaFork']);
     });
 
-    it('fork conhecido mas de sessionId diferente não afeta a elegibilidade', () => {
-      const sessao = criarSessaoComPid({ sessionId: '44444444-4444-4444-8444-444444444444' });
+    it('a known fork with a different sessionId does not affect eligibility', () => {
+      const session = createSessionWithPid({ sessionId: '44444444-4444-4444-8444-444444444444' });
 
-      const resultado = avaliarElegibilidade(
-        sessao,
-        criterios({ forksConhecidos: new Set(['99999999-9999-4999-8999-999999999999']) }),
+      const result = evaluateEligibility(
+        session,
+        criteria({ knownForks: new Set(['99999999-9999-4999-8999-999999999999']) }),
       );
 
-      expect(resultado.elegivel).toBe(true);
+      expect(result.eligible).toBe(true);
     });
   });
 
-  describe('condição 4 — cwd não está na lista ignorar', () => {
-    it('cwd presente em cwdsIgnorados torna a sessão inelegível', () => {
-      const sessao = criarSessaoComPid({ cwd: 'c:\\code\\rascunhos' });
+  describe('condition 4 — cwd is not in the ignore list', () => {
+    it('cwd present in ignoredCwds makes the session ineligible', () => {
+      const session = createSessionWithPid({ cwd: 'c:\\code\\rascunhos' });
 
-      const resultado = avaliarElegibilidade(
-        sessao,
-        criterios({ cwdsIgnorados: new Set(['c:\\code\\rascunhos']) }),
+      const result = evaluateEligibility(
+        session,
+        criteria({ ignoredCwds: new Set(['c:\\code\\rascunhos']) }),
       );
 
-      expect(resultado.elegivel).toBe(false);
-      expect(resultado.motivos).toStrictEqual(['cwdIgnorado']);
+      expect(result.eligible).toBe(false);
+      expect(result.reasons).toStrictEqual(['ignoredCwd']);
     });
 
-    it('combinação de borda: sessão relevante (atividade recente) mas cwd ignorado', () => {
-      const sessao = criarSessaoComPid({
+    it('edge combination: relevant session (recent activity) but ignored cwd', () => {
+      const session = createSessionWithPid({
         cwd: 'c:\\code\\rascunhos',
-        ultimaAtividade: new Date('2026-08-16T19:59:00.000Z'), // 1 minuto atrás — bem relevante
+        lastActivity: new Date('2026-08-16T19:59:00.000Z'), // 1 minute ago — very relevant
       });
 
-      const resultado = avaliarElegibilidade(
-        sessao,
-        criterios({ cwdsIgnorados: new Set(['c:\\code\\rascunhos']) }),
+      const result = evaluateEligibility(
+        session,
+        criteria({ ignoredCwds: new Set(['c:\\code\\rascunhos']) }),
       );
 
-      expect(resultado.elegivel).toBe(false);
-      expect(resultado.motivos).toStrictEqual(['cwdIgnorado']);
+      expect(result.eligible).toBe(false);
+      expect(result.reasons).toStrictEqual(['ignoredCwd']);
     });
   });
 
-  describe('condição 5 — anti-duplicidade compara a assinatura da evidência (D-026)', () => {
-    it('sem captura anterior hoje, a sessão é elegível independente da assinatura atual', () => {
-      const sessao = criarSessaoComPid();
+  describe('condition 5 — anti-duplication compares the evidence signature (D-026)', () => {
+    it('with no previous capture today, the session is eligible regardless of the current signature', () => {
+      const session = createSessionWithPid();
 
-      const resultado = avaliarElegibilidade(
-        sessao,
-        criterios({ capturaAnteriorHoje: null, assinaturaAtual: { transcript: 'abc' } }),
+      const result = evaluateEligibility(
+        session,
+        criteria({ previousCaptureToday: null, currentSignature: { transcript: 'abc' } }),
       );
 
-      expect(resultado.elegivel).toBe(true);
+      expect(result.eligible).toBe(true);
     });
 
-    it('assinatura idêntica entre a última captura e agora torna a sessão inelegível', () => {
-      const sessao = criarSessaoComPid();
+    it('an identical signature between the last capture and now makes the session ineligible', () => {
+      const session = createSessionWithPid();
 
-      const resultado = avaliarElegibilidade(
-        sessao,
-        criterios({
-          capturaAnteriorHoje: { assinatura: { transcript: '2026-08-16T18:00:00.000Z' } },
-          assinaturaAtual: { transcript: '2026-08-16T18:00:00.000Z' },
+      const result = evaluateEligibility(
+        session,
+        criteria({
+          previousCaptureToday: { signature: { transcript: '2026-08-16T18:00:00.000Z' } },
+          currentSignature: { transcript: '2026-08-16T18:00:00.000Z' },
         }),
       );
 
-      expect(resultado.elegivel).toBe(false);
-      expect(resultado.motivos).toStrictEqual(['duplicadaNoDia']);
+      expect(result.eligible).toBe(false);
+      expect(result.reasons).toStrictEqual(['duplicateToday']);
     });
 
-    it('combinação de borda: handoff do dia existe mas a assinatura mudou — volta a ser elegível', () => {
-      const sessao = criarSessaoComPid();
+    it("edge combination: today's handoff exists but the signature changed — eligible again", () => {
+      const session = createSessionWithPid();
 
-      const resultado = avaliarElegibilidade(
-        sessao,
-        criterios({
-          capturaAnteriorHoje: { assinatura: { transcript: '2026-08-16T18:00:00.000Z' } },
-          assinaturaAtual: { transcript: '2026-08-16T19:50:00.000Z' },
+      const result = evaluateEligibility(
+        session,
+        criteria({
+          previousCaptureToday: { signature: { transcript: '2026-08-16T18:00:00.000Z' } },
+          currentSignature: { transcript: '2026-08-16T19:50:00.000Z' },
         }),
       );
 
-      expect(resultado.elegivel).toBe(true);
+      expect(result.eligible).toBe(true);
     });
 
     it(
-      'D-026: duas capturas sem transcript, mas com git alterado entre elas, NÃO são ' +
-        'duplicadas — o caso do agente de execução autônomo (D-013)',
+      'D-026: two captures without a transcript, but with git changed between them, are NOT ' +
+        'duplicates — the autonomous execution agent case (D-013)',
       () => {
-        const sessao = criarSessaoComPid();
+        const session = createSessionWithPid();
 
-        const resultado = avaliarElegibilidade(
-          sessao,
-          criterios({
-            capturaAnteriorHoje: { assinatura: { transcript: null, git: 'sha-1' } },
-            assinaturaAtual: { transcript: null, git: 'sha-2' },
+        const result = evaluateEligibility(
+          session,
+          criteria({
+            previousCaptureToday: { signature: { transcript: null, git: 'sha-1' } },
+            currentSignature: { transcript: null, git: 'sha-2' },
           }),
         );
 
-        expect(resultado.elegivel).toBe(true);
+        expect(result.eligible).toBe(true);
       },
     );
 
     it(
-      'duas capturas com todas as fontes ausentes (null) nos dois lados NÃO são tratadas como ' +
-        'duplicadas — ausência de dado não vira afirmação positiva (D-025/D-026)',
+      'two captures with every source absent (null) on both sides are NOT treated as ' +
+        'duplicates — absence of data does not become a positive claim (D-025/D-026)',
       () => {
-        const sessao = criarSessaoComPid();
+        const session = createSessionWithPid();
 
-        const resultado = avaliarElegibilidade(
-          sessao,
-          criterios({
-            capturaAnteriorHoje: { assinatura: { transcript: null, git: null } },
-            assinaturaAtual: { transcript: null, git: null },
+        const result = evaluateEligibility(
+          session,
+          criteria({
+            previousCaptureToday: { signature: { transcript: null, git: null } },
+            currentSignature: { transcript: null, git: null },
           }),
         );
 
-        expect(resultado.elegivel).toBe(true);
+        expect(result.eligible).toBe(true);
       },
     );
   });
 
-  it('acumula todos os motivos aplicáveis, não só o primeiro', () => {
-    const sessao = criarSessaoComPid({
+  it('accumulates every applicable reason, not just the first', () => {
+    const session = createSessionWithPid({
       sessionId: '55555555-5555-4555-8555-555555555555',
       cwd: 'c:\\code\\rascunhos',
-      ultimaAtividade: null,
+      lastActivity: null,
     });
 
-    const resultado = avaliarElegibilidade(
-      sessao,
-      criterios({
-        forksConhecidos: new Set(['55555555-5555-4555-8555-555555555555']),
-        cwdsIgnorados: new Set(['c:\\code\\rascunhos']),
+    const result = evaluateEligibility(
+      session,
+      criteria({
+        knownForks: new Set(['55555555-5555-4555-8555-555555555555']),
+        ignoredCwds: new Set(['c:\\code\\rascunhos']),
       }),
     );
 
-    expect(resultado.elegivel).toBe(false);
-    expect(resultado.motivos).toStrictEqual(
-      expect.arrayContaining(['semEvidencia', 'forkDoProprioSeeya', 'cwdIgnorado']),
+    expect(result.eligible).toBe(false);
+    expect(result.reasons).toStrictEqual(
+      expect.arrayContaining(['noEvidence', 'ownSeeyaFork', 'ignoredCwd']),
     );
-    expect(resultado.motivos).toHaveLength(3);
+    expect(result.reasons).toHaveLength(3);
   });
 });

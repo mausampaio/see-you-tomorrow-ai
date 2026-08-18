@@ -1,11 +1,11 @@
 /**
- * Núcleo: regras puras e portas do domínio.
+ * Core: pure domain rules and ports.
  *
- * Não importa `node:*` nem nada de `aplicacao/`, `cli/` ou `adaptadores/`. Sem I/O, sem
- * relógio, sem rede, sem processo. Ver docs/ARQUITETURA.md.
+ * Imports no `node:*` nor anything from `aplicacao/`, `cli/` or `adaptadores/`. No I/O, no
+ * clock, no network, no process. See docs/ARQUITETURA.md.
  *
- * Barril de conveniência (S1-T1). Quem preferir, pode importar direto do módulo específico
- * (ex. `nucleo/classificacao.js`) — os dois caminhos funcionam.
+ * Convenience barrel (S1-T1). Whoever prefers can import directly from the specific module
+ * (e.g. `nucleo/classificacao.js`) — both paths work.
  */
 export * from './tipos.js';
 export * from './evidencia.js';

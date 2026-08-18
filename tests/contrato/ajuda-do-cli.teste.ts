@@ -1,18 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { executarClaude, obterVersaoDoClaudeCode } from './_apoio.js';
+import { runClaude, getClaudeCodeVersion } from './_apoio.js';
 
-const versao = obterVersaoDoClaudeCode();
-const saidaDoHelp = executarClaude(['--help']).saida;
+const version = getClaudeCodeVersion();
+const helpOutput = runClaude(['--help']).output;
 
 /**
- * docs/TESTES.md § Contrato, item 3: "`claude --help` ainda expõe `--resume`, `--fork-session`,
- * `-p`, `--output-format`, `--model`, `--max-budget-usd`, `--no-session-persistence`." A tarefa
- * do PO ampliou a lista com `--tools`, `--system-prompt` e `--json-schema` — as três também
- * citadas em D-011 como parte de como a captura enxuta doma a saída. `claude --help` é comando
- * local, não toca rede. Não roda no CI padrão — só via `npm run test:contrato`.
+ * docs/TESTES.md § Contrato, item 3: "`claude --help` still exposes `--resume`,
+ * `--fork-session`, `-p`, `--output-format`, `--model`, `--max-budget-usd`,
+ * `--no-session-persistence`." The PO's task expanded the list with `--tools`,
+ * `--system-prompt` and `--json-schema` — the three also cited in D-011 as part of how the lean
+ * capture tames the output. `claude --help` is a local command, it doesn't touch the network.
+ * Doesn't run in standard CI — only via `npm run test:contrato`.
  */
-describe(`contrato: claude --help (claude ${versao})`, () => {
-  const flagsExigidasPeloProduto = [
+describe(`contrato: claude --help (claude ${version})`, () => {
+  const flagsRequiredByTheProduct = [
     '--resume',
     '--fork-session',
     '-p',
@@ -25,10 +26,10 @@ describe(`contrato: claude --help (claude ${versao})`, () => {
     '--json-schema',
   ];
 
-  it.each(flagsExigidasPeloProduto)('expõe a flag %s', (flag) => {
+  it.each(flagsRequiredByTheProduct)('exposes the flag %s', (flag) => {
     expect(
-      saidaDoHelp,
-      `\`claude --help\` não menciona "${flag}". Saída bruta observada:\n${saidaDoHelp}`,
+      helpOutput,
+      `\`claude --help\` doesn't mention "${flag}". Raw output observed:\n${helpOutput}`,
     ).toContain(flag);
   });
 });

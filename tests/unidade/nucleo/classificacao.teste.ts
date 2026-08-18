@@ -1,142 +1,139 @@
 import { describe, expect, it } from 'vitest';
 import {
-  classificarEstado,
-  pidRepresentaMesmoProcesso,
-  type ParametrosDeClassificacao,
+  classifyState,
+  pidRepresentsSameProcess,
+  type ClassificationParams,
 } from '../../../src/nucleo/classificacao.js';
-import { criarSessaoComPid, criarSessaoSemPid } from './_fixtures.js';
+import { createSessionWithPid, createSessionWithoutPid } from './_fixtures.js';
 
-const AGORA = new Date('2026-08-16T20:45:00.000Z');
-const PARAMETROS_PADRAO: ParametrosDeClassificacao = { agora: AGORA, minutosParaOcioso: 45 };
+const NOW = new Date('2026-08-16T20:45:00.000Z');
+const DEFAULT_PARAMS: ClassificationParams = { now: NOW, idleMinutes: 45 };
 
-describe('classificarEstado', () => {
-  it('sessão sem PID é sempre "desconhecida" (D-016), independente de qualquer outro campo', () => {
-    const sessao = criarSessaoSemPid({
-      ultimaEscritaNoTranscript: AGORA,
-      ultimaAtividade: AGORA,
+describe('classifyState', () => {
+  it('session without a PID is always "unknown" (D-016), regardless of any other field', () => {
+    const session = createSessionWithoutPid({
+      lastTranscriptWrite: NOW,
+      lastActivity: NOW,
     });
 
-    expect(classificarEstado(sessao, PARAMETROS_PADRAO)).toBe('desconhecida');
+    expect(classifyState(session, DEFAULT_PARAMS)).toBe('unknown');
   });
 
-  it('sessão sem PID e sem transcript nenhum também é "desconhecida", não "encerrada"', () => {
-    const sessao = criarSessaoSemPid({
-      temTranscript: false,
-      ultimaEscritaNoTranscript: null,
+  it('session without a PID and without any transcript at all is also "unknown", not "ended"', () => {
+    const session = createSessionWithoutPid({
+      hasTranscript: false,
+      lastTranscriptWrite: null,
     });
 
-    expect(classificarEstado(sessao, PARAMETROS_PADRAO)).toBe('desconhecida');
+    expect(classifyState(session, DEFAULT_PARAMS)).toBe('unknown');
   });
 
-  it('processo com PID mas não vivo é "encerrada" (entrada obsoleta, D-016)', () => {
-    const sessao = criarSessaoComPid({
-      processoEstaVivo: false,
-      ultimaEscritaNoTranscript: AGORA, // mesmo com transcript recente, morto é morto
+  it('process with a PID but not alive is "ended" (stale entry, D-016)', () => {
+    const session = createSessionWithPid({
+      processIsAlive: false,
+      lastTranscriptWrite: NOW, // even with a recent transcript, dead is dead
     });
 
-    expect(classificarEstado(sessao, PARAMETROS_PADRAO)).toBe('encerrada');
+    expect(classifyState(session, DEFAULT_PARAMS)).toBe('ended');
   });
 
-  it('processo vivo com escrita no transcript dentro da janela é "viva"', () => {
-    const dezMinutosAtras = new Date(AGORA.getTime() - 10 * 60_000);
-    const sessao = criarSessaoComPid({
-      processoEstaVivo: true,
-      ultimaEscritaNoTranscript: dezMinutosAtras,
+  it('process alive with a transcript write within the window is "alive"', () => {
+    const tenMinutesAgo = new Date(NOW.getTime() - 10 * 60_000);
+    const session = createSessionWithPid({
+      processIsAlive: true,
+      lastTranscriptWrite: tenMinutesAgo,
     });
 
-    expect(classificarEstado(sessao, PARAMETROS_PADRAO)).toBe('viva');
+    expect(classifyState(session, DEFAULT_PARAMS)).toBe('alive');
   });
 
-  it('processo vivo sem escrita há mais que minutosParaOcioso é "ociosa"', () => {
-    const cinquentaMinutosAtras = new Date(AGORA.getTime() - 50 * 60_000);
-    const sessao = criarSessaoComPid({
-      processoEstaVivo: true,
-      ultimaEscritaNoTranscript: cinquentaMinutosAtras,
+  it('process alive with no write for more than idleMinutes is "idle"', () => {
+    const fiftyMinutesAgo = new Date(NOW.getTime() - 50 * 60_000);
+    const session = createSessionWithPid({
+      processIsAlive: true,
+      lastTranscriptWrite: fiftyMinutesAgo,
     });
 
-    expect(classificarEstado(sessao, PARAMETROS_PADRAO)).toBe('ociosa');
+    expect(classifyState(session, DEFAULT_PARAMS)).toBe('idle');
   });
 
-  it('borda: exatamente minutosParaOcioso de silêncio ainda é "viva" (estritamente >)', () => {
-    const exatosQuarentaECincoMinutosAtras = new Date(AGORA.getTime() - 45 * 60_000);
-    const sessao = criarSessaoComPid({
-      processoEstaVivo: true,
-      ultimaEscritaNoTranscript: exatosQuarentaECincoMinutosAtras,
+  it('edge: exactly idleMinutes of silence is still "alive" (strictly >)', () => {
+    const exactlyFortyFiveMinutesAgo = new Date(NOW.getTime() - 45 * 60_000);
+    const session = createSessionWithPid({
+      processIsAlive: true,
+      lastTranscriptWrite: exactlyFortyFiveMinutesAgo,
     });
 
-    expect(classificarEstado(sessao, PARAMETROS_PADRAO)).toBe('viva');
+    expect(classifyState(session, DEFAULT_PARAMS)).toBe('alive');
   });
 
-  it('borda: um milissegundo além de minutosParaOcioso já é "ociosa"', () => {
-    const umMsAlemDoLimite = new Date(AGORA.getTime() - (45 * 60_000 + 1));
-    const sessao = criarSessaoComPid({
-      processoEstaVivo: true,
-      ultimaEscritaNoTranscript: umMsAlemDoLimite,
+  it('edge: one millisecond past idleMinutes is already "idle"', () => {
+    const oneMsPastTheLimit = new Date(NOW.getTime() - (45 * 60_000 + 1));
+    const session = createSessionWithPid({
+      processIsAlive: true,
+      lastTranscriptWrite: oneMsPastTheLimit,
     });
 
-    expect(classificarEstado(sessao, PARAMETROS_PADRAO)).toBe('ociosa');
+    expect(classifyState(session, DEFAULT_PARAMS)).toBe('idle');
   });
 
   /**
-   * D-025: ausência de dado não vira afirmação sobre o mundo. Os dois casos sempre juntos — sem
-   * o primeiro, alguém "otimiza" a checagem de volta para tratar `null` como se fosse um
-   * timestamp antigo.
+   * D-025: absence of data doesn't become a claim about the world. The two cases always
+   * together — without the first, someone "optimizes" the check back into treating `null` as
+   * if it were an old timestamp.
    */
-  describe('D-025 — null não é evidência de ociosidade', () => {
-    it('processo vivo sem transcript nenhum (null) é "viva", não "ociosa"', () => {
-      const sessao = criarSessaoComPid({
-        processoEstaVivo: true,
-        temTranscript: false,
-        ultimaEscritaNoTranscript: null,
+  describe('D-025 — null is not evidence of idleness', () => {
+    it('process alive with no transcript at all (null) is "alive", not "idle"', () => {
+      const session = createSessionWithPid({
+        processIsAlive: true,
+        hasTranscript: false,
+        lastTranscriptWrite: null,
       });
 
-      expect(classificarEstado(sessao, PARAMETROS_PADRAO)).toBe('viva');
+      expect(classifyState(session, DEFAULT_PARAMS)).toBe('alive');
     });
 
-    it('processo vivo com timestamp real além do limite continua "ociosa"', () => {
-      const cinquentaMinutosAtras = new Date(AGORA.getTime() - 50 * 60_000);
-      const sessao = criarSessaoComPid({
-        processoEstaVivo: true,
-        temTranscript: true,
-        ultimaEscritaNoTranscript: cinquentaMinutosAtras,
+    it('process alive with a real timestamp past the limit stays "idle"', () => {
+      const fiftyMinutesAgo = new Date(NOW.getTime() - 50 * 60_000);
+      const session = createSessionWithPid({
+        processIsAlive: true,
+        hasTranscript: true,
+        lastTranscriptWrite: fiftyMinutesAgo,
       });
 
-      expect(classificarEstado(sessao, PARAMETROS_PADRAO)).toBe('ociosa');
+      expect(classifyState(session, DEFAULT_PARAMS)).toBe('idle');
     });
   });
 });
 
-describe('pidRepresentaMesmoProcesso', () => {
-  it('procStart idênticos representam o mesmo processo', () => {
-    expect(pidRepresentaMesmoProcesso('134313811658518463', '134313811658518463')).toBe(true);
+describe('pidRepresentsSameProcess', () => {
+  it('identical procStart values represent the same process', () => {
+    expect(pidRepresentsSameProcess('134313811658518463', '134313811658518463')).toBe(true);
   });
 
-  it('procStart divergentes indicam PID reciclado pelo SO — processo diferente', () => {
-    expect(pidRepresentaMesmoProcesso('134313811658518463', '999999999999999999')).toBe(false);
+  it('divergent procStart values indicate a PID recycled by the OS — a different process', () => {
+    expect(pidRepresentsSameProcess('134313811658518463', '999999999999999999')).toBe(false);
   });
 
   it(
-    'uso combinado: PID "vivo" no SO mas com procStart divergente do registrado vira ' +
-      '"encerrada" na classificação (docs/TESTES.md: liveness com PID reciclado)',
+    'combined use: PID "alive" on the OS but with a procStart diverging from the registered one ' +
+      'becomes "ended" in classification (docs/TESTES.md: liveness with a recycled PID)',
     () => {
-      const procStartRegistrado = '134313811658518463';
-      const procStartObservadoAgora = '999999999999999999'; // outro processo reaproveitou o PID
+      const registeredProcStart = '134313811658518463';
+      const observedProcStartNow = '999999999999999999'; // another process reused the PID
 
-      const mesmoProcesso = pidRepresentaMesmoProcesso(
-        procStartRegistrado,
-        procStartObservadoAgora,
-      );
-      expect(mesmoProcesso).toBe(false);
+      const sameProcess = pidRepresentsSameProcess(registeredProcStart, observedProcStartNow);
+      expect(sameProcess).toBe(false);
 
-      // `processoEstaVivo` é o resultado, já resolvido, de ControleDeProcesso.estaVivo(pid,
-      // procStart) — aqui simulado como o resultado do desempate acima: PID existe no SO, mas
-      // não é o mesmo processo, logo `estaVivo` teria devolvido `false`.
-      const sessao = criarSessaoComPid({
-        procStart: procStartRegistrado,
-        processoEstaVivo: mesmoProcesso,
+      // `processIsAlive` is the already-resolved result of ProcessControl.isAlive(pid,
+      // procStart) — simulated here as the result of the tie-break above: the PID exists on
+      // the OS, but it's not the same process, so `isAlive` would have returned `false`.
+      const session = createSessionWithPid({
+        procStart: registeredProcStart,
+        processIsAlive: sameProcess,
       });
 
-      expect(classificarEstado(sessao, PARAMETROS_PADRAO)).toBe('encerrada');
+      expect(classifyState(session, DEFAULT_PARAMS)).toBe('ended');
     },
   );
 });

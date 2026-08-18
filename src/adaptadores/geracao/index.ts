@@ -1,7 +1,7 @@
 /**
- * Adapter de geração: chama o `claude` headless, implementa `GeradorDeHandoff` nas variantes
- * enxuta e profunda (D-011). Ver docs/ARQUITETURA.md.
+ * Generation adapter: calls headless `claude`, implements `GeradorDeHandoff` in the lean and
+ * deep variants (D-011). See docs/ARQUITETURA.md.
  *
- * Ainda vazio — entra em S2-T2.
+ * Still empty — comes in at S2-T2.
  */
 export {};

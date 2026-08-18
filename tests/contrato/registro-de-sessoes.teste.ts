@@ -1,48 +1,48 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { esquemaRegistroDeSessao } from '../../src/adaptadores/descoberta/esquemas.js';
-import { obterVersaoDoClaudeCode, raizDoClaudeReal } from './_apoio.js';
+import { sessionRecordSchema } from '../../src/adaptadores/descoberta/esquemas.js';
+import { getClaudeCodeVersion, realClaudeRoot } from './_apoio.js';
 
-const versao = obterVersaoDoClaudeCode();
+const version = getClaudeCodeVersion();
 
 /**
- * docs/TESTES.md § Contrato, item 1: "O schema zod de `~/.claude/sessions/*.json` valida os
- * arquivos reais da máquina." Não roda no CI padrão — só via `npm run test:contrato`.
+ * docs/TESTES.md § Contrato, item 1: "The zod schema for `~/.claude/sessions/*.json` validates
+ * this machine's real files." Doesn't run in standard CI — only via `npm run test:contrato`.
  */
-describe(`contrato: ~/.claude/sessions/*.json (claude ${versao})`, () => {
-  it('valida todo arquivo de registro de sessão real desta máquina', () => {
-    const pastaDeSessoes = join(raizDoClaudeReal(), 'sessions');
-    const arquivos = readdirSync(pastaDeSessoes).filter((nome) => nome.endsWith('.json'));
+describe(`contrato: ~/.claude/sessions/*.json (claude ${version})`, () => {
+  it('validates every real session-record file on this machine', () => {
+    const sessionsFolder = join(realClaudeRoot(), 'sessions');
+    const files = readdirSync(sessionsFolder).filter((name) => name.endsWith('.json'));
 
     expect(
-      arquivos.length,
-      `Nenhum arquivo em ${pastaDeSessoes}. A suíte de contrato precisa de pelo menos uma ` +
-        'sessão (viva ou obsoleta) registrada para confirmar o schema contra a realidade — ' +
-        'abra uma sessão do Claude Code antes de rodar `npm run test:contrato`.',
+      files.length,
+      `No files in ${sessionsFolder}. The contract suite needs at least one session (alive or ` +
+        'stale) registered to confirm the schema against reality — open a Claude Code session ' +
+        'before running `npm run test:contrato`.',
     ).toBeGreaterThan(0);
 
-    for (const arquivo of arquivos) {
-      const caminho = join(pastaDeSessoes, arquivo);
-      const conteudoBruto = readFileSync(caminho, 'utf8');
+    for (const file of files) {
+      const path = join(sessionsFolder, file);
+      const rawContent = readFileSync(path, 'utf8');
 
       let json: unknown;
       try {
-        json = JSON.parse(conteudoBruto);
-      } catch (erro) {
+        json = JSON.parse(rawContent);
+      } catch (error) {
         throw new Error(
-          `${caminho} não é JSON válido — saída bruta observada:\n${conteudoBruto}\n\n` +
-            `Erro: ${String(erro)}`,
+          `${path} is not valid JSON — raw output observed:\n${rawContent}\n\n` +
+            `Error: ${String(error)}`,
         );
       }
 
-      const resultado = esquemaRegistroDeSessao.safeParse(json);
-      if (!resultado.success) {
+      const result = sessionRecordSchema.safeParse(json);
+      if (!result.success) {
         throw new Error(
-          `esquemaRegistroDeSessao rejeitou o registro real em ${caminho}. A realidade mudou — ` +
-            `registre em docs/QUESTOES.md com esta saída bruta, não afrouxe o schema.\n\n` +
-            `Conteúdo observado: ${conteudoBruto}\n\n` +
-            `Erros do zod: ${JSON.stringify(resultado.error.issues, null, 2)}`,
+          `sessionRecordSchema rejected the real record at ${path}. Reality changed — log it ` +
+            `in docs/QUESTOES.md with this raw output, don't loosen the schema.\n\n` +
+            `Observed content: ${rawContent}\n\n` +
+            `zod errors: ${JSON.stringify(result.error.issues, null, 2)}`,
         );
       }
     }

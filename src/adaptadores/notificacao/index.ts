@@ -1,7 +1,6 @@
 /**
- * Adapter de notificação: toast nativo por SO, implementa `Notificador`. Ver
- * docs/ARQUITETURA.md.
+ * Notification adapter: native per-OS toast, implements `Notificador`. See docs/ARQUITETURA.md.
  *
- * Ainda vazio — entra em S4-T1.
+ * Still empty — comes in at S4-T1.
  */
 export {};

@@ -1,8 +1,8 @@
 /**
- * Adapter de relógio: única fonte de "agora" do projeto, implementa a porta `Relogio`. Nenhum
- * outro módulo pode chamar `new Date()`, `Date.now()` ou `setTimeout` de longa duração. Ver
+ * Clock adapter: the project's single source of "now", implements the `Clock` port. No other
+ * module may call `new Date()`, `Date.now()`, or a long-running `setTimeout`. See
  * docs/ARQUITETURA.md.
  *
- * Ainda vazio — entra em S1-T1/S4-T2.
+ * Still empty — comes in at S1-T1/S4-T2.
  */
 export {};

@@ -1,64 +1,69 @@
 import { describe, expect, it } from 'vitest';
-import { dadosParaEncerrarProcesso } from '../../../src/nucleo/encerramento.js';
-import type { SessaoComPid, SessaoDescoberta, SessaoSemPid } from '../../../src/nucleo/tipos.js';
-import { criarSessaoComPid, criarSessaoSemPid } from './_fixtures.js';
+import { processTerminationData } from '../../../src/nucleo/encerramento.js';
+import type {
+  SessionWithPid,
+  DiscoveredSession,
+  SessionWithoutPid,
+} from '../../../src/nucleo/tipos.js';
+import { createSessionWithPid, createSessionWithoutPid } from './_fixtures.js';
 
 /**
- * Prova de D-024: `dadosParaEncerrarProcesso` aceita exclusivamente `SessaoComPid`. O compilador,
- * não um comentário, é quem recusa as outras formas — sem `!`, sem `as`, em lugar nenhum destes
- * testes. `tsc -p tsconfig.json --noEmit` (parte de `npm run verificar`) type-checa este arquivo:
- * se qualquer `@ts-expect-error` abaixo deixar de encontrar um erro real, a diretiva vira "não
- * usada" e a checagem de tipos falha — é isso que torna este teste "impossível de compilar" na
- * prática, conforme docs/PLANO-DE-ENTREGA.md S1-T1 pede.
+ * Proof of D-024: `processTerminationData` accepts exclusively `SessionWithPid`. The compiler,
+ * not a comment, is what refuses the other shapes — no `!`, no `as`, anywhere in these tests.
+ * `tsc -p tsconfig.json --noEmit` (part of `npm run verificar`) type-checks this file: if any
+ * `@ts-expect-error` below stops finding a real error, the directive becomes "unused" and the
+ * type check fails — that's what makes this test "impossible to compile" in practice, as
+ * docs/PLANO-DE-ENTREGA.md S1-T1 requires.
  */
-describe('dadosParaEncerrarProcesso (D-024)', () => {
-  it('aceita SessaoComPid e devolve pid + procStart', () => {
-    const sessao = criarSessaoComPid({ pid: 9999, procStart: '111222333' });
+describe('processTerminationData (D-024)', () => {
+  it('accepts SessionWithPid and returns pid + procStart', () => {
+    const session = createSessionWithPid({ pid: 9999, procStart: '111222333' });
 
-    expect(dadosParaEncerrarProcesso(sessao)).toStrictEqual({ pid: 9999, procStart: '111222333' });
+    expect(processTerminationData(session)).toStrictEqual({ pid: 9999, procStart: '111222333' });
   });
 
-  it('SessaoDescoberta (a união, sem estreitar) é aceita depois de checar sessao.temPid', () => {
-    const sessao: SessaoDescoberta = criarSessaoComPid();
+  it('DiscoveredSession (the union, unnarrowed) is accepted after checking session.hasPid', () => {
+    const session: DiscoveredSession = createSessionWithPid();
 
-    if (sessao.temPid) {
-      // Compila só porque o `if` acima estreitou `sessao` para `SessaoComPid` — sem o `if`, a
-      // linha abaixo não compilaria (ver os dois casos de `@ts-expect-error` a seguir).
-      expect(dadosParaEncerrarProcesso(sessao)).toStrictEqual({
-        pid: sessao.pid,
-        procStart: sessao.procStart,
+    if (session.hasPid) {
+      // Compiles only because the `if` above narrowed `session` to `SessionWithPid` — without
+      // the `if`, the line below wouldn't compile (see the two `@ts-expect-error` cases next).
+      expect(processTerminationData(session)).toStrictEqual({
+        pid: session.pid,
+        procStart: session.procStart,
       });
     } else {
-      expect.unreachable('a fixture usada aqui sempre tem PID');
+      expect.unreachable('the fixture used here always has a PID');
     }
   });
 
-  it('recusa em tempo de compilação SessaoSemPid — sem "!", sem "as" (D-024)', () => {
-    const sessaoSemPid: SessaoSemPid = criarSessaoSemPid();
+  it('refuses SessionWithoutPid at compile time — no "!", no "as" (D-024)', () => {
+    const sessionWithoutPid: SessionWithoutPid = createSessionWithoutPid();
 
-    // @ts-expect-error D-024: SessaoSemPid não tem `pid`. Se esta linha compilar sem erro, a
-    // proteção de tipo que D-024 exige quebrou — dadosParaEncerrarProcesso passou a aceitar uma
-    // forma que a política de encerramento (D-002) não pode aceitar.
-    const chamadaRecusadaPeloCompilador = () => dadosParaEncerrarProcesso(sessaoSemPid);
+    // @ts-expect-error D-024: SessionWithoutPid has no `pid`. If this line compiles without
+    // error, the type protection D-024 requires broke — processTerminationData started
+    // accepting a shape the termination policy (D-002) can't accept.
+    const callRefusedByTheCompiler = () => processTerminationData(sessionWithoutPid);
 
-    expect(chamadaRecusadaPeloCompilador).toBeTypeOf('function');
+    expect(callRefusedByTheCompiler).toBeTypeOf('function');
   });
 
-  it('recusa em tempo de compilação a união SessaoDescoberta sem estreitar (D-024)', () => {
-    const sessao: SessaoDescoberta = criarSessaoSemPid();
+  it('refuses the unnarrowed DiscoveredSession union at compile time (D-024)', () => {
+    const session: DiscoveredSession = createSessionWithoutPid();
 
-    // @ts-expect-error D-024: sem o `if (sessao.temPid)`, o TypeScript não sabe que `sessao` é a
-    // forma com PID — a união inteira, incluindo o lado sem PID, precisaria ser aceita, e não é.
-    const chamadaRecusadaPeloCompilador = () => dadosParaEncerrarProcesso(sessao);
+    // @ts-expect-error D-024: without `if (session.hasPid)`, TypeScript doesn't know `session`
+    // is the PID-bearing shape — the whole union, including the PID-less side, would need to be
+    // accepted, and it isn't.
+    const callRefusedByTheCompiler = () => processTerminationData(session);
 
-    expect(chamadaRecusadaPeloCompilador).toBeTypeOf('function');
+    expect(callRefusedByTheCompiler).toBeTypeOf('function');
   });
 
-  it('tipo de retorno documentado: exatamente { pid, procStart }, nada mais', () => {
-    const sessao: SessaoComPid = criarSessaoComPid();
+  it('documented return type: exactly { pid, procStart }, nothing else', () => {
+    const session: SessionWithPid = createSessionWithPid();
 
-    const resultado = dadosParaEncerrarProcesso(sessao);
+    const result = processTerminationData(session);
 
-    expect(Object.keys(resultado).sort()).toStrictEqual(['pid', 'procStart']);
+    expect(Object.keys(result).sort()).toStrictEqual(['pid', 'procStart']);
   });
 });

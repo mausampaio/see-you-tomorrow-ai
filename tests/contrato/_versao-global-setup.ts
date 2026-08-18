@@ -1,20 +1,21 @@
 /**
- * Global setup do projeto `contrato` (ver `vitest.config.ts`). Roda **uma única vez**, antes de
- * qualquer teste, no processo principal do vitest — por isso o `console.log` aqui aparece direto
- * no stdout de `npm run test:contrato` com **qualquer** reporter, inclusive o padrão.
+ * Global setup for the `contrato` project (see `vitest.config.ts`). Runs **exactly once**,
+ * before any test, in vitest's main process — that's why the `console.log` here appears straight
+ * on `npm run test:contrato`'s stdout with **any** reporter, including the default one.
  *
- * Existe porque o review mediu o defeito: embutir a versão só no nome de cada `describe`
- * (`tests/contrato/_apoio.ts`) não é visível no caminho feliz — o reporter padrão do vitest só
- * imprime nome de teste em falha ou com `--reporter=verbose`. docs/TESTES.md exige registrar a
- * versão em **toda execução**, não só quando algo quebra ou quando alguém lembra da flag certa.
+ * This exists because the review measured the defect: embedding the version only in each
+ * `describe`'s name (`tests/contrato/_apoio.ts`) isn't visible on the happy path — vitest's
+ * default reporter only prints test names on failure or with `--reporter=verbose`.
+ * docs/TESTES.md requires logging the version on **every run**, not only when something breaks
+ * or when someone remembers the right flag.
  */
-import { obterVersaoDoClaudeCode } from './_apoio.js';
+import { getClaudeCodeVersion } from './_apoio.js';
 
 export default function setup(): void {
-  const versao = obterVersaoDoClaudeCode();
-  // Único console.* deste projeto fora de adaptadores/relogio ou de um logger: é diagnóstico
-  // obrigatório da suíte de contrato (docs/TESTES.md), não log de produção — CLAUDE.md § Qualidade
-  // fala de `console.log` solto no código do produto, não de um setup de teste que existe
-  // especificamente para escrever isto.
-  console.log(`\n[contrato] executando contra claude ${versao}\n`);
+  const version = getClaudeCodeVersion();
+  // The only console.* in this project outside adaptadores/relogio or a logger: it's mandatory
+  // contract-suite diagnostics (docs/TESTES.md), not product logging — CLAUDE.md § Qualidade
+  // talks about stray `console.log` in product code, not a test setup that exists specifically
+  // to write this.
+  console.log(`\n[contrato] running against claude ${version}\n`);
 }

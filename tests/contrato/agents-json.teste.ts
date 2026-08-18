@@ -1,89 +1,87 @@
 import { describe, expect, it } from 'vitest';
-import { validarSaidaAgentsJson } from '../../src/adaptadores/descoberta/esquemas.js';
-import { executarClaude, obterVersaoDoClaudeCode } from './_apoio.js';
+import { validateAgentsJsonOutput } from '../../src/adaptadores/descoberta/esquemas.js';
+import { runClaude, getClaudeCodeVersion } from './_apoio.js';
 
-const versao = obterVersaoDoClaudeCode();
+const version = getClaudeCodeVersion();
 
 /**
- * docs/TESTES.md § Contrato, item 4: "`claude agents --json` ainda devolve array com `pid`,
- * `sessionId`, `cwd`." Comando local (D-016) — enumera processos já em execução na máquina, não
- * toca rede. Não roda no CI padrão — só via `npm run test:contrato`.
+ * docs/TESTES.md § Contrato, item 4: "`claude agents --json` still returns an array with `pid`,
+ * `sessionId`, `cwd`." Local command (D-016) — enumerates processes already running on the
+ * machine, doesn't touch the network. Doesn't run in standard CI — only via `npm run
+ * test:contrato`.
  *
- * `validarSaidaAgentsJson` é item por item (D-022) — mas a tolerância de D-022 é para o
- * **produto**: o `seeya sessoes` do usuário não pode cair por causa de uma entrada estranha, e
- * por isso o adapter descarta o item ruim e segue. **Este teste tem o propósito oposto**: ele
- * existe para gritar quando a realidade divergir do schema, porque a suíte de contrato não roda
- * no CI (só via `npm run test:contrato`) e uma falha aqui é o único sinal que um humano tem para
- * ir investigar. Se aplicássemos a mesma tolerância aqui, uma variante nova seria descartada em
- * silêncio e ninguém saberia — o alarme viraria amortecedor, e "contrato verde" deixaria de
- * provar o que promete provar. Por isso `rejeitados` precisa estar **vazio**, não só `aceitos`
- * maior que zero: qualquer item que o schema não reconheça falha o teste, com o JSON bruto do
- * item na mensagem.
+ * `validateAgentsJsonOutput` is item-by-item (D-022) — but D-022's tolerance is for the
+ * **product**: the user's `seeya sessoes` can't go down because of a strange entry, so the
+ * adapter discards the bad item and moves on. **This test has the opposite purpose**: it exists
+ * to scream when reality diverges from the schema, because the contract suite doesn't run in CI
+ * (only via `npm run test:contrato`) and a failure here is the only signal a human has to go
+ * investigate. If we applied the same tolerance here, a new variant would be silently discarded
+ * and nobody would know — the alarm would turn into a shock absorber, and "green contract" would
+ * stop proving what it claims to prove. That's why `rejected` needs to be **empty**, not just
+ * `accepted` greater than zero: any item the schema doesn't recognize fails the test, with the
+ * item's raw JSON in the message.
  */
-describe(`contrato: claude agents --json (claude ${versao})`, () => {
-  it('devolve só sessões que o schema reconhece — nenhuma pode ser descartada em silêncio', () => {
-    const resultado = executarClaude(['agents', '--json']);
+describe(`contrato: claude agents --json (claude ${version})`, () => {
+  it('returns only sessions the schema recognizes — none may be silently discarded', () => {
+    const result = runClaude(['agents', '--json']);
 
     expect(
-      resultado.codigoDeSaida,
-      `\`claude agents --json\` saiu com código diferente de 0. stderr: ${resultado.erro}`,
+      result.exitCode,
+      `\`claude agents --json\` exited with a non-zero code. stderr: ${result.error}`,
     ).toBe(0);
 
     let json: unknown;
     try {
-      json = JSON.parse(resultado.saida);
-    } catch (erro) {
+      json = JSON.parse(result.output);
+    } catch (error) {
       throw new Error(
-        `\`claude agents --json\` não devolveu JSON válido. Saída bruta:\n${resultado.saida}\n\n` +
-          `Erro: ${String(erro)}`,
+        `\`claude agents --json\` did not return valid JSON. Raw output:\n${result.output}\n\n` +
+          `Error: ${String(error)}`,
       );
     }
 
-    const { aceitos, rejeitados } = validarSaidaAgentsJson(json);
+    const { accepted, rejected } = validateAgentsJsonOutput(json);
 
-    // Estrito, ao contrário do adapter: qualquer rejeitado aqui é a realidade divergindo do
-    // schema, e o teste precisa gritar com o item bruto visível — não engolir em silêncio.
+    // Strict, unlike the adapter: any rejected item here is reality diverging from the schema,
+    // and the test needs to scream with the raw item visible — not silently swallow it.
     expect(
-      rejeitados,
-      'esquemaItemDeAgentsJson rejeitou item(ns) da saída real de `claude agents --json`. A ' +
-        'realidade mudou — registre em docs/QUESTOES.md com esta saída bruta, não afrouxe o ' +
-        `schema.\n\nRejeitados: ${JSON.stringify(rejeitados, null, 2)}`,
+      rejected,
+      'agentsJsonItemSchema rejected item(s) from the real output of `claude agents --json`. ' +
+        'Reality changed — log it in docs/QUESTOES.md with this raw output, don\'t loosen the ' +
+        `schema.\n\nRejected: ${JSON.stringify(rejected, null, 2)}`,
     ).toEqual([]);
 
-    // Caso diferente do anterior: nenhum item rejeitado, mas também nenhum aceito — não há
-    // sessão aberta para confirmar que o schema bate com a realidade.
+    // A different case from the previous one: no item rejected, but also none accepted — there's
+    // no open session to confirm the items have pid/sessionId/cwd.
     expect(
-      aceitos.length,
-      'Nenhuma sessão ativa retornada por `claude agents --json` — não dá para confirmar que ' +
-        'os itens têm pid/sessionId/cwd. Rode a suíte de contrato com pelo menos uma sessão ' +
-        'aberta.',
+      accepted.length,
+      'No active session returned by `claude agents --json` — can\'t confirm the items have ' +
+        'pid/sessionId/cwd. Run the contract suite with at least one session open.',
     ).toBeGreaterThan(0);
   });
 
   /**
-   * S1-T0c / D-022. Esta máquina (Windows) não produz a variante "background" — ela só foi
-   * observada numa segunda máquina, Linux. Sem esta fixture, a suíte de contrato nunca prova
-   * que a variante continua aceita: o teste acima só vê o que `claude agents --json` devolve
-   * *aqui*. Valores anonimizados conforme CLAUDE.md § "Este projeto é de código aberto" — `id`,
-   * `sessionId` e `cwd` não são de nenhuma sessão real; o UUID é obviamente sintético (só 3
-   * símbolos distintos: 1, 4, 8).
+   * S1-T0c / D-022. This machine (Windows) doesn't produce the "background" variant — it was
+   * only observed on a second machine, Linux. Without this fixture, the contract suite never
+   * proves the variant keeps being accepted: the test above only sees what `claude agents --json`
+   * returns *here*. Values anonymized per CLAUDE.md § "Este projeto é de código aberto" — `id`,
+   * `sessionId` and `cwd` don't belong to any real session; the UUID is obviously synthetic (only
+   * 3 distinct symbols: 1, 4, 8).
    */
-  it('aceita a variante "background" observada na segunda máquina (fixture anonimizada, D-022)', () => {
-    const amostraDeBackgroundDaSegundaMaquina = {
+  it('accepts the "background" variant observed on the second machine (anonymized fixture, D-022)', () => {
+    const backgroundSampleFromTheSecondMachine = {
       id: '11111111',
       cwd: '/home/<usuario>/.claude/agente/ui',
       kind: 'background',
       startedAt: 1780000000000,
       sessionId: '11111111-1111-4111-8111-111111111111',
-      name: 'sessao de background',
+      name: 'background session',
       state: 'blocked',
     };
 
-    const { aceitos, rejeitados } = validarSaidaAgentsJson([amostraDeBackgroundDaSegundaMaquina]);
+    const { accepted, rejected } = validateAgentsJsonOutput([backgroundSampleFromTheSecondMachine]);
 
-    expect(rejeitados, `motivo(s) da rejeição: ${JSON.stringify(rejeitados, null, 2)}`).toEqual(
-      [],
-    );
-    expect(aceitos).toStrictEqual([amostraDeBackgroundDaSegundaMaquina]);
+    expect(rejected, `rejection reason(s): ${JSON.stringify(rejected, null, 2)}`).toEqual([]);
+    expect(accepted).toStrictEqual([backgroundSampleFromTheSecondMachine]);
   });
 });

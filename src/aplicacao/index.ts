@@ -1,7 +1,7 @@
 /**
- * Aplicação: casos de uso (encerrarDia, iniciarDia, capturarSessao) que orquestram o núcleo e
- * os adaptadores. Ver docs/ARQUITETURA.md.
+ * Application: use cases (endDay, startDay, captureSession) that orchestrate the core and the
+ * adapters. See docs/ARQUITETURA.md.
  *
- * Ainda vazio — casos de uso entram a partir do Sprint 1.
+ * Still empty — use cases come in starting at Sprint 1.
  */
 export {};

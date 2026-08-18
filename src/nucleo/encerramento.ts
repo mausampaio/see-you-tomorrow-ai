@@ -1,33 +1,34 @@
 /**
- * A parte pura da política de encerramento de processo (D-002, D-024). A política inteira —
- * checar `podeEncerrar` por `cwd` na config, confirmar o handoff gravado em disco antes de
- * terminar — é orquestração de `aplicacao/` (S2-T3), fora desta tarefa. O que mora aqui é só o
- * gate de tipo que D-024 exige: extrair os dados necessários para terminar um processo só é
- * possível a partir da forma que garante `pid`.
+ * The pure slice of the process-termination policy (D-002, D-024). The whole policy — checking
+ * `podeEncerrar` by `cwd` in the config, confirming the handoff is written to disk before
+ * terminating — is orchestration that belongs to `aplicacao/` (S2-T3), out of this task's scope.
+ * What lives here is only the type gate D-024 requires: extracting the data needed to terminate a
+ * process is only possible from the shape that guarantees `pid`.
  */
-import type { SessaoComPid } from './tipos.js';
+import type { SessionWithPid } from './tipos.js';
 
-export interface DadosParaEncerrarProcesso {
+export interface ProcessTerminationData {
   readonly pid: number;
   readonly procStart: string;
 }
 
 /**
- * Extrai `pid` e `procStart` para a chamada de `ControleDeProcesso.terminarComGraca` (D-002).
+ * Extracts `pid` and `procStart` for the `ProcessControl.terminateGracefully` call (D-002).
  *
- * **Aceita exclusivamente `SessaoComPid`.** Não aceita `SessaoDescoberta` (a união) nem
- * `SessaoSemPid` — o compilador recusa a chamada nesses dois casos, sem `!` e sem `as` em lugar
- * nenhum (D-024). Quem tem uma `SessaoDescoberta` precisa estreitar primeiro:
+ * **Accepts exclusively `SessionWithPid`.** It doesn't accept `DiscoveredSession` (the union) nor
+ * `SessionWithoutPid` — the compiler refuses the call in both cases, with no `!` and no `as`
+ * anywhere (D-024). Whoever holds a `DiscoveredSession` has to narrow first:
  *
  * ```ts
- * if (sessao.temPid) {
- *   dadosParaEncerrarProcesso(sessao); // compila: `sessao` foi estreitado para SessaoComPid
+ * if (session.hasPid) {
+ *   processTerminationData(session); // compiles: `session` was narrowed to SessionWithPid
  * }
  * ```
  *
- * Ver tests/unidade/nucleo/encerramento.teste.ts para a prova de que a forma sem PID **não**
- * compila (`@ts-expect-error`) — é o teste que docs/PLANO-DE-ENTREGA.md S1-T1 exige literalmente.
+ * See tests/unidade/nucleo/encerramento.teste.ts for the proof that the PID-less shape **does
+ * not** compile (`@ts-expect-error`) — it's the test docs/PLANO-DE-ENTREGA.md S1-T1 literally
+ * requires.
  */
-export function dadosParaEncerrarProcesso(sessao: SessaoComPid): DadosParaEncerrarProcesso {
-  return { pid: sessao.pid, procStart: sessao.procStart };
+export function processTerminationData(session: SessionWithPid): ProcessTerminationData {
+  return { pid: session.pid, procStart: session.procStart };
 }

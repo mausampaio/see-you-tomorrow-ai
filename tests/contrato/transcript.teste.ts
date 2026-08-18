@@ -2,113 +2,112 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  esquemaEntradaAssistant,
-  esquemaEntradaUser,
+  assistantEntrySchema,
+  userEntrySchema,
 } from '../../src/adaptadores/transcricao/esquemas.js';
-import { obterVersaoDoClaudeCode, raizDoClaudeReal } from './_apoio.js';
+import { getClaudeCodeVersion, realClaudeRoot } from './_apoio.js';
 
-const versao = obterVersaoDoClaudeCode();
+const version = getClaudeCodeVersion();
 
-/** Varre `~/.claude/projects/**​/*.jsonl` recursivamente, sem depender de nenhum parser do projeto. */
-function listarTranscriptsReais(): string[] {
-  const raizDeProjetos = join(raizDoClaudeReal(), 'projects');
-  const resultado: string[] = [];
+/** Recursively scans `~/.claude/projects/**​/*.jsonl`, without relying on any project parser. */
+function listRealTranscripts(): string[] {
+  const projectsRoot = join(realClaudeRoot(), 'projects');
+  const result: string[] = [];
 
-  const visitar = (pasta: string): void => {
-    for (const nome of readdirSync(pasta)) {
-      const caminho = join(pasta, nome);
-      const info = statSync(caminho);
+  const visit = (folder: string): void => {
+    for (const name of readdirSync(folder)) {
+      const path = join(folder, name);
+      const info = statSync(path);
       if (info.isDirectory()) {
-        visitar(caminho);
-      } else if (nome.endsWith('.jsonl')) {
-        resultado.push(caminho);
+        visit(path);
+      } else if (name.endsWith('.jsonl')) {
+        result.push(path);
       }
     }
   };
 
-  visitar(raizDeProjetos);
-  return resultado;
+  visit(projectsRoot);
+  return result;
 }
 
 /**
- * docs/TESTES.md § Contrato, item 2: "O `.jsonl` real tem entradas `user` e `assistant` com os
- * campos que o parser usa." Não roda no CI padrão — só via `npm run test:contrato`.
+ * docs/TESTES.md § Contrato, item 2: "The real `.jsonl` has `user` and `assistant` entries with
+ * the fields the parser uses." Doesn't run in standard CI — only via `npm run test:contrato`.
  */
-describe(`contrato: transcript .jsonl real (claude ${versao})`, () => {
-  it('encontra e valida entradas user e assistant reais em pelo menos um transcript', () => {
-    const transcripts = listarTranscriptsReais();
+describe(`contrato: real transcript .jsonl (claude ${version})`, () => {
+  it('finds and validates real user and assistant entries in at least one transcript', () => {
+    const transcripts = listRealTranscripts();
 
     expect(
       transcripts.length,
-      `Nenhum .jsonl em ${join(raizDoClaudeReal(), 'projects')}. A suíte de contrato precisa de ` +
-        'pelo menos um transcript real para confirmar o schema — use o Claude Code normalmente ' +
-        'antes de rodar `npm run test:contrato`.',
+      `No .jsonl in ${join(realClaudeRoot(), 'projects')}. The contract suite needs at least ` +
+        'one real transcript to confirm the schema — use Claude Code normally before running ' +
+        '`npm run test:contrato`.',
     ).toBeGreaterThan(0);
 
     let totalUser = 0;
     let totalAssistant = 0;
 
-    for (const caminho of transcripts) {
-      const linhas = readFileSync(caminho, 'utf8').split('\n');
+    for (const path of transcripts) {
+      const lines = readFileSync(path, 'utf8').split('\n');
 
-      for (const linha of linhas) {
-        const linhaAparada = linha.trim();
-        if (linhaAparada.length === 0) {
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (trimmedLine.length === 0) {
           continue;
         }
 
-        let entrada: unknown;
+        let entry: unknown;
         try {
-          entrada = JSON.parse(linhaAparada);
+          entry = JSON.parse(trimmedLine);
         } catch {
-          // Linha truncada (o Claude Code pode estar escrevendo). O contrato só valida os tipos
-          // que conhece; linha ilegível é assunto do parser de verdade (S1-T4), não deste teste.
+          // Truncated line (Claude Code may be writing). The contract only validates the types
+          // it knows; an unreadable line is the real parser's (S1-T4) concern, not this test's.
           continue;
         }
 
-        if (typeof entrada !== 'object' || entrada === null || !('type' in entrada)) {
+        if (typeof entry !== 'object' || entry === null || !('type' in entry)) {
           continue;
         }
 
-        const tipo = entrada.type;
+        const type = entry.type;
 
-        if (tipo === 'user') {
-          const resultado = esquemaEntradaUser.safeParse(entrada);
-          if (!resultado.success) {
+        if (type === 'user') {
+          const result = userEntrySchema.safeParse(entry);
+          if (!result.success) {
             throw new Error(
-              `esquemaEntradaUser rejeitou uma entrada "user" real em ${caminho}. A realidade ` +
-                'mudou — registre em docs/QUESTOES.md com esta saída bruta, não afrouxe o schema.' +
-                `\n\nConteúdo observado: ${linhaAparada}\n\n` +
-                `Erros do zod: ${JSON.stringify(resultado.error.issues, null, 2)}`,
+              `userEntrySchema rejected a real "user" entry in ${path}. Reality changed — log ` +
+                `it in docs/QUESTOES.md with this raw output, don't loosen the schema.` +
+                `\n\nObserved content: ${trimmedLine}\n\n` +
+                `zod errors: ${JSON.stringify(result.error.issues, null, 2)}`,
             );
           }
           totalUser += 1;
-        } else if (tipo === 'assistant') {
-          const resultado = esquemaEntradaAssistant.safeParse(entrada);
-          if (!resultado.success) {
+        } else if (type === 'assistant') {
+          const result = assistantEntrySchema.safeParse(entry);
+          if (!result.success) {
             throw new Error(
-              `esquemaEntradaAssistant rejeitou uma entrada "assistant" real em ${caminho}. A ` +
-                'realidade mudou — registre em docs/QUESTOES.md com esta saída bruta, não ' +
-                `afrouxe o schema.\n\nConteúdo observado: ${linhaAparada}\n\n` +
-                `Erros do zod: ${JSON.stringify(resultado.error.issues, null, 2)}`,
+              `assistantEntrySchema rejected a real "assistant" entry in ${path}. Reality ` +
+                "changed — log it in docs/QUESTOES.md with this raw output, don't loosen the " +
+                `schema.\n\nObserved content: ${trimmedLine}\n\n` +
+                `zod errors: ${JSON.stringify(result.error.issues, null, 2)}`,
             );
           }
           totalAssistant += 1;
         }
-        // Tipo fora de "user"/"assistant": ignorado de propósito, é exatamente o comportamento
-        // tolerante que se quer (docs/ARQUITETURA.md § transcricao/).
+        // Type outside "user"/"assistant": ignored on purpose, exactly the tolerant behavior
+        // wanted (docs/ARQUITETURA.md § transcricao/).
       }
     }
 
     expect(
       totalUser,
-      'Nenhuma entrada "user" real encontrada em nenhum transcript — não dá para confirmar o ' +
-        'schema contra a realidade.',
+      'No real "user" entry found in any transcript — can\'t confirm the schema against reality.',
     ).toBeGreaterThan(0);
     expect(
       totalAssistant,
-      'Nenhuma entrada "assistant" real encontrada em nenhum transcript — não dá para confirmar ' +
-        'o schema contra a realidade.',
+      'No real "assistant" entry found in any transcript — can\'t confirm the schema against ' +
+        'reality.',
     ).toBeGreaterThan(0);
   });
 });

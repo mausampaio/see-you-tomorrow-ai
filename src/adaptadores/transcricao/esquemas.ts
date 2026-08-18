@@ -1,27 +1,28 @@
 /**
- * Schemas zod para as linhas do transcript (`~/.claude/projects/<slug>/<sessionId>.jsonl`). Ver
- * docs/ESPECIFICACAO.md § "Como as sessões são descobertas" e docs/ARQUITETURA.md § transcricao/.
+ * zod schemas for transcript lines (`~/.claude/projects/<slug>/<sessionId>.jsonl`). See
+ * docs/ESPECIFICACAO.md § "Como as sessões são descobertas" and docs/ARQUITETURA.md § transcricao/.
  *
- * O JSONL não é API pública: o Claude Code adiciona tipos de entrada novos com o tempo. Por
- * isso o parser (S1-T4, fora do escopo desta tarefa) sniffa o campo `type` de cada linha e só
- * tenta validar contra um schema conhecido quando reconhece o tipo — tipo desconhecido é
- * ignorado, não é erro. `esquemasDeEntradasConhecidas` aqui documenta exaustivamente todo tipo
- * já observado nesta máquina, mas **não é usado para reprovar** um tipo fora da lista: essa
- * lista é referência para quem escrever o parser, não uma allowlist que o schema impõe.
+ * The JSONL isn't public API: Claude Code adds new entry types over time. That's why the parser
+ * (S1-T4, out of this task's scope) sniffs each line's `type` field and only tries to validate
+ * against a known schema when it recognizes the type — an unknown type is ignored, not an error.
+ * `KNOWN_ENTRY_TYPES` here exhaustively documents every type observed so far on this machine, but
+ * **it is not used to reject** a type outside the list: that list is a reference for whoever
+ * writes the parser, not an allowlist the schema enforces.
  *
- * Só `user` e `assistant` têm schema estrutural — são as duas únicas entradas que a spec diz que
- * o parser vai ler ("últimos prompts, arquivos tocados, última atividade"), e são as duas que o
- * contrato de docs/TESTES.md exige validar contra a realidade
- * (tests/contrato/transcript.teste.ts). Confirmado contra 1048 entradas `user` e 1760 `assistant`
- * reais, de todos os projetos desta máquina, sem um campo obrigatório faltando em nenhuma.
+ * Only `user` and `assistant` have a structural schema — they're the only two entries the spec
+ * says the parser will read ("last prompts, files touched, last activity"), and the only two
+ * docs/TESTES.md's contract requires validating against reality
+ * (tests/contrato/transcript.teste.ts). Confirmed against 1048 real `user` entries and 1760
+ * `assistant` entries, from every project on this machine, with no required field missing in any
+ * of them.
  */
 import { z } from 'zod';
 
 /**
- * Todo tipo de entrada de linha já observado no `.jsonl` real desta máquina (2.1.233). Meramente
- * documental — ver o aviso acima. Novo tipo aparecendo não é falha de contrato.
+ * Every entry-line type already observed in the real `.jsonl` on this machine (2.1.233). Purely
+ * documentational — see the warning above. A new type showing up is not a contract failure.
  */
-export const TIPOS_DE_ENTRADA_CONHECIDOS = [
+export const KNOWN_ENTRY_TYPES = [
   'queue-operation',
   'user',
   'assistant',
@@ -37,49 +38,49 @@ export const TIPOS_DE_ENTRADA_CONHECIDOS = [
 ] as const;
 
 /**
- * Um bloco de `message.content[]`. Só o `type` é validado — é só o que se precisa para
- * diferenciar texto de uso de ferramenta mais adiante; o resto do bloco varia por tipo e por
- * versão e passa despercebido pelo `z.object()` (descartado, não rejeitado).
+ * A block from `message.content[]`. Only `type` is validated — it's all that's needed to tell
+ * text apart from tool use further down; the rest of the block varies by type and by version and
+ * passes through `z.object()` unnoticed (dropped, not rejected).
  */
-const esquemaBlocoDeConteudo = z.object({
+const contentBlockSchema = z.object({
   type: z.string().min(1),
 });
 
 /**
- * `content` observado tanto como string simples (raro, ~3% das entradas) quanto como array de
- * blocos (a maioria). O parser precisa tratar as duas formas.
+ * `content` observed both as a plain string (rare, ~3% of entries) and as an array of blocks (the
+ * majority). The parser needs to handle both shapes.
  */
-const esquemaConteudoDaMensagem = z.union([z.string(), z.array(esquemaBlocoDeConteudo)]);
+const messageContentSchema = z.union([z.string(), z.array(contentBlockSchema)]);
 
-const esquemaMensagem = z.object({
+const messageSchema = z.object({
   role: z.string().min(1),
-  content: esquemaConteudoDaMensagem,
+  content: messageContentSchema,
 });
 
-/** Campos comuns às entradas `user` e `assistant`, confirmados presentes nas duas. */
-const esquemaBaseDeEntrada = z.object({
+/** Fields common to `user` and `assistant` entries, confirmed present in both. */
+const baseEntrySchema = z.object({
   uuid: z.uuid(),
   parentUuid: z.uuid().nullable(),
   isSidechain: z.boolean(),
   sessionId: z.uuid(),
   cwd: z.string().min(1),
   timestamp: z.iso.datetime(),
-  message: esquemaMensagem,
+  message: messageSchema,
 });
 
 /**
- * Entrada `type: "user"`. `promptId` é específico de `user` (a entrada `assistant` correspondente
- * tem `requestId` no lugar, não usado ainda) — por isso fica de fora do schema base.
+ * `type: "user"` entry. `promptId` is specific to `user` (the corresponding `assistant` entry has
+ * `requestId` instead, not used yet) — that's why it's left out of the base schema.
  */
-export const esquemaEntradaUser = esquemaBaseDeEntrada.extend({
+export const userEntrySchema = baseEntrySchema.extend({
   type: z.literal('user'),
 });
 
-export type EntradaUser = z.infer<typeof esquemaEntradaUser>;
+export type UserEntry = z.infer<typeof userEntrySchema>;
 
-/** Entrada `type: "assistant"`. */
-export const esquemaEntradaAssistant = esquemaBaseDeEntrada.extend({
+/** `type: "assistant"` entry. */
+export const assistantEntrySchema = baseEntrySchema.extend({
   type: z.literal('assistant'),
 });
 
-export type EntradaAssistant = z.infer<typeof esquemaEntradaAssistant>;
+export type AssistantEntry = z.infer<typeof assistantEntrySchema>;

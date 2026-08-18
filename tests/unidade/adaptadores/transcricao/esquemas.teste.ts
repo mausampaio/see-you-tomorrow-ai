@@ -1,24 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import {
-  esquemaEntradaAssistant,
-  esquemaEntradaUser,
-  TIPOS_DE_ENTRADA_CONHECIDOS,
+  assistantEntrySchema,
+  userEntrySchema,
+  KNOWN_ENTRY_TYPES,
 } from '../../../../src/adaptadores/transcricao/esquemas.js';
 
 /**
- * Testes de unidade dos schemas de transcrição (S0-T5). Fixtures sintéticas moldadas na
- * estrutura observada nos `.jsonl` reais desta máquina, mas com uuids e caminho genéricos — a
- * confirmação contra o arquivo real é papel de tests/contrato/transcript.teste.ts.
+ * Unit tests for the transcript schemas (S0-T5). Synthetic fixtures shaped after what's observed
+ * in this machine's real `.jsonl` files, but with generic uuids and path — confirming against
+ * the real file is tests/contrato/transcript.teste.ts's job.
  */
-describe('esquemaEntradaUser', () => {
-  const entradaValida = {
+describe('userEntrySchema', () => {
+  const validEntry = {
     parentUuid: null,
     isSidechain: false,
     promptId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
     type: 'user' as const,
     message: {
       role: 'user',
-      content: [{ type: 'text', text: 'Faça X' }],
+      content: [{ type: 'text', text: 'Do X' }],
     },
     uuid: '11111111-2222-4333-8444-555555555555',
     timestamp: '2026-08-16T20:41:11.000Z',
@@ -29,57 +29,57 @@ describe('esquemaEntradaUser', () => {
     version: '2.1.233',
   };
 
-  it('aceita uma entrada real com content em array e descarta campos não usados', () => {
-    const resultado = esquemaEntradaUser.parse(entradaValida);
+  it('accepts a real entry with content as an array and drops unused fields', () => {
+    const result = userEntrySchema.parse(validEntry);
 
-    expect(resultado.type).toBe('user');
-    expect(resultado.parentUuid).toBeNull();
-    expect(resultado).not.toHaveProperty('gitBranch');
-    expect(resultado).not.toHaveProperty('promptId');
+    expect(result.type).toBe('user');
+    expect(result.parentUuid).toBeNull();
+    expect(result).not.toHaveProperty('gitBranch');
+    expect(result).not.toHaveProperty('promptId');
   });
 
-  it('aceita content como string simples (forma observada com menos frequência)', () => {
-    const resultado = esquemaEntradaUser.parse({
-      ...entradaValida,
-      message: { role: 'user', content: 'texto simples' },
+  it('accepts content as a plain string (a form observed less frequently)', () => {
+    const result = userEntrySchema.parse({
+      ...validEntry,
+      message: { role: 'user', content: 'plain text' },
     });
 
-    expect(resultado.message.content).toBe('texto simples');
+    expect(result.message.content).toBe('plain text');
   });
 
-  it('aceita parentUuid não nulo, encadeando para outra entrada', () => {
-    const resultado = esquemaEntradaUser.parse({
-      ...entradaValida,
-      parentUuid: '99999999-8888-4777-8666-555555555555',
+  it('accepts a non-null parentUuid, chaining to another entry', () => {
+    const result = userEntrySchema.parse({
+      ...validEntry,
+      parentUuid: '88888888-8888-4888-8888-888888888888',
     });
 
-    expect(resultado.parentUuid).toBe('99999999-8888-4777-8666-555555555555');
+    expect(result.parentUuid).toBe('88888888-8888-4888-8888-888888888888');
   });
 
-  it('rejeita type diferente de "user"', () => {
-    const resultado = esquemaEntradaUser.safeParse({ ...entradaValida, type: 'assistant' });
+  it('rejects a type other than "user"', () => {
+    const result = userEntrySchema.safeParse({ ...validEntry, type: 'assistant' });
 
-    expect(resultado.success).toBe(false);
+    expect(result.success).toBe(false);
   });
 
-  it('rejeita uuid mal formado', () => {
-    const resultado = esquemaEntradaUser.safeParse({ ...entradaValida, uuid: 'nao-e-uuid' });
+  it('rejects a malformed uuid', () => {
+    const result = userEntrySchema.safeParse({ ...validEntry, uuid: 'not-a-uuid' });
 
-    expect(resultado.success).toBe(false);
+    expect(result.success).toBe(false);
   });
 
-  it('rejeita bloco de conteúdo sem "type"', () => {
-    const resultado = esquemaEntradaUser.safeParse({
-      ...entradaValida,
-      message: { role: 'user', content: [{ text: 'sem type' }] },
+  it('rejects a content block without "type"', () => {
+    const result = userEntrySchema.safeParse({
+      ...validEntry,
+      message: { role: 'user', content: [{ text: 'no type' }] },
     });
 
-    expect(resultado.success).toBe(false);
+    expect(result.success).toBe(false);
   });
 });
 
-describe('esquemaEntradaAssistant', () => {
-  const entradaValida = {
+describe('assistantEntrySchema', () => {
+  const validEntry = {
     parentUuid: '11111111-2222-4333-8444-555555555555',
     isSidechain: false,
     type: 'assistant' as const,
@@ -87,7 +87,7 @@ describe('esquemaEntradaAssistant', () => {
       role: 'assistant',
       content: [
         { type: 'thinking', thinking: '...' },
-        { type: 'text', text: 'resposta' },
+        { type: 'text', text: 'answer' },
         { type: 'tool_use', name: 'Read', input: {} },
       ],
       id: 'msg_123',
@@ -101,36 +101,36 @@ describe('esquemaEntradaAssistant', () => {
     effort: 'medium',
   };
 
-  it('aceita uma entrada assistant real, sem promptId, e descarta o que não é usado', () => {
-    const resultado = esquemaEntradaAssistant.parse(entradaValida);
+  it('accepts a real assistant entry, with no promptId, and drops what is unused', () => {
+    const result = assistantEntrySchema.parse(validEntry);
 
-    expect(resultado.type).toBe('assistant');
-    expect(resultado).not.toHaveProperty('requestId');
-    expect(resultado).not.toHaveProperty('effort');
+    expect(result.type).toBe('assistant');
+    expect(result).not.toHaveProperty('requestId');
+    expect(result).not.toHaveProperty('effort');
   });
 
-  it('rejeita entrada sem sessionId', () => {
-    const semSessionId: Record<string, unknown> = { ...entradaValida };
-    delete semSessionId['sessionId'];
-    const resultado = esquemaEntradaAssistant.safeParse(semSessionId);
+  it('rejects an entry without sessionId', () => {
+    const withoutSessionId: Record<string, unknown> = { ...validEntry };
+    delete withoutSessionId['sessionId'];
+    const result = assistantEntrySchema.safeParse(withoutSessionId);
 
-    expect(resultado.success).toBe(false);
+    expect(result.success).toBe(false);
   });
 
-  it('rejeita timestamp fora do formato ISO com milissegundos', () => {
-    const resultado = esquemaEntradaAssistant.safeParse({
-      ...entradaValida,
+  it('rejects a timestamp outside the ISO-with-milliseconds format', () => {
+    const result = assistantEntrySchema.safeParse({
+      ...validEntry,
       timestamp: '2026-08-16T20:41:12+00:00',
     });
 
-    expect(resultado.success).toBe(false);
+    expect(result.success).toBe(false);
   });
 });
 
-describe('TIPOS_DE_ENTRADA_CONHECIDOS', () => {
-  it('lista os doze tipos observados na máquina real, incluindo user e assistant', () => {
-    expect(TIPOS_DE_ENTRADA_CONHECIDOS).toHaveLength(12);
-    expect(TIPOS_DE_ENTRADA_CONHECIDOS).toContain('user');
-    expect(TIPOS_DE_ENTRADA_CONHECIDOS).toContain('assistant');
+describe('KNOWN_ENTRY_TYPES', () => {
+  it('lists the twelve types observed on the real machine, including user and assistant', () => {
+    expect(KNOWN_ENTRY_TYPES).toHaveLength(12);
+    expect(KNOWN_ENTRY_TYPES).toContain('user');
+    expect(KNOWN_ENTRY_TYPES).toContain('assistant');
   });
 });

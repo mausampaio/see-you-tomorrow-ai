@@ -1,54 +1,51 @@
 /**
- * Comparação pura de "assinatura da evidência" — o que a anti-duplicidade da elegibilidade usa
- * (D-026, `nucleo/elegibilidade.ts`).
+ * Pure comparison of "evidence signature" — what eligibility's anti-duplication uses (D-026,
+ * `nucleo/elegibilidade.ts`).
  */
 
 /**
- * Um token comparável por fonte de evidência (D-013: git, transcript, registro). `null` quando
- * aquela fonte não respondeu naquele momento. O formato de cada token (data ISO, sha de commit,
- * hash de estado) é decidido por quem monta a assinatura — fora do núcleo, porque depende de
- * fontes que ainda não existem aqui (git só chega em S2-T1) ou de I/O (mtime do transcript). Este
- * tipo só declara a forma que a comparação pura precisa: um mapa de nome de fonte para token.
+ * A comparable token per evidence source (D-013: git, transcript, registry). `null` when that
+ * source didn't answer at that moment. The shape of each token (ISO date, commit sha, state
+ * hash) is decided by whoever assembles the signature — outside the core, because it depends on
+ * sources that don't exist here yet (git only arrives in S2-T1) or on I/O (transcript mtime).
+ * This type only declares the shape the pure comparison needs: a map from source name to token.
  */
-export type AssinaturaDeEvidencia = Readonly<Record<string, string | null>>;
+export type EvidenceSignature = Readonly<Record<string, string | null>>;
 
 /**
- * Duas assinaturas representam a mesma evidência? Usada pela anti-duplicidade (D-026): uma
- * sessão só é "duplicada" quando **nenhuma** fonte mudou desde a última captura de hoje.
+ * Do two signatures represent the same evidence? Used by anti-duplication (D-026): a session is
+ * only "duplicate" when **no** source has changed since today's last capture.
  *
- * Regra por fonte, chave a chave, unindo as chaves presentes nas duas assinaturas:
- * - As duas ausentes (`null` nos dois lados) — essa fonte não decide nada; o julgamento passa às
- *   demais (mesmo princípio de D-025: ausência de dado não vira afirmação positiva — aqui
- *   aplicado por fonte, não à assinatura inteira).
- * - Um valor presente e o outro ausente, ou os dois presentes mas diferentes — a fonte mudou:
- *   a assinatura inteira já não é a mesma, sem precisar olhar as chaves restantes.
- * - As duas presentes e iguais — essa fonte confirma que não mudou.
+ * Rule per source, key by key, over the union of keys present in both signatures:
+ * - Both absent (`null` on both sides) — that source decides nothing; the judgment passes to the
+ *   others (same principle as D-025: absence of data doesn't become a positive claim — applied
+ *   here per source, not to the whole signature).
+ * - One value present and the other absent, or both present but different — the source changed:
+ *   the whole signature is already not the same, no need to look at the remaining keys.
+ * - Both present and equal — that source confirms nothing changed.
  *
- * **Resultado só é `true` com pelo menos uma fonte confirmando positivamente.** Se toda fonte
- * comparável está ausente nos dois lados (nada para comparar), o resultado é `false` — mesma
- * razão de D-025: nenhuma regra do domínio converte "não sei" em "sim, é igual".
+ * **Result is only `true` with at least one source positively confirming.** If every comparable
+ * source is absent on both sides (nothing to compare), the result is `false` — same reason as
+ * D-025: no domain rule converts "I don't know" into "yes, it's the same".
  */
-export function mesmaEvidencia(
-  anterior: AssinaturaDeEvidencia,
-  atual: AssinaturaDeEvidencia,
-): boolean {
-  const fontes = new Set([...Object.keys(anterior), ...Object.keys(atual)]);
-  let houveFonteQueConfirmou = false;
+export function sameEvidence(previous: EvidenceSignature, current: EvidenceSignature): boolean {
+  const sources = new Set([...Object.keys(previous), ...Object.keys(current)]);
+  let hasConfirmingSource = false;
 
-  for (const fonte of fontes) {
-    const valorAnterior = anterior[fonte] ?? null;
-    const valorAtual = atual[fonte] ?? null;
+  for (const source of sources) {
+    const previousValue = previous[source] ?? null;
+    const currentValue = current[source] ?? null;
 
-    if (valorAnterior === null && valorAtual === null) {
+    if (previousValue === null && currentValue === null) {
       continue;
     }
 
-    if (valorAnterior !== valorAtual) {
+    if (previousValue !== currentValue) {
       return false;
     }
 
-    houveFonteQueConfirmou = true;
+    hasConfirmingSource = true;
   }
 
-  return houveFonteQueConfirmou;
+  return hasConfirmingSource;
 }
