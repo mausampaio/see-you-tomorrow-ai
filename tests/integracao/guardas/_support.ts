@@ -326,11 +326,7 @@ export function guardSubdirectory(guardName: string): string {
  * `guardFixturePath('eslint', 'core', 'control.ts')` →
  * `'src/core/_guarda-eslint/control.ts'`.
  */
-export function guardFixturePath(
-  guardName: string,
-  layerDir: string,
-  fileName: string,
-): string {
+export function guardFixturePath(guardName: string, layerDir: string, fileName: string): string {
   return path.join('src', layerDir, guardSubdirectory(guardName), fileName);
 }
 

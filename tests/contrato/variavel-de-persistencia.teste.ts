@@ -20,7 +20,7 @@ describe(`contrato: CLAUDE_CODE_FORCE_SESSION_PERSISTENCE (claude ${version})`, 
       found,
       `The binary at ${binaryPath} (claude ${version}) doesn't contain the literal text ` +
         '"CLAUDE_CODE_FORCE_SESSION_PERSISTENCE". Either the variable changed name/mechanism ' +
-        'between versions, or this binary is a thin shim that doesn\'t contain the real bundle ' +
+        "between versions, or this binary is a thin shim that doesn't contain the real bundle " +
         '(see the comment in tests/contrato/_apoio.ts). Log it in docs/QUESTOES.md with the ' +
         'path and the result observed before changing D-017/D-018.',
     ).toBe(true);

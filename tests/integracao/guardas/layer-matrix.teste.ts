@@ -55,7 +55,7 @@ describe('guard: the 20 ordered pairs of the docs/ARQUITETURA.md matrix have com
     cleanUpGuardResidue(GUARD_NAME);
   });
 
-  it('the declared layer list matches src/\'s real directories (otherwise the matrix is stale)', () => {
+  it("the declared layer list matches src/'s real directories (otherwise the matrix is stale)", () => {
     // S1-T0, third review round: dependency-cruiser.teste.ts creates and deletes
     // src/application-legacy/ on its own (see SYNTHETIC_TEST_LAYER_NAME in _support.ts) to test
     // dependency-cruiser's segment anchoring. If this listing, running in parallel, catches

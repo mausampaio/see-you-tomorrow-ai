@@ -1,125 +1,126 @@
 # See You Tomorrow AI
 
-O dia acaba com várias sessões de IA em andamento, em projetos diferentes. No dia seguinte, o
-caro não é retomar o trabalho — é reconstruir o contexto de cada uma.
+The day ends with several AI sessions in progress, across different projects. The next day, the
+expensive part isn't resuming the work — it's rebuilding the context for each one.
 
-**See You Tomorrow AI** descobre as sessões de Claude Code da sua máquina, captura o estado de
-cada uma no fim do dia, gera um plano para amanhã, e no dia seguinte retoma de onde parou.
+**See You Tomorrow AI** discovers the Claude Code sessions on your machine, captures the state of
+each one at the end of the day, generates a plan for tomorrow, and resumes right where you left
+off the next day.
 
-O comando se chama **`seeya`**.
+The command is called **`seeya`**.
 
 ```bash
-seeya sessoes        # o que está aberto agora
-seeya encerrar-dia   # captura tudo e planeja amanhã
-seeya iniciar-dia    # retoma de onde parou
+seeya sessions    # what's open right now
+seeya end-day     # captures everything and plans tomorrow
+seeya start-day   # resumes where you left off
 ```
 
-> **Estado: em desenvolvimento inicial (Sprint 0 — fundação).** Nenhum comando de negócio existe
-> ainda; hoje só há o esqueleto do projeto e `seeya --version`. Os comandos acima são o alvo, não
-> o presente. Acompanhe em [`docs/PLANO-DE-ENTREGA.md`](docs/PLANO-DE-ENTREGA.md).
+> **Status: early development (Sprint 0 — foundation).** No business command exists yet; today
+> there's only the project scaffold and `seeya --version`. The commands above are the target, not
+> the present. Follow along in [`docs/PLANO-DE-ENTREGA.md`](docs/PLANO-DE-ENTREGA.md).
 
-## Como funciona
+## How it works
 
-O Claude Code registra as sessões vivas em `~/.claude/sessions/` e guarda o transcript de cada
-uma em `~/.claude/projects/`. O `seeya` lê essas duas fontes — e o estado do git de cada projeto,
-worktrees incluídos — para montar um handoff por sessão: o que estava sendo feito, o que ficou
-pendente e o que fazer amanhã.
+Claude Code registers live sessions in `~/.claude/sessions/` and keeps each one's transcript in
+`~/.claude/projects/`. `seeya` reads both sources — plus each project's git state, worktrees
+included — to assemble a handoff per session: what was being worked on, what's left pending, and
+what to do tomorrow.
 
-Ele **nunca fala com a sessão viva**. Não existe canal para injetar comando numa sessão
-interativa em execução, então a captura acontece por fora, num processo headless que enxerga a
-conversa inteira. Isso funciona mesmo para sessões que já morreram, e não gasta o contexto da
-sessão que está aberta. O porquê está em [`docs/DECISOES.md`](docs/DECISOES.md), D-001.
+It **never talks to the live session**. There's no channel to inject a command into a running
+interactive session, so the capture happens from the outside, in a headless process that sees the
+whole conversation. This works even for sessions that have already died, and it doesn't spend the
+open session's context. The reasoning is in [`docs/DECISOES.md`](docs/DECISOES.md), D-001.
 
-Tudo que o `seeya` escreve fica em `~/.seeya/`. Ele não escreve dentro dos seus
-repositórios nem dentro de `~/.claude/`.
+Everything `seeya` writes lives in `~/.seeya/`. It never writes inside your repositories nor
+inside `~/.claude/`.
 
-## Requisitos
+## Requirements
 
 - Node.js >= 22
-- Claude Code instalado e autenticado
+- Claude Code installed and authenticated
 
-## Desenvolvimento
+## Development
 
 ```bash
 npm install
-npm run verificar   # o portão: tipos + lint + camadas + build + cobertura
+npm run verificar   # the gate: types + lint + layers + build + coverage
 ```
 
-Os demais comandos:
+The other commands:
 
 ```bash
-npm run build          # compila TypeScript para dist/
-npm test               # unidade + integração
+npm run build          # compiles TypeScript to dist/
+npm test               # unit + integration
 npm run test:e2e       # end-to-end
-npm run test:contrato  # contra o ~/.claude real; não roda no CI padrão
+npm run test:contrato  # against the real ~/.claude; doesn't run in standard CI
 npm run lint           # eslint
-npm run dependencias   # dependency-cruiser: valida as fronteiras de camada
-npm run cobertura      # testes com cobertura e limites por diretório
-npm run verificar:linux  # o portão dentro de um container Linux (node:22-bookworm)
+npm run dependencias   # dependency-cruiser: validates layer boundaries
+npm run cobertura      # tests with coverage and per-directory thresholds
+npm run verificar:linux  # the gate inside a Linux container (node:22-bookworm)
 ```
 
-### Pré-voo em Linux via Docker
+### Linux pre-flight via Docker
 
-O CI roda em três SOs (ubuntu, windows, macos). Um bug real de Linux já escapou para depois
-do push porque não havia como reproduzir o job Linux localmente numa máquina Windows. Rode:
+CI runs on three OSes (ubuntu, windows, macos). A real Linux bug once escaped until after the
+push because there was no way to reproduce the Linux job locally on a Windows machine. Run:
 
 ```bash
 npm run verificar:linux
 ```
 
-Isso executa `npm ci && npm run verificar` dentro de `node:22-bookworm`, reproduzindo o job
-Linux do CI. O `node_modules` do host **nunca** é montado no container — `vitest`, `esbuild`
-e `rollup` trazem binários nativos por plataforma, e um `node_modules` instalado no Windows
-quebra na hora dentro do Linux. Em vez disso, o script usa um volume Docker nomeado, isolado
-do host, populado por `npm ci` rodando dentro do container. A primeira execução reinstala
-tudo; as seguintes reaproveitam o volume e ficam rápidas.
+This runs `npm ci && npm run verificar` inside `node:22-bookworm`, reproducing CI's Linux job.
+The host's `node_modules` is **never** mounted into the container — `vitest`, `esbuild` and
+`rollup` ship platform-native binaries, and a `node_modules` installed on Windows breaks
+instantly inside Linux. Instead, the script uses a named Docker volume, isolated from the host,
+populated by `npm ci` running inside the container. The first run reinstalls everything;
+subsequent ones reuse the volume and are fast.
 
-O nome do volume é `seeya-node-modules-<hash>`, onde `<hash>` deriva do caminho absoluto do
-repositório — **um volume por repositório/worktree, nunca um só global**. Foi provado que um
-volume único quebra sob concorrência: dois `npm ci` simultâneos (dois worktrees rodando o
-pré-voo ao mesmo tempo — cenário comum aqui) escrevendo no mesmo volume fazem um deles perder
-a corrida com `ENOENT: Cannot cd into '/app/node_modules/...'`. É falso-vermelho, não
-falso-verde, e o volume não fica corrompido — mas é um vermelho sem relação com o código do
-dev. O hash por caminho elimina a corrida sem precisar de lock: cada worktree tem o seu volume,
-e o repositório principal continua reaproveitando o mesmo entre execuções (mesmo caminho toda
-vez), preservando o ganho de cache.
+The volume name is `seeya-node-modules-<hash>`, where `<hash>` derives from the repository's
+absolute path — **one volume per repository/worktree, never a single global one**. It was proven
+that a single volume breaks under concurrency: two simultaneous `npm ci` runs (two worktrees
+running the pre-flight at the same time — a common scenario here) writing to the same volume make
+one of them lose the race with `ENOENT: Cannot cd into '/app/node_modules/...'`. It's a
+false-negative, not a false-positive, and the volume doesn't get corrupted — but it's a failure
+unrelated to the dev's code. The path-based hash eliminates the race without needing a lock: each
+worktree has its own volume, and the main repository keeps reusing the same one across runs (same
+path every time), preserving the cache gain.
 
-Custo: um volume órfão fica para trás quando um worktree é removido. Para limpar:
+Cost: an orphaned volume is left behind when a worktree is removed. To clean up:
 
 ```bash
-docker volume ls --filter name=seeya-node-modules-   # lista os volumes do projeto
-docker volume rm seeya-node-modules-<hash>            # remove o de um worktree específico
+docker volume ls --filter name=seeya-node-modules-   # lists the project's volumes
+docker volume rm seeya-node-modules-<hash>            # removes a specific worktree's
 ```
 
-Requer o Docker Desktop instalado e em execução; o script detecta se o daemon não responde e
-avisa em vez de falhar com um erro críptico.
+Requires Docker Desktop installed and running; the script detects when the daemon doesn't
+respond and warns instead of failing with a cryptic error.
 
-**Limite honesto: não existe cobertura de macOS aqui.** Não existe container de macOS — o
-kernel XNU e a licença da Apple exigem hardware Apple. Este comando cobre só o job Linux do
-CI; o CI nos 3 SOs e a bateria manual do S5-T4 continuam obrigatórios.
+**Honest limit: there's no macOS coverage here.** There's no macOS container — the XNU kernel and
+Apple's license require Apple hardware. This command only covers CI's Linux job; CI on all 3 OSes
+and the manual S5-T4 pass remain mandatory.
 
-### Antes de escrever código
+### Before writing code
 
-Leia [`AGENTS.md`](AGENTS.md). É o contrato de trabalho do projeto: as fronteiras de camada, o
-estilo de código, o que nunca fazer, e quando parar e perguntar em vez de decidir sozinho. Vale
-tanto para agente quanto para humano. `CLAUDE.md` só aponta para ele.
+Read [`AGENTS.md`](AGENTS.md). It's the project's work contract: layer boundaries, code style,
+what never to do, and when to stop and ask instead of deciding alone. It applies to agents and
+humans alike. `CLAUDE.md` just points to it.
 
-## Documentação
+## Documentation
 
-| Arquivo | O que é |
-|---|---|
-| [`AGENTS.md`](AGENTS.md) | Contrato de trabalho, regras inegociáveis e estilo de código |
-| [`docs/DECISOES.md`](docs/DECISOES.md) | Decisões travadas, numeradas e com o porquê |
-| [`docs/ESPECIFICACAO.md`](docs/ESPECIFICACAO.md) | Comportamento de cada comando |
-| [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) | Camadas e a matriz de dependências permitidas |
-| [`docs/TESTES.md`](docs/TESTES.md) | A pirâmide de testes e a faixa de contrato |
-| [`docs/PLANO-DE-ENTREGA.md`](docs/PLANO-DE-ENTREGA.md) | Roteiro por sprint, tarefa a tarefa |
-| [`docs/FORA-DE-ESCOPO.md`](docs/FORA-DE-ESCOPO.md) | O que a v1 deliberadamente não faz |
-| [`docs/spikes/`](docs/spikes/) | Experimentos, com a saída bruta e o veredito |
+| File                                                   | What it is                                         |
+| ------------------------------------------------------ | -------------------------------------------------- |
+| [`AGENTS.md`](AGENTS.md)                               | Work contract, non-negotiable rules and code style |
+| [`docs/DECISOES.md`](docs/DECISOES.md)                 | Locked decisions, numbered and with the reasoning  |
+| [`docs/ESPECIFICACAO.md`](docs/ESPECIFICACAO.md)       | Behavior of each command                           |
+| [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md)           | Layers and the allowed-dependency matrix           |
+| [`docs/TESTES.md`](docs/TESTES.md)                     | The test pyramid and the contract track            |
+| [`docs/PLANO-DE-ENTREGA.md`](docs/PLANO-DE-ENTREGA.md) | Sprint-by-sprint, task-by-task roadmap             |
+| [`docs/FORA-DE-ESCOPO.md`](docs/FORA-DE-ESCOPO.md)     | What v1 deliberately doesn't do                    |
+| [`docs/spikes/`](docs/spikes/)                         | Experiments, with raw output and the verdict       |
 
-Este projeto depende de estruturas internas e não documentadas do Claude Code. Quando elas
-mudarem, a suíte de contrato é o que vai avisar — ver [`docs/TESTES.md`](docs/TESTES.md).
+This project depends on internal, undocumented Claude Code structures. When they change, the
+contract suite is what will warn us — see [`docs/TESTES.md`](docs/TESTES.md).
 
-## Licença
+## License
 
 MIT

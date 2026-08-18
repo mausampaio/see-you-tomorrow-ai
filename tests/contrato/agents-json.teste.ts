@@ -47,7 +47,7 @@ describe(`contrato: claude agents --json (claude ${version})`, () => {
     expect(
       rejected,
       'agentsJsonItemSchema rejected item(s) from the real output of `claude agents --json`. ' +
-        'Reality changed — log it in docs/QUESTOES.md with this raw output, don\'t loosen the ' +
+        "Reality changed — log it in docs/QUESTOES.md with this raw output, don't loosen the " +
         `schema.\n\nRejected: ${JSON.stringify(rejected, null, 2)}`,
     ).toEqual([]);
 
@@ -55,7 +55,7 @@ describe(`contrato: claude agents --json (claude ${version})`, () => {
     // no open session to confirm the items have pid/sessionId/cwd.
     expect(
       accepted.length,
-      'No active session returned by `claude agents --json` — can\'t confirm the items have ' +
+      "No active session returned by `claude agents --json` — can't confirm the items have " +
         'pid/sessionId/cwd. Run the contract suite with at least one session open.',
     ).toBeGreaterThan(0);
   });

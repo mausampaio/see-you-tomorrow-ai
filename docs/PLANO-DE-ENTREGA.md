@@ -154,7 +154,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* existe um teste que **não compila** se alguém tentar passar a forma sem PID para a
       função de encerramento — ou, se um teste de compilação for caro demais, a função de
       encerramento aceita exclusivamente o tipo com `pid` garantido e isso está exercitado.
-- [ ] **S1-T0d — Migrar o código para inglês (D-028).** Vem **antes do S1-T2**, senão ele escreve
+- [~] **S1-T0d — Migrar o código para inglês (D-028).** Vem **antes do S1-T2**, senão ele escreve
       código novo em português que teria de ser migrado logo depois.
       Escopo: identificadores, comentários de código, README, comandos e saída do CLI. `docs/`
       **não** muda — continua em português, e é por isso que o glossário existe.

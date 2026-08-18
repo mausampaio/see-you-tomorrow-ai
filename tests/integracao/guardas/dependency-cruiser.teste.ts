@@ -117,7 +117,9 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
     'rejects adapters/ importing application/',
     () => {
       const filePath = fixture('adapters/clock', 'violation-test-application.ts');
-      created.push(writeTempFile(filePath, "import '../../../application/index.js';\nexport {};\n"));
+      created.push(
+        writeTempFile(filePath, "import '../../../application/index.js';\nexport {};\n"),
+      );
 
       const result = runDependencyCruiser([filePath]);
       expect(result.jsonValid, result.raw).toBe(true);

@@ -16,18 +16,18 @@ describe('sameEvidence', () => {
 
   it('an absent source (null) on both sides decides nothing — passes to the rest (D-025/D-026)', () => {
     // transcript absent in both captures; git is the only source with a value and it's equal in both.
-    expect(sameEvidence({ transcript: null, git: 'sha-1' }, { transcript: null, git: 'sha-1' })).toBe(
-      true,
-    );
+    expect(
+      sameEvidence({ transcript: null, git: 'sha-1' }, { transcript: null, git: 'sha-1' }),
+    ).toBe(true);
   });
 
   it(
     'two captures without a transcript, with git changed between them, are NOT the same evidence ' +
       '(D-026 — the autonomous execution agent case)',
     () => {
-      expect(sameEvidence({ transcript: null, git: 'sha-1' }, { transcript: null, git: 'sha-2' })).toBe(
-        false,
-      );
+      expect(
+        sameEvidence({ transcript: null, git: 'sha-1' }, { transcript: null, git: 'sha-2' }),
+      ).toBe(false);
     },
   );
 

@@ -1,7 +1,7 @@
 {
   "name": "see-you-tomorrow-ai",
   "version": "0.1.0",
-  "description": "Descobre sessoes de IA na maquina, captura o estado no fim do dia e retoma no dia seguinte.",
+  "description": "Discovers AI sessions on the machine, captures their state at the end of the day, and resumes them the next day.",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -55,7 +55,7 @@
     "claude-code",
     "cli",
     "handoff",
-    "produtividade",
-    "ia"
+    "productivity",
+    "ai"
   ]
 }

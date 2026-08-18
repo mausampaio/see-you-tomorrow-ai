@@ -1,9 +1,9 @@
 /**
- * Config do lint-staged (pre-commit, ver .husky/pre-commit e S0-T2 em
- * docs/PLANO-DE-ENTREGA.md). Arquivo `.js` separado porque a checagem de tipos não pode ser
- * restrita aos arquivos alterados — o TypeScript precisa do programa inteiro para resolver tipos
- * entre módulos — então ela é uma função que ignora a lista de arquivos e roda `tsc` no projeto
- * todo sempre que algum `.ts` estiver no commit.
+ * lint-staged config (pre-commit, see .husky/pre-commit and S0-T2 in
+ * docs/PLANO-DE-ENTREGA.md). Separate `.js` file because type-checking can't be restricted to
+ * the changed files — TypeScript needs the whole program to resolve types across modules — so
+ * it's a function that ignores the file list and runs `tsc` on the whole project whenever any
+ * `.ts` is in the commit.
  */
 export default {
   '*.ts': ['eslint --fix'],

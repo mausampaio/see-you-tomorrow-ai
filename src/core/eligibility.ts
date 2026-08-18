@@ -14,11 +14,7 @@ import { sameEvidence, type EvidenceSignature } from './evidence.js';
  * "edge combinations" (more than one condition failing at the same time) to be covered.
  */
 export type IneligibilityReason =
-  | 'noEvidence'
-  | 'noRecentActivity'
-  | 'ownSeeyaFork'
-  | 'ignoredCwd'
-  | 'duplicateToday';
+  'noEvidence' | 'noRecentActivity' | 'ownSeeyaFork' | 'ignoredCwd' | 'duplicateToday';
 
 /**
  * What's known about a capture already made today for this session, just enough to decide
