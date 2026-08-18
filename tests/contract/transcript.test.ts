@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { assistantEntrySchema, userEntrySchema } from '../../src/adapters/transcript/schemas.js';
-import { getClaudeCodeVersion, realClaudeRoot } from './_apoio.js';
+import { getClaudeCodeVersion, realClaudeRoot } from './_support.js';
 
 const version = getClaudeCodeVersion();
 
@@ -31,7 +31,7 @@ function listRealTranscripts(): string[] {
  * docs/TESTES.md § Contrato, item 2: "The real `.jsonl` has `user` and `assistant` entries with
  * the fields the parser uses." Doesn't run in standard CI — only via `npm run test:contrato`.
  */
-describe(`contrato: real transcript .jsonl (claude ${version})`, () => {
+describe(`contract: real transcript .jsonl (claude ${version})`, () => {
   it('finds and validates real user and assistant entries in at least one transcript', () => {
     const transcripts = listRealTranscripts();
 

@@ -8,7 +8,7 @@ import {
 /**
  * Unit tests for the transcript schemas (S0-T5). Synthetic fixtures shaped after what's observed
  * in this machine's real `.jsonl` files, but with generic uuids and path — confirming against
- * the real file is tests/contrato/transcript.teste.ts's job.
+ * the real file is tests/contract/transcript.test.ts's job.
  */
 describe('userEntrySchema', () => {
   const validEntry = {

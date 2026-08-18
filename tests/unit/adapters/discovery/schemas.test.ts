@@ -6,7 +6,7 @@ import {
 
 /**
  * Unit tests for the discovery schemas (S0-T5). Synthetic fixtures, not this machine's real
- * files — confirming against reality is tests/contrato/'s job, not this suite's (which needs to
+ * files — confirming against reality is tests/contract/'s job, not this suite's (which needs to
  * run without touching `~/.claude`, per docs/TESTES.md).
  */
 describe('sessionRecordSchema', () => {

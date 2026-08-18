@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { validateAgentsJsonOutput } from '../../src/adapters/discovery/schemas.js';
-import { runClaude, getClaudeCodeVersion } from './_apoio.js';
+import { runClaude, getClaudeCodeVersion } from './_support.js';
 
 const version = getClaudeCodeVersion();
 
@@ -21,7 +21,7 @@ const version = getClaudeCodeVersion();
  * `accepted` greater than zero: any item the schema doesn't recognize fails the test, with the
  * item's raw JSON in the message.
  */
-describe(`contrato: claude agents --json (claude ${version})`, () => {
+describe(`contract: claude agents --json (claude ${version})`, () => {
   it('returns only sessions the schema recognizes — none may be silently discarded', () => {
     const result = runClaude(['agents', '--json']);
 

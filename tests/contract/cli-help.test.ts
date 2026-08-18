@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { runClaude, getClaudeCodeVersion } from './_apoio.js';
+import { runClaude, getClaudeCodeVersion } from './_support.js';
 
 const version = getClaudeCodeVersion();
 const helpOutput = runClaude(['--help']).output;
@@ -12,7 +12,7 @@ const helpOutput = runClaude(['--help']).output;
  * capture tames the output. `claude --help` is a local command, it doesn't touch the network.
  * Doesn't run in standard CI — only via `npm run test:contrato`.
  */
-describe(`contrato: claude --help (claude ${version})`, () => {
+describe(`contract: claude --help (claude ${version})`, () => {
   const flagsRequiredByTheProduct = [
     '--resume',
     '--fork-session',

@@ -32,8 +32,8 @@ function fixture(layerDir: string, fileName: string): string {
  * violation stays permanently in the repo.
  *
  * S1-T0: each test's fixture lives in `src/<layer>/_guarda-dependency-cruiser/`, a subdirectory
- * reserved for THIS test file (never shared with layer-matrix.teste.ts or
- * eslint-restrictions.teste.ts). And, even more importantly: each test tells dependency-cruiser to
+ * reserved for THIS test file (never shared with layer-matrix.test.ts or
+ * eslint-restrictions.test.ts). And, even more importantly: each test tells dependency-cruiser to
  * analyze ONLY its own fixture (`runDependencyCruiser([path])`), not all of `src/` —
  * dependency-cruiser resolves and follows imports from there, so the result only speaks to what
  * the test wrote, never to what another test file is doing in parallel in another layer. The only
@@ -45,7 +45,7 @@ function fixture(layerDir: string, fileName: string): string {
  * without them, a rule could later be tightened too much and break the composition root without
  * anyone noticing, same reasoning as D-019's allowed case.
  *
- * See also layer-matrix.teste.ts: the "guard of the guard" that scans the matrix's 20
+ * See also layer-matrix.test.ts: the "guard of the guard" that scans the matrix's 20
  * ordered pairs from a single data structure, instead of relying only on these manual tests.
  */
 describe('guard: dependency-cruiser rejects a layer violation', () => {

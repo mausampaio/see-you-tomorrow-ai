@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { sessionRecordSchema } from '../../src/adapters/discovery/schemas.js';
-import { getClaudeCodeVersion, realClaudeRoot } from './_apoio.js';
+import { getClaudeCodeVersion, realClaudeRoot } from './_support.js';
 
 const version = getClaudeCodeVersion();
 
@@ -10,7 +10,7 @@ const version = getClaudeCodeVersion();
  * docs/TESTES.md § Contrato, item 1: "The zod schema for `~/.claude/sessions/*.json` validates
  * this machine's real files." Doesn't run in standard CI — only via `npm run test:contrato`.
  */
-describe(`contrato: ~/.claude/sessions/*.json (claude ${version})`, () => {
+describe(`contract: ~/.claude/sessions/*.json (claude ${version})`, () => {
   it('validates every real session-record file on this machine', () => {
     const sessionsFolder = join(realClaudeRoot(), 'sessions');
     const files = readdirSync(sessionsFolder).filter((name) => name.endsWith('.json'));

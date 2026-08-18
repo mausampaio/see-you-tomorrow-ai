@@ -33,7 +33,7 @@ function fixture(layerDir: string, fileName: string): string {
  * eslint.
  *
  * S1-T0: each fixture lives in `src/<layer>/_guarda-eslint/`, a subdirectory reserved for THIS
- * test file — never shared with dependency-cruiser.teste.ts or layer-matrix.teste.ts.
+ * test file — never shared with dependency-cruiser.test.ts or layer-matrix.test.ts.
  * `runEslint` is already given the fixture's exact path (never scans the whole tree), so eslint
  * itself never "sees" another test file's fixture; the real cause of the failure under
  * parallelism was `limparResiduosDeTestesDeGuarda`, which scanned all of src/ by `_` prefix in

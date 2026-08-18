@@ -1,6 +1,6 @@
 /**
  * Single source of truth for the layer matrix in docs/ARQUITETURA.md — 5 layers, 20 ordered
- * pairs, 12 forbidden and 8 allowed (D-020, S0-T6). `layer-matrix.teste.ts` is entirely
+ * pairs, 12 forbidden and 8 allowed (D-020, S0-T6). `layer-matrix.test.ts` is entirely
  * driven by this structure: none of the 20 pairs is a hand-written `it(...)`.
  *
  * This is a second source of truth, independent of `.dependency-cruiser.cjs` — on purpose. The
@@ -8,7 +8,7 @@
  * table; if this file just repeated `.dependency-cruiser.cjs`'s rules, an error made in both
  * places at once would slip through.
  *
- * Not a test file (doesn't end in `.teste.ts`), just the data structure + pure functions that
+ * Not a test file (doesn't end in `.test.ts`), just the data structure + pure functions that
  * derive the pairs from it.
  */
 
@@ -28,7 +28,7 @@ export interface Layer {
 
 /**
  * The 5 layers from docs/ARQUITETURA.md. If a new directory shows up in `src/` without entering
- * here (or vice versa), `layer-matrix.teste.ts` fails before it even scans the pairs.
+ * here (or vice versa), `layer-matrix.test.ts` fails before it even scans the pairs.
  */
 export const LAYERS: readonly Layer[] = [
   { name: 'core', fixtureDir: 'core', targetDir: 'core' },
@@ -41,7 +41,7 @@ export const LAYERS: readonly Layer[] = [
 /**
  * ALLOWED pairs of the "From → To" matrix in docs/ARQUITETURA.md, as `"from->to"`. Every pair
  * between two distinct layers not listed here is forbidden. 8 entries — matches the doc table's
- * "8 allowed" (see the sanity test in layer-matrix.teste.ts).
+ * "8 allowed" (see the sanity test in layer-matrix.test.ts).
  */
 const ALLOWED_PAIRS: ReadonlySet<string> = new Set([
   'adapters->core',

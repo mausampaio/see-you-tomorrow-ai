@@ -34,7 +34,7 @@ const GUARD_NAME = 'matriz-de-camadas';
  *    overly tight rule (should accept and doesn't) are equally a bug here.
  *
  * S1-T0: each fixture lives in `src/<layer>/_guarda-matriz-de-camadas/`, a subdirectory reserved
- * for THIS file (never shared with dependency-cruiser.teste.ts), and dependency-cruiser is called
+ * for THIS file (never shared with dependency-cruiser.test.ts), and dependency-cruiser is called
  * only with THAT fixture as input (`runDependencyCruiser([fixturePath])`), not all of `src/` — the
  * result only speaks to what this test wrote, never to what another test file is doing in
  * parallel in another layer. See `_support.ts` for the detail.
@@ -56,7 +56,7 @@ describe('guard: the 20 ordered pairs of the docs/ARQUITETURA.md matrix have com
   });
 
   it("the declared layer list matches src/'s real directories (otherwise the matrix is stale)", () => {
-    // S1-T0, third review round: dependency-cruiser.teste.ts creates and deletes
+    // S1-T0, third review round: dependency-cruiser.test.ts creates and deletes
     // src/application-legacy/ on its own (see SYNTHETIC_TEST_LAYER_NAME in _support.ts) to test
     // dependency-cruiser's segment anchoring. If this listing, running in parallel, catches
     // that directory mid-flight, the failure would point at the WRONG place ("the matrix is

@@ -13,7 +13,7 @@ import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-/** This machine's real `~/.claude` root. Only used inside tests/contrato/. */
+/** This machine's real `~/.claude` root. Only used inside tests/contract/. */
 export function realClaudeRoot(): string {
   return join(homedir(), '.claude');
 }
@@ -58,7 +58,7 @@ export function runClaude(args: readonly string[]): {
  * version a specific failure came from, or when running with `--reporter=verbose`. **This alone
  * does not guarantee visibility on the happy path**: vitest's default reporter doesn't print test
  * names when everything passes (measured by the S0-T5 review — that's what this comment used to
- * claim, incorrectly). The real guarantee comes from `tests/contrato/_versao-global-setup.ts`,
+ * claim, incorrectly). The real guarantee comes from `tests/contract/_version-global-setup.ts`,
  * which writes the version straight to stdout before the suite runs, outside any reporter's
  * control.
  */
@@ -114,7 +114,7 @@ export function locateClaudeBinary(): string {
  * install is a thin shim (e.g. npm's `.cmd` pointing to a separate `.js`) whose real bundle lives
  * in another file. That's why the test that uses this reports the raw output instead of deciding
  * on its own what to do when it finds nothing — see
- * tests/contrato/variavel-de-persistencia.teste.ts.
+ * tests/contract/persistence-variable.test.ts.
  */
 export function binaryContainsText(binaryPath: string, searchedText: string): boolean {
   const bytes = readFileSync(binaryPath);

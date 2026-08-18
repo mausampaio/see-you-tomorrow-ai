@@ -7,7 +7,7 @@ import { defineConfig } from 'vitest/config';
  */
 export default defineConfig({
   test: {
-    include: ['sut.teste.ts'],
+    include: ['sut.test.ts'],
     coverage: {
       provider: 'v8',
       include: ['sut.ts'],

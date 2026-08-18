@@ -4,8 +4,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
- * Common support for tests/integracao/guardas/*.teste.ts. Not a test file itself (doesn't end in
- * `.teste.ts`), just a utility imported by them.
+ * Common support for tests/integration/guards/*.test.ts. Not a test file itself (doesn't end in
+ * `.test.ts`), just a utility imported by them.
  *
  * Every guard is invoked as a real child process — never by calling the tool's API in-process —
  * because what this test set proves is that the command that runs in `npm run verificar` and in
@@ -154,7 +154,7 @@ function isErrorWithCode(error: unknown, code: string): boolean {
  * directly, without tolerating this, and the PO reproduced the suite (not the test — the SUITE)
  * crashing with `ENOENT: ... scandir`. The TOCTOU hadn't been eliminated from dependency-cruiser:
  * it had been MOVED one level up, to this scan. E.g. the test "doesn't reject
- * src/application-legacy/ by mistake" (dependency-cruiser.teste.ts) creates `src/application-legacy/`
+ * src/application-legacy/ by mistake" (dependency-cruiser.test.ts) creates `src/application-legacy/`
  * and deletes the whole directory in `finally` — if this scan, running in parallel, lists `src/`
  * and sees `application-legacy` in time, but only gets to read its CONTENTS after that `finally` has
  * already run, the recursive `readdirSync` in here blows up.
@@ -287,22 +287,22 @@ export function deleteTempFile(absolutePath: string): void {
 }
 
 /**
- * Name of the synthetic top-level `src/` directory that `dependency-cruiser.teste.ts` creates and
+ * Name of the synthetic top-level `src/` directory that `dependency-cruiser.test.ts` creates and
  * deletes on its own to prove the segment anchoring of D-020/S0-T6 ("doesn't reject
  * src/application-legacy/ by mistake"). Shared here (S1-T0, third review round) so that
- * `layer-matrix.teste.ts` — which lists `src/`'s top-level directories and compares them
+ * `layer-matrix.test.ts` — which lists `src/`'s top-level directories and compares them
  * against the declared layer matrix — knows to filter out EXACTLY this name before comparing,
  * instead of risking a (rare, but real) failure pointing at the wrong place: "the matrix is
  * outdated" when really it's just another test file's fixture, in flight.
  *
- * Why the filter on layer-matrix.teste.ts's side has to be an EXACT name, never a prefix or
+ * Why the filter on layer-matrix.test.ts's side has to be an EXACT name, never a prefix or
  * regex: that test exists to catch a real 6th layer added to src/ without updating the matrix. A
  * broad filter (e.g. `startsWith('application')`) would blind the test to a legitimate layer called
  * `application-new` — we'd trade a rare race for a permanent blind spot, which is worse. An exact
  * name is the only way to exclude just this known synthetic directory without giving up the
  * test's purpose.
  *
- * Don't change the value without reviewing `dependency-cruiser.teste.ts`: the anchoring test
+ * Don't change the value without reviewing `dependency-cruiser.test.ts`: the anchoring test
  * depends on the name starting with `application` — it's exactly the prefix an unanchored regex
  * would match by mistake against the real `application/` layer.
  */
@@ -310,7 +310,7 @@ export const SYNTHETIC_TEST_LAYER_NAME = 'application-legacy';
 
 /**
  * Name of the subdirectory reserved for ONE guard test file (S1-T0). Each file
- * (`dependency-cruiser.teste.ts`, `layer-matrix.teste.ts`, `eslint-restrictions.teste.ts`)
+ * (`dependency-cruiser.test.ts`, `layer-matrix.test.ts`, `eslint-restrictions.test.ts`)
  * uses a different `guardName` and only writes/cleans inside its own subdirectory — never scans
  * the rest of src/. This is what lets the three run in parallel without one deleting another's
  * in-flight fixture (the original failure: `limparResiduosDeTestesDeGuarda` scanned all of src/

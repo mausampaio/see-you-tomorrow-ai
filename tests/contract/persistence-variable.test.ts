@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { binaryContainsText, locateClaudeBinary, getClaudeCodeVersion } from './_apoio.js';
+import { binaryContainsText, locateClaudeBinary, getClaudeCodeVersion } from './_support.js';
 
 const version = getClaudeCodeVersion();
 
@@ -11,7 +11,7 @@ const version = getClaudeCodeVersion();
  * the network is the same one used in Spike D: search for the literal text in the installed
  * binary. Doesn't run in standard CI — only via `npm run test:contrato`.
  */
-describe(`contrato: CLAUDE_CODE_FORCE_SESSION_PERSISTENCE (claude ${version})`, () => {
+describe(`contract: CLAUDE_CODE_FORCE_SESSION_PERSISTENCE (claude ${version})`, () => {
   it('the claude binary on the PATH recognizes the environment variable', () => {
     const binaryPath = locateClaudeBinary();
     const found = binaryContainsText(binaryPath, 'CLAUDE_CODE_FORCE_SESSION_PERSISTENCE');
@@ -21,7 +21,7 @@ describe(`contrato: CLAUDE_CODE_FORCE_SESSION_PERSISTENCE (claude ${version})`, 
       `The binary at ${binaryPath} (claude ${version}) doesn't contain the literal text ` +
         '"CLAUDE_CODE_FORCE_SESSION_PERSISTENCE". Either the variable changed name/mechanism ' +
         "between versions, or this binary is a thin shim that doesn't contain the real bundle " +
-        '(see the comment in tests/contrato/_apoio.ts). Log it in docs/QUESTOES.md with the ' +
+        '(see the comment in tests/contract/_support.ts). Log it in docs/QUESTOES.md with the ' +
         'path and the result observed before changing D-017/D-018.',
     ).toBe(true);
   });
