@@ -14,7 +14,7 @@ agente dev de espalhar `child_process.exec` pelo projeto.
 ```
 cli/           ← comandos, parsing de argumento, saída para o terminal
   ↓
-application/   ← casos de uso: encerrarDia, iniciarDia, capturarSessao
+application/   ← casos de uso: endDay, startDay, captureSession
   ↓
 core/          ← regras puras + interfaces (portas). NÃO importa nada de I/O.
   ↑
@@ -62,8 +62,8 @@ composição sem ninguém notar.
 ## Portas (interfaces do núcleo)
 
 ```ts
-interface ProvedorDeSessoes {
-  listar(): Promise<SessaoDescoberta[]>;
+interface SessionProvider {
+  list(): Promise<DiscoveredSession[]>;
 }
 
 interface LeitorDeTranscricao {
@@ -85,13 +85,13 @@ interface Armazenamento {
   salvarEstado(estado: EstadoDoDia): Promise<void>;
 }
 
-interface ControleDeProcesso {
-  estaVivo(pid: number, procStart?: string): Promise<boolean>;
-  terminarComGraca(pid: number, prazoMs: number): Promise<boolean>;
+interface ProcessControl {
+  isAlive(pid: number, procStart?: string): Promise<boolean>;
+  terminateGracefully(pid: number, deadlineMs: number): Promise<boolean>;
 }
 
-interface Relogio {
-  agora(): Date;
+interface Clock {
+  now(): Date;
 }
 ```
 
@@ -100,7 +100,7 @@ Nos testes, cada porta tem um duplo em memória. Nenhum teste unitário toca dis
 ## Decisões técnicas por adapter
 
 ### `discovery/`
-Lê `~/.claude/sessions/*.json`, valida com zod, filtra por liveness (`ControleDeProcesso`) e
+Lê `~/.claude/sessions/*.json`, valida com zod, filtra por liveness (`ProcessControl`) e
 resolve o caminho do transcript. O slug do diretório em `~/.claude/projects/` é derivado do
 `cwd`; a derivação é frágil, então a estratégia primária é **procurar o arquivo
 `<sessionId>.jsonl` em todos os slugs**, e a derivação do slug é só otimização.
@@ -110,10 +110,10 @@ Duas responsabilidades que vieram do Spike A e são fáceis de esquecer:
 - **Excluir os forks do próprio `seeya`** listados em `forks.json`, sob pena de laço de
   realimentação (D-012).
 - **Transcript ausente não desqualifica a sessão** (D-013). A sessão entra com
-  `temTranscript: false` e dispara a notificação de detecção precoce, uma vez por `sessionId`.
+  `hasTranscript: false` e dispara a notificação de detecção precoce, uma vez por `sessionId`.
 
 Na v2 este adapter passa a ter duas origens — registro e wrapper PTY — e precisa deduplicar por
-`sessionId` (D-014). A interface já é desenhada para isso: `listar()` devolve a união, não a
+`sessionId` (D-014). A interface já é desenhada para isso: `list()` devolve a união, não a
 concatenação.
 
 ### `transcript/`
@@ -163,10 +163,10 @@ residente. Não validado; ver S4-T1.
 
 ### `storage/`
 Raiz injetada (nunca `os.homedir()` direto no código de negócio). Escrita atômica. Todo arquivo
-lido passa por zod. `versaoDoEsquema` em todo documento persistido, com migração explícita.
+lido passa por zod. `schemaVersion` em todo documento persistido, com migração explícita.
 
 ### `clock/`
-Um único módulo produz `agora()`. Nenhum outro arquivo do projeto pode chamar `new Date()`,
+Um único módulo produz `now()`. Nenhum outro arquivo do projeto pode chamar `new Date()`,
 `Date.now()` ou `setTimeout` com prazo longo — imposto por regra de lint.
 
 ## Fusos e horários
@@ -181,17 +181,17 @@ graça. Nada de guardar epoch para "o horário de encerramento".
 
 ```jsonc
 {
-  "versaoDoEsquema": 1,
-  "horarioDeEncerramento": "19:30",     // null = só manual
-  "antecedenciasEmMinutos": [30, 15],
-  "horasDeRelevancia": 12,
-  "minutosParaOcioso": 45,
-  "modeloDaCaptura": "sonnet",
-  "orcamentoPorSessaoUsd": 0.25,
-  "concorrenciaDaCaptura": 3,
-  "ignorar": ["c:\\code\\rascunhos"],
-  "politicaPorProjeto": {
-    "c:\\code\\projeto": { "podeEncerrar": true }
+  "schemaVersion": 1,
+  "endOfDayTime": "19:30",     // null = só manual
+  "leadTimesInMinutes": [30, 15],
+  "relevanceHours": 12,
+  "idleMinutes": 45,
+  "captureModel": "sonnet",
+  "budgetPerSessionUsd": 0.25,
+  "captureConcurrency": 3,
+  "ignore": ["c:\\code\\rascunhos"],
+  "projectPolicy": {
+    "c:\\code\\projeto": { "canTerminate": true }
   }
 }
 ```

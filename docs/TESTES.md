@@ -27,7 +27,7 @@ O que precisa estar coberto com rigor, porque é onde os bugs vão doer:
 
 - **Cálculo do instante de encerramento** a partir de `"19:30"` + data + fuso. Casos
   obrigatórios: dia normal; dia de entrada de horário de verão; dia de saída; horário já
-  passado no momento da checagem; `horarioDeEncerramento: null`.
+  passado no momento da checagem; `endOfDayTime: null`.
 - **Adiamento e pular-hoje**: adiar antes do horário; adiar depois do horário; adiar duas vezes;
   pular depois de já ter adiado; virada de meia-noite zerando o estado do dia.
 - **Elegibilidade da sessão**: cada uma das **cinco** condições da spec isolada, e as combinações
@@ -35,11 +35,11 @@ O que precisa estar coberto com rigor, porque é onde os bugs vão doer:
 - **Liveness com PID reciclado**: PID vivo + `procStart` divergente = obsoleta.
 - **Cadeia de fallback do notificador**: primeiro disponível vence; nenhum disponível cai para
   stderr sem lançar.
-- **Decisão de fallback da geração**: erro do modelo produz handoff `deterministico`, nunca
+- **Decisão de fallback da geração**: erro do modelo produz handoff `deterministic`, nunca
   exceção que aborte o encerramento.
 - **Coleta multi-fonte (D-013)**: handoff continua válido com só git respondendo; com só
   transcript; com só registro; com nenhuma fonte, a sessão é reportada como não capturável, sem
-  exceção. O campo `fontes[]` reflete exatamente quem respondeu.
+  exceção. O campo `sources[]` reflete exatamente quem respondeu.
 - **Exclusão de forks (D-012)**: sessão cujo `sessionId` está em `forks.json` nunca é elegível.
   Este teste é o que impede o laço de realimentação — não pode ser removido.
 - **Detecção precoce sem transcript**: notifica na primeira vez que vê o `sessionId`, e não
@@ -67,7 +67,7 @@ Cada adapter contra o mundo real, mas num mundo de mentira controlado.
   tipos de entrada desconhecidos, com linha truncada no fim (o Claude Code pode estar
   escrevendo enquanto lemos).
 - **`storage/`**: `tmpdir` real. Testar atomicidade — matar no meio da escrita não pode
-  deixar arquivo pela metade; ler documento de `versaoDoEsquema` antiga aciona migração.
+  deixar arquivo pela metade; ler documento de `schemaVersion` antiga aciona migração.
 - **`generation/`**: um script falso de `claude` colocado no PATH do teste, que devolve JSON
   canned, JSON inválido, código de saída != 0, e um que trava (para testar o timeout).
   **Nenhum teste da suíte chama a API de verdade.** Obrigatório: um teste que passa contexto com
@@ -86,14 +86,14 @@ Cada adapter contra o mundo real, mas num mundo de mentira controlado.
 Rodam o binário `seeya` compilado, com `HOME`/`USERPROFILE` apontando para `tmpdir` e um
 `claude` falso no PATH. Um teste por jornada:
 
-1. `seeya sessoes` lista corretamente vivas, ociosas e encerradas.
-2. `seeya encerrar-dia --dry-run` não escreve nada e descreve o que faria.
-3. `seeya encerrar-dia` gera handoffs + briefing com o conteúdo esperado.
-4. `seeya encerrar-dia` com o `claude` falso falhando gera handoffs determinísticos e sai com
+1. `seeya sessions` lista corretamente vivas, ociosas e encerradas.
+2. `seeya end-day --dry-run` não escreve nada e descreve o que faria.
+3. `seeya end-day` gera handoffs + briefing com o conteúdo esperado.
+4. `seeya end-day` com o `claude` falso falhando gera handoffs determinísticos e sai com
    sucesso.
-5. `seeya iniciar-dia --todas` invoca `claude --resume` com os argumentos certos.
+5. `seeya start-day --all` invoca `claude --resume` com os argumentos certos.
 6. Daemon, com relógio injetado, dispara aviso prévio e depois o encerramento.
-7. `seeya adiar +30m` empurra o disparo; `seeya pular-hoje` cancela.
+7. `seeya snooze +30m` empurra o disparo; `seeya skip-today` cancela.
 8. Segunda instância do daemon recusa subir por causa do lock.
 
 ## Contrato — a faixa que protege contra o mundo mudar
@@ -122,7 +122,7 @@ Rodar antes de cada release e quando o Claude Code atualizar. Falha aqui = issue
 ## Regras que valem para toda a suíte
 
 - Nenhum teste depende de rede.
-- Nenhum teste depende do relógio real: `Relogio` é sempre injetado.
+- Nenhum teste depende do relógio real: `Clock` é sempre injetado.
 - Nenhum teste escreve fora do seu `tmpdir`. Um teste que escreva no `~/.claude` ou no
   `~/.seeya` reais é um bug grave.
 - Testes de plataforma usam `describe.skipIf` explícito, nunca ficam silenciosamente verdes.

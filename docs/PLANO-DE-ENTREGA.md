@@ -218,7 +218,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* `npm run format:check` verde nesta máquina, e um `.ts` deliberadamente mal
       formatado em stage é barrado ou corrigido no commit. Provado por execução.
 
-- [ ] **S1-T0g — As docs internas não alcançaram o D-028.** Precisa entrar **antes do S1-T6**, que
+- [~] **S1-T0g — As docs internas não alcançaram o D-028.** Precisa entrar **antes do S1-T6**, que
       é onde os nomes de comando viram código.
       O escopo real é maior do que "nome de comando": a especificação inteira estava escrita com
       identificadores em português — chaves do `config.json`, chaves do handoff, layout de pastas
@@ -245,9 +245,9 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 - [ ] **S1-T2 — `adapters/process`.** Liveness com desempate por `procStart`, nos 3 SOs.
 - [ ] **S1-T3 — `adapters/discovery`, estratégia por registro.** Lê
       `~/.claude/sessions/*.json`, tolerante a arquivo corrompido. Exclui forks de `forks.json`
-      (D-012). Sessão sem transcript entra normalmente, com `temTranscript: false` (D-013).
+      (D-012). Sessão sem transcript entra normalmente, com `hasTranscript: false` (D-013).
 - [ ] **S1-T8 — Estratégia por varredura de transcripts (D-016).** Varre
-      `~/.claude/projects/**/*.jsonl` por mtime dentro de `horasDeRelevancia`, sem ler conteúdo
+      `~/.claude/projects/**/*.jsonl` por mtime dentro de `relevanceHours`, sem ler conteúdo
       antes de filtrar. Reconstrói o `cwd` a partir do transcript, já que o slug não é
       reversível com segurança.
       *Aceite:* sessão headless — que não aparece no registro — é descoberta. Um `~/.claude`
@@ -286,9 +286,9 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* sessão registrada sem `.jsonl` gera exatamente uma notificação, e a segunda
       passagem da descoberta não repete.
 - [ ] **S1-T5 — `adapters/storage`.** Raiz injetável, escrita atômica, config com
-      defaults, `versaoDoEsquema`.
-- [ ] **S1-T6 — `seeya sessoes` e `seeya status`.**
-      *Aceite do sprint:* `seeya sessoes` lista corretamente as sessões reais desta máquina,
+      defaults, `schemaVersion`.
+- [ ] **S1-T6 — `seeya sessions` e `seeya status`.**
+      *Aceite do sprint:* `seeya sessions` lista corretamente as sessões reais desta máquina,
       incluindo as obsoletas, e o e2e nº1 passa.
 
 ---
@@ -305,14 +305,14 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       tipado. Registro do fork em `forks.json` no modo profundo.
       *Aceite:* teste com conteúdo contendo quebra de linha, aspas, acento e `%` chega íntegro
       ao processo filho; medição do piso de tokens antes e depois do `--tools ""` registrada.
-- [ ] **S2-T3 — Caso de uso `encerrarDia`.** Coleta multi-fonte com `fontes[]` (D-013),
+- [ ] **S2-T3 — Caso de uso `endDay`.** Coleta multi-fonte com `sources[]` (D-013),
       concorrência limitada, isolamento de falha por sessão, fallback determinístico,
       anti-duplicidade, guarda de turno ativo. Handoff válido com qualquer fonte respondendo.
-- [ ] **S2-T6 — Limpeza de forks.** Apaga forks próprios com mais de `diasParaLimparForks`.
+- [ ] **S2-T6 — Limpeza de forks.** Apaga forks próprios com mais de `forkCleanupDays`.
       *Aceite:* apaga apenas IDs presentes em `forks.json`; um teste prova que nenhum outro
       arquivo de `~/.claude/projects/` é tocado.
-- [ ] **S2-T4 — Briefing.** Geração do `resumo.md` a partir dos handoffs.
-- [ ] **S2-T5 — `seeya encerrar-dia` com `--dry-run` e `--sessao`.**
+- [ ] **S2-T4 — Briefing.** Geração do `summary.md` a partir dos handoffs.
+- [ ] **S2-T5 — `seeya end-day` com `--dry-run` e `--session`.**
       *Aceite do sprint:* e2e 2, 3 e 4 passam. Encerramento com o modelo indisponível ainda
       produz handoffs úteis.
 
@@ -323,7 +323,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 - [ ] **S3-T1 — Leitura do briefing pendente** e montagem do prompt de retomada por sessão.
 - [ ] **S3-T2 — Retomada.** `claude --resume` no `cwd` original, com fallback para sessão nova
       e aviso explícito ao usuário.
-- [ ] **S3-T3 — `seeya iniciar-dia`** com seleção interativa e `--todas`.
+- [ ] **S3-T3 — `seeya start-day`** com seleção interativa e `--all`.
       *Aceite do sprint:* e2e 5 passa; retomada real de uma sessão de ontem funciona à mão.
 
 ---
@@ -336,8 +336,8 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 - [ ] **S4-T2 — `core/schedule`.** Puro: dado config + estado + agora, o que deve acontecer.
       É aqui que moram os testes de horário de verão e de máquina suspensa.
 - [ ] **S4-T3 — Daemon.** Loop, lockfile de instância única, recuperação de disparo atrasado.
-- [ ] **S4-T4 — `seeya adiar`, `seeya pular-hoje`, `seeya config`.**
-- [ ] **S4-T5 — `seeya daemon --parar/--status`.**
+- [ ] **S4-T4 — `seeya snooze`, `seeya skip-today`, `seeya config`.**
+- [ ] **S4-T5 — `seeya daemon --stop/--status`.**
       *Aceite do sprint:* e2e 6, 7 e 8 passam. Um dia inteiro de uso real sem intervenção.
 
 ---

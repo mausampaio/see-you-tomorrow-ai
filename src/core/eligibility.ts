@@ -45,7 +45,7 @@ export interface EligibilityCriteria {
    * comparison here is exact string equality.
    */
   readonly ignoredCwds: ReadonlySet<string>;
-  /** `sessionId`s registered in `~/.see-you-tomorrow/forks.json` (D-012). */
+  /** `sessionId`s registered in `~/.seeya/forks.json` (D-012, D-027). */
   readonly knownForks: ReadonlySet<string>;
   /** See `PreviousCaptureToday`. `null` when there's no handoff today for this session. */
   readonly previousCaptureToday: PreviousCaptureToday | null;
