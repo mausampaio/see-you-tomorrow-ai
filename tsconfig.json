@@ -4,6 +4,14 @@
     "lib": ["ES2023"],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
+    // Explicit, not relying on TypeScript's automatic @types/* discovery: that auto-inclusion
+    // turned out to depend on which files happen to be in the program (S1-T2 found it by
+    // accident — `tsconfig.json`, which also includes vitest.config.ts, picked up @types/node
+    // that way; `tsconfig.build.json`, which only includes `src` and doesn't extend the file
+    // list, silently didn't, and every `node:*` import in the first adapter to use one failed to
+    // build with "Cannot find name 'process'"). Declaring it here makes both configs agree and
+    // stops depending on which unrelated file happens to pull the package in.
+    "types": ["node"],
     "strict": true,
     "exactOptionalPropertyTypes": true,
     "noUncheckedIndexedAccess": true,

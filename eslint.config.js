@@ -20,7 +20,18 @@ export default tseslint.config(
     // the project's TypeScript program — it's out of the type-aware ESLint's scope.
     // coverage/** is '**/coverage/**' (not just the root one) because the fixtures in
     // tests/fixtures/guards/ generate their own when they run.
-    ignores: ['dist/**', '**/coverage/**', 'node_modules/**', '.dependency-cruiser.cjs'],
+    // tests/fixtures/**/*.mjs: plain Node scripts spawned as real child processes by
+    // integration tests (e.g. tests/fixtures/process/), never imported nor compiled — they
+    // aren't part of the TypeScript program (tsconfig.json's "include" doesn't reach them) and
+    // `allowDefaultProject` only covers the two root-level .js config files, not a whole
+    // directory of them.
+    ignores: [
+      'dist/**',
+      '**/coverage/**',
+      'node_modules/**',
+      '.dependency-cruiser.cjs',
+      'tests/fixtures/**/*.mjs',
+    ],
   },
   ...tseslint.configs.recommendedTypeChecked,
   {
@@ -32,9 +43,6 @@ export default tseslint.config(
         projectService: {
           allowDefaultProject: ['eslint.config.js', 'lint-staged.config.js'],
         },
-        // Under allowDefaultProject the program is created without @types/node, so
-        // import.meta.dirname ends up untyped (the value itself is sound — it's always a string).
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- see comment above
         tsconfigRootDir: import.meta.dirname,
       },
     },
