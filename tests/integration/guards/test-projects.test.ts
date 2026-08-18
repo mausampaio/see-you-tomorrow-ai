@@ -21,8 +21,9 @@ import { DECLARED_PROJECTS, type DeclaredProject } from './_test-projects.js';
  *    land there;
  * 3. the two SETS of project names — declared in `_test-projects.ts`, and the real ones read
  *    from vitest.config.ts below — match exactly. A project added to vitest.config.ts without an
- *    entry here fails loudly instead of running unchecked; a leftover entry for a removed
- *    project fails too.
+ *    entry here fails loudly instead of running unchecked, and so does one added without a
+ *    readable name at all (`realProjectName` refuses to guess at a name vitest would derive on
+ *    its own); a leftover entry for a removed project fails too.
  */
 describe('guard: no vitest project silently resolves to the wrong test-file count', () => {
   it("the declared project list matches vitest.config.ts's real project set exactly", () => {
@@ -56,13 +57,37 @@ function extractRealProjectNames(rawConfig: unknown): string[] {
         `{ test: { projects: [...] } }, got ${JSON.stringify(rawConfig)}`,
     );
   }
-  const names: string[] = [];
-  for (const project of rawConfig.test.projects) {
-    if (isRecord(project) && isRecord(project.test) && typeof project.test.name === 'string') {
-      names.push(project.test.name);
-    }
+  return rawConfig.test.projects.map((project, index) => realProjectName(project, index));
+}
+
+/**
+ * Reduces one `test.projects[]` entry to its name — or throws, never skips (found in review).
+ * Vitest accepts two shapes here that the earlier version of this function silently dropped: a
+ * glob STRING pointing at another config file, and an inline object with no `name` at all (in
+ * which case vitest derives one from the array index, e.g. `"0"`). Both are real projects that
+ * really run real tests. Dropping either silently made `extractRealProjectNames` under-count,
+ * which made the set-comparison test above blind to a whole track added this way — verified by
+ * execution: adding `{ test: { include: [...] } }` with no `name` made the guard pass while
+ * vitest itself collected and would run that project's tests. That's requirement (c) failing in
+ * exactly the silent way S1-T0e exists to close, just one level removed from the original bug.
+ *
+ * Failing closed instead (same doctrine as the stage reader in
+ * scripts/verificar-termos-locais.mjs: "não dá para verificar: falha fechada"): whoever hits this
+ * error almost certainly added a project legitimately and needs to know to give it an explicit
+ * name and declare that name in `_test-projects.ts` — not that this guard is broken.
+ */
+function realProjectName(project: unknown, index: number): string {
+  if (isRecord(project) && isRecord(project.test) && typeof project.test.name === 'string') {
+    return project.test.name;
   }
-  return names;
+  throw new Error(
+    `vitest.config.ts's test.projects[${index}] has no explicit { test: { name: '...' } } ` +
+      `this guard can read (got ${JSON.stringify(project)}). Vitest would still run it — either ` +
+      `as a string reference to another config file, or under a name it derives from the array ` +
+      `index (e.g. "${index}") — so this guard refuses to guess and treats it as unresolved ` +
+      `instead of silently absent. Give the project an explicit name in vitest.config.ts, then ` +
+      `declare that same name in _test-projects.ts's DECLARED_PROJECTS.`,
+  );
 }
 
 function testProject(project: DeclaredProject): void {
