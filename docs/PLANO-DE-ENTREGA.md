@@ -169,7 +169,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       - o teste de sanidade da matriz compara os diretórios reais de `src/` com a lista declarada:
         ele **tem** que reprovar durante a migração e voltar a passar no fim. Se passar o tempo
         todo, alguma das duas pontas não foi migrada.
-      *Aceite:* `npm run verificar` verde; `npx vitest run --project guardas --file-parallelism`
+      *Aceite:* `npm run verificar` verde; `npx vitest run --project guards --file-parallelism`
       verde; nenhum identificador em português em `src/` e `tests/`; `docs/` intocado exceto os
       nomes de caminho.
 
