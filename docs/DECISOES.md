@@ -1,4 +1,4 @@
-﻿# Decisões
+# Decisões
 
 Registro imutável das decisões de produto e arquitetura. **O agente dev não altera este
 arquivo.** Se uma tarefa parecer exigir a violação de uma decisão, pare e abra uma questão
@@ -84,7 +84,7 @@ sessão pendente, injetando o plano do dia anterior como primeiro prompt.
 prévias, do adiamento e do disparo. Não usamos Task Scheduler / cron / launchd para a lógica.
 
 **Consequências.**
-- Instância única obrigatória: lockfile em `~/.see-you-tomorrow/daemon.lock` com PID e
+- Instância única obrigatória: lockfile em `~/.seeya/daemon.lock` com PID e
   verificação de liveness.
 - O daemon precisa sobreviver a suspensão da máquina: o disparo é decidido comparando relógio
   de parede, nunca contando `setTimeout` longo.
@@ -105,9 +105,9 @@ de escape explícita, então forçar um teto seria redundante.
 
 ---
 
-## D-007 — Estado global em `~/.see-you-tomorrow/`
+## D-007 — Estado global em `~/.seeya/`
 
-**Decisão.** Config, estado, handoffs e histórico ficam em `~/.see-you-tomorrow/`. O app
+**Decisão.** Config, estado, handoffs e histórico ficam em `~/.seeya/`. O app
 **nunca** escreve dentro dos repositórios das sessões capturadas.
 
 **Consequências.** O `iniciar-dia` lê tudo de uma fonte só. Nenhum `.gitignore` de terceiro
@@ -171,7 +171,7 @@ completo.
 tentaria capturá-los, gerando novos forks — laço de realimentação.
 
 **Decisão.** Todo `sessionId` de fork criado pelo `seeya` é registrado em
-`~/.see-you-tomorrow/forks.json`. A descoberta **exclui** esses IDs. Forks com mais de
+`~/.seeya/forks.json`. A descoberta **exclui** esses IDs. Forks com mais de
 `diasParaLimparForks` (default 7) são apagados.
 
 **Consequências.** Apagar arquivo dentro de `~/.claude/projects/` é a **única** exceção à regra
@@ -367,7 +367,7 @@ itens inválidos são registrados e descartados individualmente, e a operação 
 - a saída de `claude agents --json`
 - os arquivos de `~/.claude/sessions/*.json`
 - as entradas do `.jsonl` de transcript
-- os handoffs lidos de `~/.see-you-tomorrow/`
+- os handoffs lidos de `~/.seeya/`
 
 **Consequências.**
 - O tipo de retorno declara os dois lados: os itens aceitos **e** os rejeitados com o motivo, para
@@ -514,6 +514,35 @@ qualquer fonte de D-013 mudou desde a última captura do dia, a sessão **não**
   calculá-la.
 - Teste obrigatório: duas capturas sem transcript, **com git alterado** entre elas, **não** são
   duplicadas. É o caso que motivou a decisão e o que mais dói se voltar.
+
+---
+
+## D-027 — O diretório de dados é `~/.seeya/`, igual ao comando
+
+**Contexto.** O projeto tinha três nomes em circulação: o produto **See You Tomorrow AI**, o
+pacote `see-you-tomorrow-ai`, o comando `seeya` — e um diretório de dados `~/.see-you-tomorrow/`
+que não batia com nenhum deles. Era resíduo do nome anterior ao `-ai`.
+
+**Decisão.** `~/.seeya/`, igual ao comando que a pessoa digita.
+
+O argumento decisivo é de descoberta: quem se pergunta "onde o `seeya` guarda as coisas?" chuta
+o nome do comando. É o precedente do próprio Claude Code — comando `claude`, diretório
+`~/.claude/`. Nome de pacote é coisa de quem instala; nome de comando é coisa de quem usa.
+
+**Consequências.**
+- Trocado enquanto custava uma substituição em documento: **zero linha de código** usava o
+  caminho, porque `adaptadores/armazenamento` (S1-T5) ainda era stub. Depois do S1-T5 e de uma
+  semana de uso, custaria código de migração, detecção de diretório antigo e o risco de handoff
+  órfão numa pasta que ninguém olha mais.
+- A raiz continua **injetável**: nenhum teste toca o diretório real, e o nome não fica espalhado
+  pelo código.
+- **Não adotamos XDG** (`~/.config/seeya`, `~/.local/share/seeya`) na v1. É a convenção correta
+  no Linux e triplicaria a resolução de caminho por plataforma; fica anotado para a v2, quando
+  houver usuário Linux de verdade reclamando — não antes.
+
+**Regra que vale além deste caso:** nome de diretório, arquivo de estado ou chave persistida é
+decisão **barata antes do primeiro byte gravado e cara depois**. Quando perceber divergência de
+nomenclatura, corrija enquanto não há dado de ninguém dentro.
 
 ---
 

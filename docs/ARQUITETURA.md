@@ -23,7 +23,7 @@ adaptadores/   ← implementam as portas do núcleo
   transcricao/     parseia o JSONL do transcript
   geracao/         chama o claude headless
   notificacao/     toast por SO
-  armazenamento/   ~/.see-you-tomorrow/
+  armazenamento/   ~/.seeya/
   processo/        liveness de PID, terminação graciosa
   git/             branch e status do cwd
   relogio/         a única fonte de "agora"
@@ -177,7 +177,7 @@ graça. Nada de guardar epoch para "o horário de encerramento".
 
 ## Config
 
-`~/.see-you-tomorrow/config.json`
+`~/.seeya/config.json`
 
 ```jsonc
 {

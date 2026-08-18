@@ -26,7 +26,7 @@ Checklist do revisor:
 
 1. O diff implementa o que a spec pede para esta tarefa, nem mais nem menos?
 2. Alguma regra inegociável de `AGENTS.md` foi violada? (fronteiras, relógio, zod, escrita fora
-   de `~/.see-you-tomorrow/`, `spawn` com shell, `any`)
+   de `~/.seeya/`, `spawn` com shell, `any`)
 3. Os testes cobrem os casos que `TESTES.md` exige para esta faixa, ou só os caminhos felizes?
 4. Algum teste toca rede, relógio real ou o `~/.claude` real?
 5. Entrou código que só faz sentido para uma tarefa futura? (escopo adiantado é defeito)

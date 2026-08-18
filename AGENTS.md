@@ -84,7 +84,7 @@ mínima. Não precisa parar; precisa avisar.
 
 ## Sistema de arquivos
 
-- Escrever **apenas** dentro de `~/.see-you-tomorrow/` (raiz injetável). Nunca dentro de
+- Escrever **apenas** dentro de `~/.seeya/` (raiz injetável). Nunca dentro de
   `~/.claude/`, nunca dentro dos repositórios das sessões capturadas. A única exceção é apagar
   fork que o próprio `seeya` criou e registrou (D-012).
 - Toda escrita é atômica: temporário + rename.
@@ -195,7 +195,7 @@ descobria quais eram os 2 erros até alguém instrumentar à mão.
   camada, build e cobertura.
 - **Toda função nova tem teste. Toda correção de bug tem teste de regressão** — e o teste falha
   antes da correção, senão não prova nada.
-- Nenhum teste toca a rede, o relógio real, o `~/.claude` real ou o `~/.see-you-tomorrow` real.
+- Nenhum teste toca a rede, o relógio real, o `~/.claude` real ou o `~/.seeya` real.
   A suíte de contrato é a única exceção, e ela não roda no CI.
 - **Duplo de I/O é classe/objeto nomeado implementando a porta**, não stub inline. O nome diz o
   que ele finge ser.

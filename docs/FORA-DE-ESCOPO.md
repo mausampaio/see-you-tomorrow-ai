@@ -13,7 +13,7 @@ Pare e registre em `docs/QUESTOES.md`.
 - **Interface gráfica ou web.** É CLI e notificação nativa. Sem TUI elaborada, sem servidor
   HTTP, sem dashboard.
 - **Sincronização entre máquinas ou nuvem.** O estado é local, de uma máquina só.
-- **Multiusuário.** Um usuário, um `~/.see-you-tomorrow/`.
+- **Multiusuário.** Um usuário, um `~/.seeya/`.
 - **Injetar comandos na sessão viva.** Fechado por D-001. Não tente TTY, named pipe, injeção
   de teclado, automação de janela ou qualquer variação disso.
 - **O wrapper PTY (`seeya claude`).** É v2 e já está desenhado em D-014. Não antecipe, não

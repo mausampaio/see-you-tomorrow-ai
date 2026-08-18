@@ -124,7 +124,7 @@ Rodar antes de cada release e quando o Claude Code atualizar. Falha aqui = issue
 - Nenhum teste depende de rede.
 - Nenhum teste depende do relógio real: `Relogio` é sempre injetado.
 - Nenhum teste escreve fora do seu `tmpdir`. Um teste que escreva no `~/.claude` ou no
-  `~/.see-you-tomorrow` reais é um bug grave.
+  `~/.seeya` reais é um bug grave.
 - Testes de plataforma usam `describe.skipIf` explícito, nunca ficam silenciosamente verdes.
 - Fixtures anonimizadas: nenhum caminho, token, nome de cliente ou trecho de código privado
   vai para o repositório.

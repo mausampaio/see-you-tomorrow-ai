@@ -1,4 +1,4 @@
-﻿# Especificação funcional — see-you-tomorrow (v1)
+# Especificação funcional — See You Tomorrow AI (v1)
 
 Fonte da verdade do comportamento. O agente dev implementa exatamente o que está aqui.
 Divergência percebida → `docs/QUESTOES.md`, não improviso.
@@ -186,7 +186,7 @@ Uma sessão entra no encerramento se, e somente se:
 
 ## Formato do handoff
 
-`~/.see-you-tomorrow/dias/<AAAA-MM-DD>/sessoes/<sessionId>.json`
+`~/.seeya/dias/<AAAA-MM-DD>/sessoes/<sessionId>.json`
 
 ```jsonc
 {
@@ -244,7 +244,7 @@ fluxo.
 - Windows, macOS e Linux. Nenhum caminho hardcoded com `/` ou `\`.
 - Encerramento de 5 sessões deve terminar em menos de 2 min.
 - Nenhum segredo é lido, gravado ou enviado. O app não toca em `~/.claude/.credentials.json`.
-- Toda escrita em `~/.see-you-tomorrow/` é atômica (escreve em temporário, renomeia).
+- Toda escrita em `~/.seeya/` é atômica (escreve em temporário, renomeia).
 - O app nunca escreve dentro de `~/.claude/`.
 
 ## Sugestões minhas para depois da v1

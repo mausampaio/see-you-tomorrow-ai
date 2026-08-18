@@ -58,9 +58,15 @@ function conteudoEmStage() {
     process.exitCode = 1;
     return null;
   }
+  // O sinal de adição inicial é sintaxe de diff, não conteúdo — precisa sair antes de qualquer
+  // casamento. Mantê-lo produzia falso positivo real: uma linha adicionada contendo só um import
+  // no formato arroba-mais-nome-de-arquivo casava com o padrão de e-mail, porque o sinal de
+  // adição é caractere válido em local-part e a extensão parece um TLD. Isso recusou um commit
+  // legítimo, e guard que barra o certo é guard que alguém desliga.
   const linhasAdicionadas = diff.stdout
     .split(/\r?\n/)
     .filter((linha) => linha.startsWith('+') && !linha.startsWith('+++'))
+    .map((linha) => linha.slice(1))
     .join('\n');
   return `${linhasAdicionadas}\n${nomes.stdout}`;
 }

@@ -104,7 +104,7 @@ O `seeya` precisa limpar os forks que ele mesmo criou.
 Os forks aparecem em `~/.claude/projects/` como sessões legítimas. Sem tratamento, o
 `seeya` descobriria os próprios forks na captura seguinte e tentaria capturá-los — que por sua
 vez geram novos forks. **A descoberta precisa excluir os `sessionId` de forks criados pelo
-próprio `seeya`**, registrados em `~/.see-you-tomorrow/forks.json`.
+próprio `seeya`**, registrados em `~/.seeya/forks.json`.
 
 ## Consequências para o plano
 

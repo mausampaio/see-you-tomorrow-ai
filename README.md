@@ -30,7 +30,7 @@ interativa em execução, então a captura acontece por fora, num processo headl
 conversa inteira. Isso funciona mesmo para sessões que já morreram, e não gasta o contexto da
 sessão que está aberta. O porquê está em [`docs/DECISOES.md`](docs/DECISOES.md), D-001.
 
-Tudo que o `seeya` escreve fica em `~/.see-you-tomorrow/`. Ele não escreve dentro dos seus
+Tudo que o `seeya` escreve fica em `~/.seeya/`. Ele não escreve dentro dos seus
 repositórios nem dentro de `~/.claude/`.
 
 ## Requisitos
