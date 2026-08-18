@@ -17,14 +17,14 @@ function fixture(layerDir: string, fileName: string): string {
 
 /**
  * Proves that eslint.config.js's boundary rules (S0-T2) really REJECT: `no-restricted-imports`
- * (node:* outside src/nucleo/), `no-restricted-globals` (setTimeout/setInterval outside
- * src/adaptadores/relogio/) and `no-restricted-syntax` (argument-less `new Date()` and
- * `Date.now()` outside src/adaptadores/relogio/ — D-019).
+ * (node:* outside src/core/), `no-restricted-globals` (setTimeout/setInterval outside
+ * src/adapters/clock/) and `no-restricted-syntax` (argument-less `new Date()` and
+ * `Date.now()` outside src/adapters/clock/ — D-019).
  *
  * D-019 is deliberately narrow: `new Date(valor)` with an argument is a deterministic
  * transformation of data already in hand (parsing a transcript timestamp, for example), not a
  * read of "now" — that's why there's a dedicated test proving it stays APPROVED outside
- * relogio/. Without that test, the rule could go back to being too strict without anyone
+ * clock/. Without that test, the rule could go back to being too strict without anyone
  * noticing.
  *
  * Each test writes a file (violating or not) in the real tree, runs the real eslint as a child
@@ -43,7 +43,7 @@ function fixture(layerDir: string, fileName: string): string {
  * the `expect`'s second message, so a count failure comes with eslint's real messages (plan item
  * 3) instead of just "expected N to be M".
  */
-describe('guard: eslint rejects node:* in nucleo/ and non-deterministic time sources outside relogio/', () => {
+describe('guard: eslint rejects node:* in core/ and non-deterministic time sources outside clock/', () => {
   const created: string[] = [];
 
   afterEach(() => {
@@ -60,9 +60,9 @@ describe('guard: eslint rejects node:* in nucleo/ and non-deterministic time sou
   });
 
   it(
-    'approves a clean file in src/nucleo/ (control)',
+    'approves a clean file in src/core/ (control)',
     () => {
-      const filePath = writeTempFile(fixture('nucleo', 'control.ts'), 'export {};\n');
+      const filePath = writeTempFile(fixture('core', 'control.ts'), 'export {};\n');
       created.push(filePath);
 
       const result = runEslint([filePath]);
@@ -73,10 +73,10 @@ describe('guard: eslint rejects node:* in nucleo/ and non-deterministic time sou
   );
 
   it(
-    'rejects node:* imported in src/nucleo/, with a message saying what to do',
+    'rejects node:* imported in src/core/, with a message saying what to do',
     () => {
       const filePath = writeTempFile(
-        fixture('nucleo', 'violation-test-node.ts'),
+        fixture('core', 'violation-test-node.ts'),
         "import { readFileSync } from 'node:fs';\nexport const content = readFileSync('x');\n",
       );
       created.push(filePath);
@@ -85,16 +85,16 @@ describe('guard: eslint rejects node:* in nucleo/ and non-deterministic time sou
 
       expect(result.exitCode, result.output).not.toBe(0);
       expect(result.output).toContain('no-restricted-imports');
-      expect(result.output).toContain('porta declarada em nucleo/portas.ts');
+      expect(result.output).toContain('port declared in core/ports.ts');
     },
     CHILD_PROCESS_TIMEOUT,
   );
 
   it(
-    'rejects argument-less new Date() outside src/adaptadores/relogio/, with a message saying what to do (D-019)',
+    'rejects argument-less new Date() outside src/adapters/clock/, with a message saying what to do (D-019)',
     () => {
       const filePath = writeTempFile(
-        fixture('aplicacao', 'violation-test-date-no-argument.ts'),
+        fixture('application', 'violation-test-date-no-argument.ts'),
         'export const now = new Date();\n',
       );
       created.push(filePath);
@@ -103,16 +103,16 @@ describe('guard: eslint rejects node:* in nucleo/ and non-deterministic time sou
 
       expect(result.exitCode, result.output).not.toBe(0);
       expect(result.output).toContain('no-restricted-syntax');
-      expect(result.output).toContain('porta Relogio');
+      expect(result.output).toContain('Clock port');
     },
     CHILD_PROCESS_TIMEOUT,
   );
 
   it(
-    'rejects Date.now() outside src/adaptadores/relogio/, with a message saying what to do (D-019)',
+    'rejects Date.now() outside src/adapters/clock/, with a message saying what to do (D-019)',
     () => {
       const filePath = writeTempFile(
-        fixture('aplicacao', 'violation-test-date-now.ts'),
+        fixture('application', 'violation-test-date-now.ts'),
         'export const now = Date.now();\n',
       );
       created.push(filePath);
@@ -121,16 +121,16 @@ describe('guard: eslint rejects node:* in nucleo/ and non-deterministic time sou
 
       expect(result.exitCode, result.output).not.toBe(0);
       expect(result.output).toContain('no-restricted-syntax');
-      expect(result.output).toContain('porta Relogio');
+      expect(result.output).toContain('Clock port');
     },
     CHILD_PROCESS_TIMEOUT,
   );
 
   it(
-    'approves new Date(value) WITH an argument outside src/adaptadores/relogio/ (D-019, the allowed case)',
+    'approves new Date(value) WITH an argument outside src/adapters/clock/ (D-019, the allowed case)',
     () => {
       const filePath = writeTempFile(
-        fixture('aplicacao', 'control-test-date-with-argument.ts'),
+        fixture('application', 'control-test-date-with-argument.ts'),
         "export const commitDate = new Date('2026-01-01');\n",
       );
       created.push(filePath);
@@ -143,10 +143,10 @@ describe('guard: eslint rejects node:* in nucleo/ and non-deterministic time sou
   );
 
   it(
-    'approves Date.parse(value) outside src/adaptadores/relogio/ (D-019, the allowed case)',
+    'approves Date.parse(value) outside src/adapters/clock/ (D-019, the allowed case)',
     () => {
       const filePath = writeTempFile(
-        fixture('aplicacao', 'control-test-date-parse.ts'),
+        fixture('application', 'control-test-date-parse.ts'),
         "export const instant = Date.parse('2026-01-01');\n",
       );
       created.push(filePath);
@@ -159,10 +159,10 @@ describe('guard: eslint rejects node:* in nucleo/ and non-deterministic time sou
   );
 
   it(
-    'rejects setTimeout outside src/adaptadores/relogio/',
+    'rejects setTimeout outside src/adapters/clock/',
     () => {
       const filePath = writeTempFile(
-        fixture('aplicacao', 'violation-test-settimeout.ts'),
+        fixture('application', 'violation-test-settimeout.ts'),
         'export const id = setTimeout(() => {}, 1000);\n',
       );
       created.push(filePath);
@@ -171,16 +171,16 @@ describe('guard: eslint rejects node:* in nucleo/ and non-deterministic time sou
 
       expect(result.exitCode, result.output).not.toBe(0);
       expect(result.output).toContain('no-restricted-globals');
-      expect(result.output).toContain('porta Relogio');
+      expect(result.output).toContain('Clock port');
     },
     CHILD_PROCESS_TIMEOUT,
   );
 
   it(
-    'rejects setInterval outside src/adaptadores/relogio/',
+    'rejects setInterval outside src/adapters/clock/',
     () => {
       const filePath = writeTempFile(
-        fixture('aplicacao', 'violation-test-setinterval.ts'),
+        fixture('application', 'violation-test-setinterval.ts'),
         'export const id = setInterval(() => {}, 1000);\n',
       );
       created.push(filePath);
@@ -194,10 +194,10 @@ describe('guard: eslint rejects node:* in nucleo/ and non-deterministic time sou
   );
 
   it(
-    'approves new Date() and Date.now() inside src/adaptadores/relogio/ (control for the exception)',
+    'approves new Date() and Date.now() inside src/adapters/clock/ (control for the exception)',
     () => {
       const filePath = writeTempFile(
-        fixture('adaptadores/relogio', 'control-test-date.ts'),
+        fixture('adapters/clock', 'control-test-date.ts'),
         'export const now = () => new Date();\nexport const nowMs = () => Date.now();\n',
       );
       created.push(filePath);

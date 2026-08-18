@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { claudePrintOutputSchema } from '../../../../src/adaptadores/geracao/esquemas.js';
+import { claudePrintOutputSchema } from '../../../../src/adapters/generation/schemas.js';
 
 /**
  * Unit tests for the `claude -p --output-format json` output schema (S0-T5). Synthetic fixture
  * shaped as what the PO gathered on this machine — it can't be confirmed against a real call
  * because no test in this project may touch the network (CLAUDE.md, docs/TESTES.md). See the
- * comment at the top of src/adaptadores/geracao/esquemas.ts.
+ * comment at the top of src/adapters/generation/schemas.ts.
  */
 describe('claudePrintOutputSchema', () => {
   const validOutput = {

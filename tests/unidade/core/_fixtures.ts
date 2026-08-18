@@ -1,7 +1,7 @@
-import type { SessionWithPid, SessionWithoutPid } from '../../../src/nucleo/tipos.js';
+import type { SessionWithPid, SessionWithoutPid } from '../../../src/core/types.js';
 
 /**
- * Factories for `DiscoveredSession` for the `nucleo/` tests (S1-T1). Synthetic values — UUIDs
+ * Factories for `DiscoveredSession` for the `core/` tests (S1-T1). Synthetic values — UUIDs
  * with only the digits 1/2/4/8 (CLAUDE.md § "Este projeto é de código aberto"), never real data.
  *
  * `Omit<..., 'hasPid'>` on the overrides parameter, with `hasPid` fixed after the spread: this

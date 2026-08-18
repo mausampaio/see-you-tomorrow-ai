@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   sessionRecordSchema,
   validateAgentsJsonOutput,
-} from '../../../../src/adaptadores/descoberta/esquemas.js';
+} from '../../../../src/adapters/discovery/schemas.js';
 
 /**
  * Unit tests for the discovery schemas (S0-T5). Synthetic fixtures, not this machine's real

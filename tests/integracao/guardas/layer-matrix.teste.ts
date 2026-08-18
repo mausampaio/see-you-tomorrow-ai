@@ -57,14 +57,14 @@ describe('guard: the 20 ordered pairs of the docs/ARQUITETURA.md matrix have com
 
   it('the declared layer list matches src/\'s real directories (otherwise the matrix is stale)', () => {
     // S1-T0, third review round: dependency-cruiser.teste.ts creates and deletes
-    // src/aplicacao-legado/ on its own (see SYNTHETIC_TEST_LAYER_NAME in _support.ts) to test
+    // src/application-legacy/ on its own (see SYNTHETIC_TEST_LAYER_NAME in _support.ts) to test
     // dependency-cruiser's segment anchoring. If this listing, running in parallel, catches
     // that directory mid-flight, the failure would point at the WRONG place ("the matrix is
     // stale, missing a 6th layer") when no layer is actually missing — just another test
     // file's fixture, in flight. That's why we filter by EXACT NAME before comparing: never by
     // prefix/regex, because this test exists precisely to catch a real 6th layer, and a broad
-    // filter (`startsWith('aplicacao')`, for example) would blind the test to a legitimate
-    // layer called `aplicacao-nova` — we'd trade a rare race for a permanent blind spot, which
+    // filter (`startsWith('application')`, for example) would blind the test to a legitimate
+    // layer called `application-new` — we'd trade a rare race for a permanent blind spot, which
     // is worse. DO NOT generalize this filter.
     const realDirectories = readdirSync(path.join(PROJECT_ROOT, 'src'), { withFileTypes: true })
       .filter((entry) => entry.isDirectory())

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   assistantEntrySchema,
   userEntrySchema,
-} from '../../src/adaptadores/transcricao/esquemas.js';
+} from '../../src/adapters/transcript/schemas.js';
 import { getClaudeCodeVersion, realClaudeRoot } from './_apoio.js';
 
 const version = getClaudeCodeVersion();
@@ -96,7 +96,7 @@ describe(`contrato: real transcript .jsonl (claude ${version})`, () => {
           totalAssistant += 1;
         }
         // Type outside "user"/"assistant": ignored on purpose, exactly the tolerant behavior
-        // wanted (docs/ARQUITETURA.md § transcricao/).
+        // wanted (docs/ARQUITETURA.md § transcript/).
       }
     }
 

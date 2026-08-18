@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { validateAgentsJsonOutput } from '../../src/adaptadores/descoberta/esquemas.js';
+import { validateAgentsJsonOutput } from '../../src/adapters/discovery/schemas.js';
 import { runClaude, getClaudeCodeVersion } from './_apoio.js';
 
 const version = getClaudeCodeVersion();

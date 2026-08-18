@@ -40,7 +40,7 @@ function fixture(layerDir: string, fileName: string): string {
  * test that needs to scan all of `src/` (because it has no fixture of its own) is "approves the
  * real tree, no violation" — see `runDependencyCruiserOnFullTree` in `_support.ts`.
  *
- * Includes the test for D-020's allowed side (cli/ importing adaptadores/ — cli/ is the only
+ * Includes the test for D-020's allowed side (cli/ importing adapters/ — cli/ is the only
  * composition root) and, starting at S0-T6, a control for each of the matrix's 8 allowed pairs:
  * without them, a rule could later be tightened too much and break the composition root without
  * anyone noticing, same reasoning as D-019's allowed case.
@@ -77,9 +77,9 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
   );
 
   it(
-    'rejects nucleo/ importing node:*',
+    'rejects core/ importing node:*',
     () => {
-      const filePath = fixture('nucleo', 'violation-test-node.ts');
+      const filePath = fixture('core', 'violation-test-node.ts');
       created.push(
         writeTempFile(
           filePath,
@@ -91,78 +91,78 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
       expect(result.jsonValid, result.raw).toBe(true);
       const rules = violationsOfFixture(result.violations, filePath).map((v) => v.rule);
 
-      expect(rules, result.raw).toContain('nucleo-nao-importa-node');
+      expect(rules, result.raw).toContain('core-does-not-import-node');
     },
     CHILD_PROCESS_TIMEOUT,
   );
 
   it(
-    'rejects nucleo/ importing another layer of the project',
+    'rejects core/ importing another layer of the project',
     () => {
-      const filePath = fixture('nucleo', 'violation-test-layer.ts');
+      const filePath = fixture('core', 'violation-test-layer.ts');
       created.push(
-        writeTempFile(filePath, "import '../../adaptadores/relogio/index.js';\nexport {};\n"),
+        writeTempFile(filePath, "import '../../adapters/clock/index.js';\nexport {};\n"),
       );
 
       const result = runDependencyCruiser([filePath]);
       expect(result.jsonValid, result.raw).toBe(true);
       const rules = violationsOfFixture(result.violations, filePath).map((v) => v.rule);
 
-      expect(rules, result.raw).toContain('nucleo-nao-importa-outras-camadas');
+      expect(rules, result.raw).toContain('core-does-not-import-other-layers');
     },
     CHILD_PROCESS_TIMEOUT,
   );
 
   it(
-    'rejects adaptadores/ importing aplicacao/',
+    'rejects adapters/ importing application/',
     () => {
-      const filePath = fixture('adaptadores/relogio', 'violation-test-aplicacao.ts');
-      created.push(writeTempFile(filePath, "import '../../../aplicacao/index.js';\nexport {};\n"));
+      const filePath = fixture('adapters/clock', 'violation-test-application.ts');
+      created.push(writeTempFile(filePath, "import '../../../application/index.js';\nexport {};\n"));
 
       const result = runDependencyCruiser([filePath]);
       expect(result.jsonValid, result.raw).toBe(true);
       const rules = violationsOfFixture(result.violations, filePath).map((v) => v.rule);
 
-      expect(rules, result.raw).toContain('adaptadores-nao-importa-aplicacao-cli-ou-agendador');
+      expect(rules, result.raw).toContain('adapters-does-not-import-application-cli-or-scheduler');
     },
     CHILD_PROCESS_TIMEOUT,
   );
 
   it(
-    'rejects adaptadores/ importing cli/',
+    'rejects adapters/ importing cli/',
     () => {
-      const filePath = fixture('adaptadores/relogio', 'violation-test-cli.ts');
+      const filePath = fixture('adapters/clock', 'violation-test-cli.ts');
       created.push(writeTempFile(filePath, "import '../../../cli/index.js';\nexport {};\n"));
 
       const result = runDependencyCruiser([filePath]);
       expect(result.jsonValid, result.raw).toBe(true);
       const rules = violationsOfFixture(result.violations, filePath).map((v) => v.rule);
 
-      expect(rules, result.raw).toContain('adaptadores-nao-importa-aplicacao-cli-ou-agendador');
+      expect(rules, result.raw).toContain('adapters-does-not-import-application-cli-or-scheduler');
     },
     CHILD_PROCESS_TIMEOUT,
   );
 
   it(
-    'rejects adaptadores/ importing agendador/',
+    'rejects adapters/ importing scheduler/',
     () => {
-      const filePath = fixture('adaptadores/relogio', 'violation-test-agendador.ts');
-      created.push(writeTempFile(filePath, "import '../../../agendador/index.js';\nexport {};\n"));
+      const filePath = fixture('adapters/clock', 'violation-test-scheduler.ts');
+      created.push(writeTempFile(filePath, "import '../../../scheduler/index.js';\nexport {};\n"));
 
       const result = runDependencyCruiser([filePath]);
       expect(result.jsonValid, result.raw).toBe(true);
       const rules = violationsOfFixture(result.violations, filePath).map((v) => v.rule);
 
-      expect(rules, result.raw).toContain('adaptadores-nao-importa-aplicacao-cli-ou-agendador');
+      expect(rules, result.raw).toContain('adapters-does-not-import-application-cli-or-scheduler');
     },
     CHILD_PROCESS_TIMEOUT,
   );
 
   it(
-    'approves adaptadores/ importing nucleo/ (control: implements the port)',
+    'approves adapters/ importing core/ (control: implements the port)',
     () => {
-      const filePath = fixture('adaptadores/relogio', 'control-test-nucleo.ts');
-      created.push(writeTempFile(filePath, "import '../../../nucleo/index.js';\nexport {};\n"));
+      const filePath = fixture('adapters/clock', 'control-test-core.ts');
+      created.push(writeTempFile(filePath, "import '../../../core/index.js';\nexport {};\n"));
 
       const result = runDependencyCruiser([filePath]);
       expect(result.jsonValid, result.raw).toBe(true);
@@ -174,55 +174,55 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
   );
 
   it(
-    'rejects aplicacao/ importing cli/',
+    'rejects application/ importing cli/',
     () => {
-      const filePath = fixture('aplicacao', 'violation-test-cli.ts');
+      const filePath = fixture('application', 'violation-test-cli.ts');
       created.push(writeTempFile(filePath, "import '../../cli/index.js';\nexport {};\n"));
 
       const result = runDependencyCruiser([filePath]);
       expect(result.jsonValid, result.raw).toBe(true);
       const rules = violationsOfFixture(result.violations, filePath).map((v) => v.rule);
 
-      expect(rules, result.raw).toContain('aplicacao-nao-importa-adaptadores-cli-ou-agendador');
+      expect(rules, result.raw).toContain('application-does-not-import-adapters-cli-or-scheduler');
     },
     CHILD_PROCESS_TIMEOUT,
   );
 
   it(
-    'rejects aplicacao/ importing agendador/',
+    'rejects application/ importing scheduler/',
     () => {
-      const filePath = fixture('aplicacao', 'violation-test-agendador.ts');
-      created.push(writeTempFile(filePath, "import '../../agendador/index.js';\nexport {};\n"));
+      const filePath = fixture('application', 'violation-test-scheduler.ts');
+      created.push(writeTempFile(filePath, "import '../../scheduler/index.js';\nexport {};\n"));
 
       const result = runDependencyCruiser([filePath]);
       expect(result.jsonValid, result.raw).toBe(true);
       const rules = violationsOfFixture(result.violations, filePath).map((v) => v.rule);
 
-      expect(rules, result.raw).toContain('aplicacao-nao-importa-adaptadores-cli-ou-agendador');
+      expect(rules, result.raw).toContain('application-does-not-import-adapters-cli-or-scheduler');
     },
     CHILD_PROCESS_TIMEOUT,
   );
 
   it(
-    'rejects aplicacao/ importing adaptadores/ (D-020: only cli/ names a concrete adapter)',
+    'rejects application/ importing adapters/ (D-020: only cli/ names a concrete adapter)',
     () => {
-      const filePath = fixture('aplicacao', 'violation-test-adaptadores.ts');
-      created.push(writeTempFile(filePath, "import '../../adaptadores/git/index.js';\nexport {};\n"));
+      const filePath = fixture('application', 'violation-test-adapters.ts');
+      created.push(writeTempFile(filePath, "import '../../adapters/git/index.js';\nexport {};\n"));
 
       const result = runDependencyCruiser([filePath]);
       expect(result.jsonValid, result.raw).toBe(true);
       const rules = violationsOfFixture(result.violations, filePath).map((v) => v.rule);
 
-      expect(rules, result.raw).toContain('aplicacao-nao-importa-adaptadores-cli-ou-agendador');
+      expect(rules, result.raw).toContain('application-does-not-import-adapters-cli-or-scheduler');
     },
     CHILD_PROCESS_TIMEOUT,
   );
 
   it(
-    'approves aplicacao/ importing nucleo/ (control)',
+    'approves application/ importing core/ (control)',
     () => {
-      const filePath = fixture('aplicacao', 'control-test-nucleo.ts');
-      created.push(writeTempFile(filePath, "import '../../nucleo/index.js';\nexport {};\n"));
+      const filePath = fixture('application', 'control-test-core.ts');
+      created.push(writeTempFile(filePath, "import '../../core/index.js';\nexport {};\n"));
 
       const result = runDependencyCruiser([filePath]);
       expect(result.jsonValid, result.raw).toBe(true);
@@ -234,40 +234,40 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
   );
 
   it(
-    'rejects agendador/ importing adaptadores/ (D-020: receives injection from cli/)',
+    'rejects scheduler/ importing adapters/ (D-020: receives injection from cli/)',
     () => {
-      const filePath = fixture('agendador', 'violation-test-adaptadores.ts');
-      created.push(writeTempFile(filePath, "import '../../adaptadores/git/index.js';\nexport {};\n"));
+      const filePath = fixture('scheduler', 'violation-test-adapters.ts');
+      created.push(writeTempFile(filePath, "import '../../adapters/git/index.js';\nexport {};\n"));
 
       const result = runDependencyCruiser([filePath]);
       expect(result.jsonValid, result.raw).toBe(true);
       const rules = violationsOfFixture(result.violations, filePath).map((v) => v.rule);
 
-      expect(rules, result.raw).toContain('agendador-nao-importa-adaptadores');
+      expect(rules, result.raw).toContain('scheduler-does-not-import-adapters');
     },
     CHILD_PROCESS_TIMEOUT,
   );
 
   it(
-    'rejects agendador/ importing cli/ (D-020: cli/ is what injects the scheduler, never the other way)',
+    'rejects scheduler/ importing cli/ (D-020: cli/ is what injects the scheduler, never the other way)',
     () => {
-      const filePath = fixture('agendador', 'violation-test-cli.ts');
+      const filePath = fixture('scheduler', 'violation-test-cli.ts');
       created.push(writeTempFile(filePath, "import '../../cli/index.js';\nexport {};\n"));
 
       const result = runDependencyCruiser([filePath]);
       expect(result.jsonValid, result.raw).toBe(true);
       const rules = violationsOfFixture(result.violations, filePath).map((v) => v.rule);
 
-      expect(rules, result.raw).toContain('agendador-nao-importa-cli');
+      expect(rules, result.raw).toContain('scheduler-does-not-import-cli');
     },
     CHILD_PROCESS_TIMEOUT,
   );
 
   it(
-    'approves agendador/ importing nucleo/ (control)',
+    'approves scheduler/ importing core/ (control)',
     () => {
-      const filePath = fixture('agendador', 'control-test-nucleo.ts');
-      created.push(writeTempFile(filePath, "import '../../nucleo/index.js';\nexport {};\n"));
+      const filePath = fixture('scheduler', 'control-test-core.ts');
+      created.push(writeTempFile(filePath, "import '../../core/index.js';\nexport {};\n"));
 
       const result = runDependencyCruiser([filePath]);
       expect(result.jsonValid, result.raw).toBe(true);
@@ -279,10 +279,10 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
   );
 
   it(
-    'approves agendador/ importing aplicacao/ (control: agendador orchestrates aplicacao/ over time)',
+    'approves scheduler/ importing application/ (control: scheduler orchestrates application/ over time)',
     () => {
-      const filePath = fixture('agendador', 'control-test-aplicacao.ts');
-      created.push(writeTempFile(filePath, "import '../../aplicacao/index.js';\nexport {};\n"));
+      const filePath = fixture('scheduler', 'control-test-application.ts');
+      created.push(writeTempFile(filePath, "import '../../application/index.js';\nexport {};\n"));
 
       const result = runDependencyCruiser([filePath]);
       expect(result.jsonValid, result.raw).toBe(true);
@@ -294,10 +294,10 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
   );
 
   it(
-    'approves cli/ importing adaptadores/ (control: cli/ is the only composition root, D-020)',
+    'approves cli/ importing adapters/ (control: cli/ is the only composition root, D-020)',
     () => {
-      const filePath = fixture('cli', 'control-test-adaptadores.ts');
-      created.push(writeTempFile(filePath, "import '../../adaptadores/git/index.js';\nexport {};\n"));
+      const filePath = fixture('cli', 'control-test-adapters.ts');
+      created.push(writeTempFile(filePath, "import '../../adapters/git/index.js';\nexport {};\n"));
 
       const result = runDependencyCruiser([filePath]);
       expect(result.jsonValid, result.raw).toBe(true);
@@ -309,10 +309,10 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
   );
 
   it(
-    'approves cli/ importing nucleo/ (control)',
+    'approves cli/ importing core/ (control)',
     () => {
-      const filePath = fixture('cli', 'control-test-nucleo.ts');
-      created.push(writeTempFile(filePath, "import '../../nucleo/index.js';\nexport {};\n"));
+      const filePath = fixture('cli', 'control-test-core.ts');
+      created.push(writeTempFile(filePath, "import '../../core/index.js';\nexport {};\n"));
 
       const result = runDependencyCruiser([filePath]);
       expect(result.jsonValid, result.raw).toBe(true);
@@ -324,10 +324,10 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
   );
 
   it(
-    'approves cli/ importing aplicacao/ (control)',
+    'approves cli/ importing application/ (control)',
     () => {
-      const filePath = fixture('cli', 'control-test-aplicacao.ts');
-      created.push(writeTempFile(filePath, "import '../../aplicacao/index.js';\nexport {};\n"));
+      const filePath = fixture('cli', 'control-test-application.ts');
+      created.push(writeTempFile(filePath, "import '../../application/index.js';\nexport {};\n"));
 
       const result = runDependencyCruiser([filePath]);
       expect(result.jsonValid, result.raw).toBe(true);
@@ -339,10 +339,10 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
   );
 
   it(
-    'approves cli/ importing agendador/ (control: cli/ builds and injects the scheduler)',
+    'approves cli/ importing scheduler/ (control: cli/ builds and injects the scheduler)',
     () => {
-      const filePath = fixture('cli', 'control-test-agendador.ts');
-      created.push(writeTempFile(filePath, "import '../../agendador/index.js';\nexport {};\n"));
+      const filePath = fixture('cli', 'control-test-scheduler.ts');
+      created.push(writeTempFile(filePath, "import '../../scheduler/index.js';\nexport {};\n"));
 
       const result = runDependencyCruiser([filePath]);
       expect(result.jsonValid, result.raw).toBe(true);
@@ -354,11 +354,11 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
   );
 
   it(
-    'does not reject src/aplicacao-legado/ by mistake (segment anchoring, S0-T6): ' +
-      '^src/aplicacao without an anchor would match this prefix and block a layer that does not even exist',
+    'does not reject src/application-legacy/ by mistake (segment anchoring, S0-T6): ' +
+      '^src/application without an anchor would match this prefix and block a layer that does not even exist',
     () => {
       const filePath = fixture(SYNTHETIC_TEST_LAYER_NAME, 'anchoring-test.ts');
-      writeTempFile(filePath, "import '../../adaptadores/git/index.js';\nexport {};\n");
+      writeTempFile(filePath, "import '../../adapters/git/index.js';\nexport {};\n");
       try {
         const result = runDependencyCruiser([filePath]);
         expect(result.jsonValid, result.raw).toBe(true);
@@ -378,8 +378,8 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
   it(
     'rejects a dependency cycle between two modules',
     () => {
-      const filePathA = fixture('adaptadores/relogio', 'cycle-test-a.ts');
-      const filePathB = fixture('adaptadores/relogio', 'cycle-test-b.ts');
+      const filePathA = fixture('adapters/clock', 'cycle-test-a.ts');
+      const filePathB = fixture('adapters/clock', 'cycle-test-b.ts');
       created.push(writeTempFile(filePathA, "import './cycle-test-b.js';\nexport {};\n"));
       created.push(writeTempFile(filePathB, "import './cycle-test-a.js';\nexport {};\n"));
 
@@ -387,7 +387,7 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
       expect(result.jsonValid, result.raw).toBe(true);
       const rules = violationsOfFixture(result.violations, filePathA).map((v) => v.rule);
 
-      expect(rules, result.raw).toContain('sem-dependencia-circular');
+      expect(rules, result.raw).toContain('no-circular-dependency');
     },
     CHILD_PROCESS_TIMEOUT,
   );

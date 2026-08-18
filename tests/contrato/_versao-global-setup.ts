@@ -13,7 +13,7 @@ import { getClaudeCodeVersion } from './_apoio.js';
 
 export default function setup(): void {
   const version = getClaudeCodeVersion();
-  // The only console.* in this project outside adaptadores/relogio or a logger: it's mandatory
+  // The only console.* in this project outside adapters/clock or a logger: it's mandatory
   // contract-suite diagnostics (docs/TESTES.md), not product logging — CLAUDE.md § Qualidade
   // talks about stray `console.log` in product code, not a test setup that exists specifically
   // to write this.

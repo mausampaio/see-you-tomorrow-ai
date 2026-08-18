@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sameEvidence } from '../../../src/nucleo/evidencia.js';
+import { sameEvidence } from '../../../src/core/evidence.js';
 
 describe('sameEvidence', () => {
   it('two empty signatures are not "the same evidence" — nothing to confirm (D-025)', () => {

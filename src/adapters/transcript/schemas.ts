@@ -1,6 +1,6 @@
 /**
  * zod schemas for transcript lines (`~/.claude/projects/<slug>/<sessionId>.jsonl`). See
- * docs/ESPECIFICACAO.md § "Como as sessões são descobertas" and docs/ARQUITETURA.md § transcricao/.
+ * docs/ESPECIFICACAO.md § "Como as sessões são descobertas" and docs/ARQUITETURA.md § transcript/.
  *
  * The JSONL isn't public API: Claude Code adds new entry types over time. That's why the parser
  * (S1-T4, out of this task's scope) sniffs each line's `type` field and only tries to validate

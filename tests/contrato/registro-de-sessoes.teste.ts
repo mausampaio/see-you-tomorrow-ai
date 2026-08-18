@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { sessionRecordSchema } from '../../src/adaptadores/descoberta/esquemas.js';
+import { sessionRecordSchema } from '../../src/adapters/discovery/schemas.js';
 import { getClaudeCodeVersion, realClaudeRoot } from './_apoio.js';
 
 const version = getClaudeCodeVersion();

@@ -17,8 +17,8 @@ export interface Layer {
   readonly name: string;
   /**
    * Directory (relative to src/) where it's safe to write a fixture file for this layer.
-   * `adaptadores/` has no `index.ts` at its root (each concrete adapter has its own) — that's why
-   * it points at a concrete adapter (`adaptadores/relogio/`), like the rest of the suite already
+   * `adapters/` has no `index.ts` at its root (each concrete adapter has its own) — that's why
+   * it points at a concrete adapter (`adapters/clock/`), like the rest of the suite already
    * does.
    */
   readonly fixtureDir: string;
@@ -31,10 +31,10 @@ export interface Layer {
  * here (or vice versa), `layer-matrix.teste.ts` fails before it even scans the pairs.
  */
 export const LAYERS: readonly Layer[] = [
-  { name: 'nucleo', fixtureDir: 'nucleo', targetDir: 'nucleo' },
-  { name: 'adaptadores', fixtureDir: 'adaptadores/relogio', targetDir: 'adaptadores/relogio' },
-  { name: 'aplicacao', fixtureDir: 'aplicacao', targetDir: 'aplicacao' },
-  { name: 'agendador', fixtureDir: 'agendador', targetDir: 'agendador' },
+  { name: 'core', fixtureDir: 'core', targetDir: 'core' },
+  { name: 'adapters', fixtureDir: 'adapters/clock', targetDir: 'adapters/clock' },
+  { name: 'application', fixtureDir: 'application', targetDir: 'application' },
+  { name: 'scheduler', fixtureDir: 'scheduler', targetDir: 'scheduler' },
   { name: 'cli', fixtureDir: 'cli', targetDir: 'cli' },
 ];
 
@@ -44,14 +44,14 @@ export const LAYERS: readonly Layer[] = [
  * "8 allowed" (see the sanity test in layer-matrix.teste.ts).
  */
 const ALLOWED_PAIRS: ReadonlySet<string> = new Set([
-  'adaptadores->nucleo',
-  'aplicacao->nucleo',
-  'agendador->nucleo',
-  'agendador->aplicacao',
-  'cli->nucleo',
-  'cli->adaptadores',
-  'cli->aplicacao',
-  'cli->agendador',
+  'adapters->core',
+  'application->core',
+  'scheduler->core',
+  'scheduler->application',
+  'cli->core',
+  'cli->adapters',
+  'cli->application',
+  'cli->scheduler',
 ]);
 
 export interface LayerPair {

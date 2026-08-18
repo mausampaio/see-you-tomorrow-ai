@@ -3,7 +3,7 @@
  * docs/DECISOES.md D-016. No I/O or real liveness read happens here — the caller has already
  * resolved `processIsAlive` via the `ProcessControl` port (S1-T2) and passes the result in.
  */
-import type { SessionState, DiscoveredSession } from './tipos.js';
+import type { SessionState, DiscoveredSession } from './types.js';
 
 export interface ClassificationParams {
   /** The current instant, obtained from the `Clock` port by the caller — never read here (D-019). */
@@ -19,13 +19,13 @@ export interface ClassificationParams {
  * são descobertas": "PID is recycled by the OS. `procStart` is used to break the tie").
  *
  * Pure comparison, without querying the OS — capturing the two values is the responsibility of
- * `adaptadores/processo` (S1-T2, out of this task's scope). The function itself is a pure
+ * `adapters/process` (S1-T2, out of this task's scope). The function itself is a pure
  * predicate (string to boolean, no I/O and no state): there's no reason for it to live outside
- * `nucleo/`, and the layer matrix in docs/ARQUITETURA.md doesn't forbid a pure decision from
+ * `core/`, and the layer matrix in docs/ARQUITETURA.md doesn't forbid a pure decision from
  * living here just because the data it compares also feeds an adapter.
  *
  * String equality, not numeric: both sides come in as strings because they exceed
- * `Number.MAX_SAFE_INTEGER` (same reason as `adaptadores/descoberta/esquemas.ts`), and comparing
+ * `Number.MAX_SAFE_INTEGER` (same reason as `adapters/discovery/schemas.ts`), and comparing
  * as strings avoids any precision loss on conversion.
  */
 export function pidRepresentsSameProcess(

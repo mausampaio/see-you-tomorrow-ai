@@ -1,89 +1,90 @@
 /**
- * Regras de camada de docs/ARQUITETURA.md (tabela "De → Para", 5 camadas x 20 pares ordenados,
- * D-020), impostas por dependency-cruiser. Ver S0-T2 e S0-T6 em docs/PLANO-DE-ENTREGA.md.
+ * Layer rules from docs/ARQUITETURA.md ("From → To" table, 5 layers x 20 ordered pairs, D-020),
+ * enforced by dependency-cruiser. See S0-T2 and S0-T6 in docs/PLANO-DE-ENTREGA.md.
  *
- * `cli/` é a única raiz de composição (D-020): só ele nomeia adapter concreto e injeta em
- * aplicacao/ e agendador/. Por isso aplicacao/ e agendador/ não podem importar adaptadores/
- * diretamente — só através das portas declaradas em nucleo/portas.ts. E agendador/ não pode
- * importar cli/: cli/ é quem constrói e injeta o agendador, nunca o contrário — importar cli/
- * a partir de agendador/ seria inversão de dependência da raiz de composição.
+ * `cli/` is the only composition root (D-020): only it names a concrete adapter and injects it
+ * into application/ and scheduler/. That's why application/ and scheduler/ cannot import
+ * adapters/ directly — only through the ports declared in core/ports.ts. And scheduler/ cannot
+ * import cli/: cli/ is what builds and injects the scheduler, never the other way around —
+ * importing cli/ from scheduler/ would be a composition-root dependency inversion.
  *
- * Os caminhos de `from`/`to` são âncorados por segmento (`($|/)` depois do nome da camada): sem
- * isso, `^src/aplicacao` também casaria com um futuro `src/aplicacao-legado/`, que não é a
- * camada `aplicacao/` da matriz. Ver tests/integracao/guardas/dependency-cruiser.teste.ts para
- * o teste de regressão dessa âncora.
+ * `from`/`to` paths are anchored per segment (`($|/)` after the layer name): without this,
+ * `^src/application` would also match a future `src/application-legacy/`, which isn't the
+ * `application/` layer from the matrix. See tests/integracao/guardas/dependency-cruiser.teste.ts
+ * for the regression test of that anchor.
  *
- * Arquivo em CommonJS (`.cjs`) de propósito: o pacote é `"type": "module"`, e o carregador de
- * config do dependency-cruiser é mais previsível com `module.exports` do que com um `.js` ESM.
+ * File in CommonJS (`.cjs`) on purpose: the package is `"type": "module"`, and
+ * dependency-cruiser's config loader is more predictable with `module.exports` than with an ESM
+ * `.js`.
  */
 module.exports = {
   forbidden: [
     {
-      name: 'nucleo-nao-importa-outras-camadas',
+      name: 'core-does-not-import-other-layers',
       severity: 'error',
       comment:
-        'nucleo/ é puro: não pode importar adaptadores/, aplicacao/, cli/ nem agendador/. ' +
-        'Declare uma porta em nucleo/portas.ts e implemente-a num adaptador.',
-      from: { path: '^src/nucleo($|/)' },
-      to: { path: '^src/(adaptadores|aplicacao|cli|agendador)($|/)' },
+        'core/ is pure: it cannot import adapters/, application/, cli/ or scheduler/. Declare ' +
+        'a port in core/ports.ts and implement it in an adapter.',
+      from: { path: '^src/core($|/)' },
+      to: { path: '^src/(adapters|application|cli|scheduler)($|/)' },
     },
     {
-      name: 'nucleo-nao-importa-node',
+      name: 'core-does-not-import-node',
       severity: 'error',
       comment:
-        'nucleo/ não pode importar módulos nativos do Node (node:*). Isole o I/O num adaptador ' +
-        'atrás de uma porta declarada em nucleo/portas.ts.',
-      from: { path: '^src/nucleo($|/)' },
+        'core/ cannot import Node built-in modules (node:*). Isolate I/O in an adapter behind ' +
+        'a port declared in core/ports.ts.',
+      from: { path: '^src/core($|/)' },
       to: { dependencyTypes: ['core'] },
     },
     {
-      name: 'adaptadores-nao-importa-aplicacao-cli-ou-agendador',
+      name: 'adapters-does-not-import-application-cli-or-scheduler',
       severity: 'error',
       comment:
-        'adaptadores/ implementa portas do núcleo; não pode depender de aplicacao/, cli/ nem ' +
-        'agendador/. Inverta a dependência: é aplicacao/ (ou agendador/) quem chama o adapter, ' +
-        'nunca o contrário.',
-      from: { path: '^src/adaptadores($|/)' },
-      to: { path: '^src/(aplicacao|cli|agendador)($|/)' },
+        'adapters/ implements ports from the core; it cannot depend on application/, cli/ nor ' +
+        'scheduler/. Invert the dependency: it is application/ (or scheduler/) that calls the ' +
+        'adapter, never the other way around.',
+      from: { path: '^src/adapters($|/)' },
+      to: { path: '^src/(application|cli|scheduler)($|/)' },
     },
     {
-      name: 'aplicacao-nao-importa-adaptadores-cli-ou-agendador',
+      name: 'application-does-not-import-adapters-cli-or-scheduler',
       severity: 'error',
       comment:
-        'aplicacao/ define os casos de uso; cli/ e agendador/ são quem os chama (a seta aponta ' +
-        'agendador → aplicacao em ARQUITETURA.md, nunca o contrário) — não pode ser o ' +
-        'contrário. E aplicacao/ não pode importar adaptadores/ concreto (D-020): dependa só ' +
-        'da porta declarada em nucleo/portas.ts; quem injeta a implementação é cli/, a única ' +
-        'raiz de composição.',
-      from: { path: '^src/aplicacao($|/)' },
-      to: { path: '^src/(adaptadores|cli|agendador)($|/)' },
+        'application/ defines the use cases; cli/ and scheduler/ are the ones that call them ' +
+        '(the arrow points scheduler → application in ARQUITETURA.md, never the other way) — ' +
+        'it cannot be the reverse. And application/ cannot import a concrete adapters/ (D-020): ' +
+        'depend only on the port declared in core/ports.ts; cli/, the only composition root, ' +
+        'is what injects the implementation.',
+      from: { path: '^src/application($|/)' },
+      to: { path: '^src/(adapters|cli|scheduler)($|/)' },
     },
     {
-      name: 'agendador-nao-importa-adaptadores',
+      name: 'scheduler-does-not-import-adapters',
       severity: 'error',
       comment:
-        'agendador/ recebe as dependências injetadas por cli/ (D-020, a única raiz de ' +
-        'composição) — não pode nomear um adaptador concreto direto. Dependa da porta ' +
-        'declarada em nucleo/portas.ts.',
-      from: { path: '^src/agendador($|/)' },
-      to: { path: '^src/adaptadores($|/)' },
+        'scheduler/ receives its dependencies injected by cli/ (D-020, the only composition ' +
+        'root) — it cannot name a concrete adapter directly. Depend on the port declared in ' +
+        'core/ports.ts.',
+      from: { path: '^src/scheduler($|/)' },
+      to: { path: '^src/adapters($|/)' },
     },
     {
-      name: 'agendador-nao-importa-cli',
+      name: 'scheduler-does-not-import-cli',
       severity: 'error',
       comment:
-        'cli/ é a única raiz de composição (D-020): é ele que constrói o agendador e o injeta, ' +
-        'nunca o contrário. agendador/ importar cli/ é inversão de dependência — se agendador/ ' +
-        'precisa de algo de cli/, receba por parâmetro/construtor a partir de cli/.',
-      from: { path: '^src/agendador($|/)' },
+        'cli/ is the only composition root (D-020): it is what builds the scheduler and injects ' +
+        'it, never the other way around. scheduler/ importing cli/ is a dependency inversion — ' +
+        'if scheduler/ needs something from cli/, receive it by parameter/constructor from cli/.',
+      from: { path: '^src/scheduler($|/)' },
       to: { path: '^src/cli($|/)' },
     },
     {
-      name: 'sem-dependencia-circular',
+      name: 'no-circular-dependency',
       severity: 'error',
       comment:
-        'Ciclo de dependência entre módulos do projeto. Quebre o ciclo extraindo a parte comum ' +
-        'para outro módulo ou invertendo uma das pontas pela porta certa.',
+        'Dependency cycle between project modules. Break the cycle by extracting the shared ' +
+        'part into another module or by inverting one of the ends through the right port.',
       from: {},
       to: { circular: true },
     },
@@ -93,9 +94,9 @@ module.exports = {
     tsConfig: {
       fileName: 'tsconfig.json',
     },
-    // Resolve o suficiente para saber que um pacote é 'npm'/'core', mas não entra nos módulos
-    // internos de node_modules — senão um ciclo interno de uma dependência (ex.: zod) dispara a
-    // regra sem-dependencia-circular, que é para o nosso código, não para o de terceiros.
+    // Resolves enough to know a package is 'npm'/'core', but doesn't go into node_modules'
+    // internal modules — otherwise an internal cycle in a dependency (e.g. zod) would trigger
+    // the no-circular-dependency rule, which is for our code, not for third-party code.
     doNotFollow: {
       path: 'node_modules',
     },

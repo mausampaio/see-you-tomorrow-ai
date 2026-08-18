@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { processTerminationData } from '../../../src/nucleo/encerramento.js';
+import { processTerminationData } from '../../../src/core/termination.js';
 import type {
   SessionWithPid,
   DiscoveredSession,
   SessionWithoutPid,
-} from '../../../src/nucleo/tipos.js';
+} from '../../../src/core/types.js';
 import { createSessionWithPid, createSessionWithoutPid } from './_fixtures.js';
 
 /**

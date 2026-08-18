@@ -3,7 +3,7 @@ import {
   assistantEntrySchema,
   userEntrySchema,
   KNOWN_ENTRY_TYPES,
-} from '../../../../src/adaptadores/transcricao/esquemas.js';
+} from '../../../../src/adapters/transcript/schemas.js';
 
 /**
  * Unit tests for the transcript schemas (S0-T5). Synthetic fixtures shaped after what's observed

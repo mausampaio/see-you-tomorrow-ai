@@ -4,8 +4,8 @@
  * I/O here — every external datum (config, `forks.json`, today's capture signature) arrives
  * already resolved in `EligibilityCriteria`, assembled by the caller (outside the core).
  */
-import type { DiscoveredSession } from './tipos.js';
-import { sameEvidence, type EvidenceSignature } from './evidencia.js';
+import type { DiscoveredSession } from './types.js';
+import { sameEvidence, type EvidenceSignature } from './evidence.js';
 
 /**
  * Why a given session is ineligible, in the same order the conditions appear in the spec.
@@ -44,7 +44,7 @@ export interface EligibilityCriteria {
   readonly relevanceHours: number;
   /**
    * `cwd`s from the `ignorar` list in `config.json`, already normalized by whoever assembles this
-   * object — `nucleo/` can't import `node:path` (guard rule), so path normalization
+   * object — `core/` can't import `node:path` (guard rule), so path normalization
    * (upper/lowercase, trailing slash, etc.) is the responsibility of code outside the core. The
    * comparison here is exact string equality.
    */

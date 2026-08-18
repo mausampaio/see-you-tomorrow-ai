@@ -1,47 +1,47 @@
-// Configuração do ESLint (flat config). Ver docs/PLANO-DE-ENTREGA.md S0-T2: regras type-aware
-// (recommendedTypeChecked) mais os dois guards de fronteira que o dependency-cruiser não cobre
-// sozinho — proibição de node:* em nucleo/ e, fora de adaptadores/relogio/, da fonte
-// não-determinística de tempo (D-019: `new Date()` sem argumento, `Date.now()`, setTimeout/
-// setInterval). `new Date(valor)` e `Date.parse` continuam livres em qualquer lugar — não são
-// leitura do "agora", são transformação determinística de um dado que já se tem.
+// ESLint config (flat config). See docs/PLANO-DE-ENTREGA.md S0-T2: type-aware rules
+// (recommendedTypeChecked) plus the two boundary guards dependency-cruiser doesn't cover on its
+// own — banning node:* in core/ and, outside adapters/clock/, non-deterministic time sources
+// (D-019: argument-less `new Date()`, `Date.now()`, setTimeout/setInterval). `new Date(valor)`
+// and `Date.parse` stay free anywhere — they aren't a read of "now", they're a deterministic
+// transformation of data already in hand.
 import tseslint from 'typescript-eslint';
 
-const MENSAGEM_NODE_NO_NUCLEO =
-  'nucleo/ é puro e não pode importar módulos do Node (node:*). Isole o I/O num adaptador ' +
-  'atrás de uma porta declarada em nucleo/portas.ts.';
+const NODE_IN_CORE_MESSAGE =
+  'core/ is pure and cannot import Node modules (node:*). Isolate I/O in an adapter behind a ' +
+  'port declared in core/ports.ts.';
 
-const MENSAGEM_RELOGIO = (nome) =>
-  `${nome} só pode ser usado em src/adaptadores/relogio/. Em qualquer outro lugar, use a ` +
-  'porta Relogio (nucleo/portas.ts) para obter o instante atual ou agendar algo.';
+const CLOCK_MESSAGE = (name) =>
+  `${name} can only be used in src/adapters/clock/. Anywhere else, use the Clock port ` +
+  '(core/ports.ts) to get the current instant or schedule something.';
 
 export default tseslint.config(
   {
-    // .dependency-cruiser.cjs é CommonJS de propósito (ver o próprio arquivo) e não faz parte
-    // do programa TypeScript do projeto — fica fora do escopo do ESLint type-aware.
-    // coverage/** é '**/coverage/**' (não só a da raiz) porque as fixtures de
-    // tests/fixtures/guardas/ geram a delas própria ao rodar.
+    // .dependency-cruiser.cjs is CommonJS on purpose (see the file itself) and isn't part of
+    // the project's TypeScript program — it's out of the type-aware ESLint's scope.
+    // coverage/** is '**/coverage/**' (not just the root one) because the fixtures in
+    // tests/fixtures/guards/ generate their own when they run.
     ignores: ['dist/**', '**/coverage/**', 'node_modules/**', '.dependency-cruiser.cjs'],
   },
   ...tseslint.configs.recommendedTypeChecked,
   {
     languageOptions: {
       parserOptions: {
-        // allowJs está desligado (de propósito: não queremos .js solto em src/), então nenhum
-        // .js na raiz entra de fato no programa do tsc mesmo listado no "include" do
-        // tsconfig.json. Os dois arquivos de config em .js do projeto entram aqui.
+        // allowJs is off (on purpose: we don't want stray .js in src/), so no .js at the root
+        // actually enters the tsc program even though it's listed in tsconfig.json's "include".
+        // The project's two .js config files enter here.
         projectService: {
           allowDefaultProject: ['eslint.config.js', 'lint-staged.config.js'],
         },
-        // Sob allowDefaultProject o programa é criado sem @types/node, então
-        // import.meta.dirname fica sem tipo (o valor em si é são — é sempre string).
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- ver comentário acima
+        // Under allowDefaultProject the program is created without @types/node, so
+        // import.meta.dirname ends up untyped (the value itself is sound — it's always a string).
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- see comment above
         tsconfigRootDir: import.meta.dirname,
       },
     },
   },
   {
-    // node:* é proibido só no núcleo — em qualquer outro diretório é normal e necessário.
-    files: ['src/nucleo/**/*.ts'],
+    // node:* is forbidden only in the core — in any other directory it's normal and necessary.
+    files: ['src/core/**/*.ts'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -49,7 +49,7 @@ export default tseslint.config(
           patterns: [
             {
               group: ['node:*'],
-              message: MENSAGEM_NODE_NO_NUCLEO,
+              message: NODE_IN_CORE_MESSAGE,
             },
           ],
         },
@@ -57,30 +57,30 @@ export default tseslint.config(
     },
   },
   {
-    // A fonte não-determinística de tempo só existe em adaptadores/relogio/, que implementa a
-    // porta Relogio (D-019). setTimeout/setInterval são banidos por inteiro — não têm uma forma
-    // determinística. Date é mais fino: `new Date()` sem argumento e `Date.now()` leem o
-    // "agora" (proibidos); `new Date(valor)`, `Date.parse(valor)` e os métodos de instância só
-    // transformam um dado que já se tem (permitidos em qualquer lugar) — por isso
-    // no-restricted-globals (que não distingue aridade) não serve para Date, e viramos
-    // no-restricted-syntax com seletores que olham os argumentos de verdade.
+    // The non-deterministic time source only exists in adapters/clock/, which implements the
+    // Clock port (D-019). setTimeout/setInterval are banned outright — they have no
+    // deterministic form. Date is finer-grained: argument-less `new Date()` and `Date.now()`
+    // read "now" (forbidden); `new Date(valor)`, `Date.parse(valor)` and instance methods only
+    // transform data already in hand (allowed anywhere) — that's why no-restricted-globals
+    // (which doesn't distinguish arity) doesn't work for Date, and we turn to
+    // no-restricted-syntax with selectors that actually look at the arguments.
     files: ['src/**/*.ts'],
-    ignores: ['src/adaptadores/relogio/**/*.ts'],
+    ignores: ['src/adapters/clock/**/*.ts'],
     rules: {
       'no-restricted-globals': [
         'error',
-        { name: 'setTimeout', message: MENSAGEM_RELOGIO('setTimeout') },
-        { name: 'setInterval', message: MENSAGEM_RELOGIO('setInterval') },
+        { name: 'setTimeout', message: CLOCK_MESSAGE('setTimeout') },
+        { name: 'setInterval', message: CLOCK_MESSAGE('setInterval') },
       ],
       'no-restricted-syntax': [
         'error',
         {
           selector: "NewExpression[callee.name='Date'][arguments.length=0]",
-          message: MENSAGEM_RELOGIO('new Date() sem argumento'),
+          message: CLOCK_MESSAGE('argument-less new Date()'),
         },
         {
           selector: "CallExpression[callee.object.name='Date'][callee.property.name='now']",
-          message: MENSAGEM_RELOGIO('Date.now()'),
+          message: CLOCK_MESSAGE('Date.now()'),
         },
       ],
     },

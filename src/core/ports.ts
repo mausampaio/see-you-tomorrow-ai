@@ -1,6 +1,6 @@
 /**
  * Core ports — the interfaces every access to the world has to go through
- * (docs/ARQUITETURA.md § "Princípio"). `nucleo/` declares the interface; `adaptadores/`
+ * (docs/ARQUITETURA.md § "Princípio"). `core/` declares the interface; `adapters/`
  * implements it; `cli/` is the only composition root that names the concrete implementation and
  * injects it (D-020).
  *
@@ -25,10 +25,10 @@
  *
  * Open question about this scope cut: docs/QUESTOES.md Q-004.
  */
-import type { DiscoveredSession } from './tipos.js';
+import type { DiscoveredSession } from './types.js';
 
 /**
- * The project's single source of "now" (D-019). Implemented in `adaptadores/relogio/`. No other
+ * The project's single source of "now" (D-019). Implemented in `adapters/clock/`. No other
  * module calls `new Date()` with no argument, `Date.now()`, or a long-running
  * `setTimeout`/`setInterval` — this port is what returns the instant, and whoever needs it
  * receives it already resolved.
@@ -38,11 +38,11 @@ export interface Clock {
 }
 
 /**
- * Process liveness and termination (D-002, D-023). Implemented in `adaptadores/processo/`
+ * Process liveness and termination (D-002, D-023). Implemented in `adapters/process/`
  * (S1-T2). `isAlive` receives `procStart` to break ties on a recycled PID
  * (docs/ESPECIFICACAO.md § "Como as sessões são descobertas") — the pure decision of when two
  * `procStart` values count as the same process lives in
- * `nucleo/classification.ts#pidRepresentsSameProcess`; this port only declares the async
+ * `core/classification.ts#pidRepresentsSameProcess`; this port only declares the async
  * contract that the adapter fulfills by querying the real OS.
  */
 export interface ProcessControl {
@@ -51,7 +51,7 @@ export interface ProcessControl {
 }
 
 /**
- * Session discovery (D-016, D-023). Implemented in `adaptadores/descoberta/`, merging the
+ * Session discovery (D-016, D-023). Implemented in `adapters/discovery/`, merging the
  * strategies of S1-T3 (registry), S1-T8 (transcript scan) and S1-T10 (process + `.key`) into a
  * single deduplicated list of `DiscoveredSession` — `list()` returns the already-merged union,
  * never the raw concatenation of the three sources: callers shouldn't need to know how many

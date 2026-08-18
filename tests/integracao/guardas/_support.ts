@@ -154,15 +154,15 @@ function isErrorWithCode(error: unknown, code: string): boolean {
  * directly, without tolerating this, and the PO reproduced the suite (not the test — the SUITE)
  * crashing with `ENOENT: ... scandir`. The TOCTOU hadn't been eliminated from dependency-cruiser:
  * it had been MOVED one level up, to this scan. E.g. the test "doesn't reject
- * src/aplicacao-legado/ by mistake" (dependency-cruiser.teste.ts) creates `src/aplicacao-legado/`
+ * src/application-legacy/ by mistake" (dependency-cruiser.teste.ts) creates `src/application-legacy/`
  * and deletes the whole directory in `finally` — if this scan, running in parallel, lists `src/`
- * and sees `aplicacao-legado` in time, but only gets to read its CONTENTS after that `finally` has
+ * and sees `application-legacy` in time, but only gets to read its CONTENTS after that `finally` has
  * already run, the recursive `readdirSync` in here blows up.
  *
  * Why tolerating this is the CORRECT answer and not a lazy `catch` hiding instability (the same
  * trap as the retry we already discarded): the only kind of directory that can vanish mid-scan is
  * a transient artifact from another guard test file — either a `_guarda-*` (which we already skip
- * by name anyway) or a whole synthetic layer like `aplicacao-legado/`, created and deleted by a
+ * by name anyway) or a whole synthetic layer like `application-legacy/`, created and deleted by a
  * single test. No real PRODUCTION directory is ever deleted during the suite. So "disappeared
  * between me listing the parent and me trying to read it" is, by definition, "not production" —
  * returning an empty list for that branch is the semantically correct read, not fault tolerance.
@@ -234,7 +234,7 @@ export function runDependencyCruiserOnFullTree(): DependencyCruiserResult {
 
 /**
  * Violations whose source or destination module is the given fixture (path relative to the
- * project root, e.g. `src/nucleo/_guarda-eslint/x.ts` — dependency-cruiser always reports paths
+ * project root, e.g. `src/core/_guarda-eslint/x.ts` — dependency-cruiser always reports paths
  * with `/`, even on Windows).
  */
 export function violationsOfFixture(
@@ -271,7 +271,7 @@ export function runVitestWithCoverage(fixtureDirectory: string): CommandResult {
 
 /**
  * Writes a temp file inside the project's real tree (needed for the layer guards, which see
- * paths like `src/nucleo/...`). Returns the absolute path, so the caller can delete it in
+ * paths like `src/core/...`). Returns the absolute path, so the caller can delete it in
  * `afterEach`.
  */
 export function writeTempFile(pathRelativeToProject: string, content: string): string {
@@ -289,7 +289,7 @@ export function deleteTempFile(absolutePath: string): void {
 /**
  * Name of the synthetic top-level `src/` directory that `dependency-cruiser.teste.ts` creates and
  * deletes on its own to prove the segment anchoring of D-020/S0-T6 ("doesn't reject
- * src/aplicacao-legado/ by mistake"). Shared here (S1-T0, third review round) so that
+ * src/application-legacy/ by mistake"). Shared here (S1-T0, third review round) so that
  * `layer-matrix.teste.ts` — which lists `src/`'s top-level directories and compares them
  * against the declared layer matrix — knows to filter out EXACTLY this name before comparing,
  * instead of risking a (rare, but real) failure pointing at the wrong place: "the matrix is
@@ -297,16 +297,16 @@ export function deleteTempFile(absolutePath: string): void {
  *
  * Why the filter on layer-matrix.teste.ts's side has to be an EXACT name, never a prefix or
  * regex: that test exists to catch a real 6th layer added to src/ without updating the matrix. A
- * broad filter (e.g. `startsWith('aplicacao')`) would blind the test to a legitimate layer called
- * `aplicacao-nova` — we'd trade a rare race for a permanent blind spot, which is worse. An exact
+ * broad filter (e.g. `startsWith('application')`) would blind the test to a legitimate layer called
+ * `application-new` — we'd trade a rare race for a permanent blind spot, which is worse. An exact
  * name is the only way to exclude just this known synthetic directory without giving up the
  * test's purpose.
  *
  * Don't change the value without reviewing `dependency-cruiser.teste.ts`: the anchoring test
- * depends on the name starting with `aplicacao` — it's exactly the prefix an unanchored regex
- * would match by mistake against the real `aplicacao/` layer.
+ * depends on the name starting with `application` — it's exactly the prefix an unanchored regex
+ * would match by mistake against the real `application/` layer.
  */
-export const SYNTHETIC_TEST_LAYER_NAME = 'aplicacao-legado';
+export const SYNTHETIC_TEST_LAYER_NAME = 'application-legacy';
 
 /**
  * Name of the subdirectory reserved for ONE guard test file (S1-T0). Each file
@@ -322,9 +322,9 @@ export function guardSubdirectory(guardName: string): string {
 
 /**
  * Path (relative to the project root) of a fixture file for the `guardName` guard, inside the
- * `layerDir` layer (relative to src/, e.g. `'adaptadores/relogio'`). E.g.:
- * `guardFixturePath('eslint', 'nucleo', 'controle.ts')` →
- * `'src/nucleo/_guarda-eslint/controle.ts'`.
+ * `layerDir` layer (relative to src/, e.g. `'adapters/clock'`). E.g.:
+ * `guardFixturePath('eslint', 'core', 'control.ts')` →
+ * `'src/core/_guarda-eslint/control.ts'`.
  */
 export function guardFixturePath(
   guardName: string,
@@ -339,7 +339,7 @@ export function guardFixturePath(
  * timeout, for example) before `afterEach` deletes the offending file. Unlike the old scan (every
  * `_` in all of src/), this only deletes the subdirectory reserved for `guardName` — wherever it
  * appears inside src/, since a layer can have more than one occurrence (e.g.
- * `adaptadores/relogio/_guarda-eslint/` and `aplicacao/_guarda-eslint/`). Never touches another
+ * `adapters/clock/_guarda-eslint/` and `application/_guarda-eslint/`). Never touches another
  * test file's fixture.
  */
 export function cleanUpGuardResidue(guardName: string): void {

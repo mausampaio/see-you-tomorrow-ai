@@ -11,7 +11,7 @@
  * and nothing in the type stops `terminateGracefully(item.pid!)`. Here there is no path to that:
  * `SessionWithPid` carries a guaranteed `pid` (`number`, never `undefined`); `SessionWithoutPid`
  * doesn't have the `pid` field at all. The process-termination policy (D-002) accepts only the
- * first shape — see `nucleo/termination.ts#processTerminationData`, which only types for
+ * first shape — see `core/termination.ts#processTerminationData`, which only types for
  * `SessionWithPid`. Whoever holds a `DiscoveredSession` (the union) has to narrow with
  * `if (session.hasPid)` before being able to call that function; the compiler refuses the call
  * without the narrowing, with no `!` at the call site.
@@ -69,8 +69,8 @@ interface CommonSessionFields {
   /**
    * Instant of the last known write to the transcript, or `null` when `hasTranscript` is
    * `false` (there was never anything to write). Used both by state classification (idleness,
-   * `nucleo/classificacao.ts`) and by eligibility (anti-duplication,
-   * `nucleo/elegibilidade.ts`) — both use specifically the transcript, not general activity,
+   * `core/classification.ts`) and by eligibility (anti-duplication,
+   * `core/eligibility.ts`) — both use specifically the transcript, not general activity,
    * because that's what the spec asks for in each case.
    */
   readonly lastTranscriptWrite: Date | null;
@@ -93,8 +93,8 @@ export interface SessionWithPid extends CommonSessionFields {
   /**
    * Process start timestamp, in the raw shape from the Claude Code record (string, not
    * `number`: the real values exceed `Number.MAX_SAFE_INTEGER` — same reason as
-   * `adaptadores/discovery/schemas.ts`). Used to break ties on a recycled PID
-   * (`nucleo/classification.ts#pidRepresentsSameProcess`).
+   * `adapters/discovery/schemas.ts`). Used to break ties on a recycled PID
+   * (`core/classification.ts#pidRepresentsSameProcess`).
    */
   readonly procStart: string;
   /**

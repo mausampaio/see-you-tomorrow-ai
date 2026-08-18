@@ -1,6 +1,6 @@
 /**
  * Pure comparison of "evidence signature" — what eligibility's anti-duplication uses (D-026,
- * `nucleo/elegibilidade.ts`).
+ * `core/eligibility.ts`).
  */
 
 /**
