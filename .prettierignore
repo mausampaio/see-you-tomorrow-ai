@@ -2,8 +2,13 @@ dist/
 coverage/
 node_modules/
 
-# Documentos de autoridade e o contrato de trabalho: fora do alcance de reformatação
-# automática desta tarefa (docs/DECISOES.md e docs/ESPECIFICACAO.md nem podem ser alterados
-# pelo agente dev — ver CLAUDE.md).
-CLAUDE.md
+# Authority documents and the work contract: out of scope for automatic reformatting
+# (docs/DECISOES.md and docs/ESPECIFICACAO.md can't even be edited by the dev agent — see
+# AGENTS.md, the contract CLAUDE.md only imports).
 docs/
+
+# AGENTS.md: reformatting only realigns the markdown tables (glossary, language table) to
+# padded columns — no wording changes. Every future one-cell edit would then repad the whole
+# table, turning a one-line content change into dozens of noise lines in the diff of the
+# project's most closely-reviewed document. Churn without gain (S1-T0f).
+AGENTS.md
