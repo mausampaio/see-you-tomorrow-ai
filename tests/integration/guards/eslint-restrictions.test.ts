@@ -10,7 +10,7 @@ import {
 
 const GUARD_NAME = 'eslint';
 
-/** Shortcut for a fixture path in this file, always isolated in src/<layer>/_guarda-eslint/. */
+/** Shortcut for a fixture path in this file, always isolated in src/<layer>/_guard-eslint/. */
 function fixture(layerDir: string, fileName: string): string {
   return guardFixturePath(GUARD_NAME, layerDir, fileName);
 }
@@ -32,7 +32,7 @@ function fixture(layerDir: string, fileName: string): string {
  * TIMEOUT` (S0-T6) because Vitest's default 5s times out under load when spawning the real
  * eslint.
  *
- * S1-T0: each fixture lives in `src/<layer>/_guarda-eslint/`, a subdirectory reserved for THIS
+ * S1-T0: each fixture lives in `src/<layer>/_guard-eslint/`, a subdirectory reserved for THIS
  * test file — never shared with dependency-cruiser.test.ts or layer-matrix.test.ts.
  * `runEslint` is already given the fixture's exact path (never scans the whole tree), so eslint
  * itself never "sees" another test file's fixture; the real cause of the failure under

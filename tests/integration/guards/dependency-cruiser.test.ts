@@ -17,7 +17,7 @@ import {
 
 const GUARD_NAME = 'dependency-cruiser';
 
-/** Shortcut for a fixture path in this file, always isolated in src/<layer>/_guarda-dependency-cruiser/. */
+/** Shortcut for a fixture path in this file, always isolated in src/<layer>/_guard-dependency-cruiser/. */
 function fixture(layerDir: string, fileName: string): string {
   return guardFixturePath(GUARD_NAME, layerDir, fileName);
 }
@@ -31,7 +31,7 @@ function fixture(layerDir: string, fileName: string): string {
  * tool as a child process, and deletes the file in `afterEach`, even if the assertion fails. No
  * violation stays permanently in the repo.
  *
- * S1-T0: each test's fixture lives in `src/<layer>/_guarda-dependency-cruiser/`, a subdirectory
+ * S1-T0: each test's fixture lives in `src/<layer>/_guard-dependency-cruiser/`, a subdirectory
  * reserved for THIS test file (never shared with layer-matrix.test.ts or
  * eslint-restrictions.test.ts). And, even more importantly: each test tells dependency-cruiser to
  * analyze ONLY its own fixture (`runDependencyCruiser([path])`), not all of `src/` —

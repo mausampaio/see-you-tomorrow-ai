@@ -161,7 +161,7 @@ function isErrorWithCode(error: unknown, code: string): boolean {
  *
  * Why tolerating this is the CORRECT answer and not a lazy `catch` hiding instability (the same
  * trap as the retry we already discarded): the only kind of directory that can vanish mid-scan is
- * a transient artifact from another guard test file — either a `_guarda-*` (which we already skip
+ * a transient artifact from another guard test file — either a `_guard-*` (which we already skip
  * by name anyway) or a whole synthetic layer like `application-legacy/`, created and deleted by a
  * single test. No real PRODUCTION directory is ever deleted during the suite. So "disappeared
  * between me listing the parent and me trying to read it" is, by definition, "not production" —
@@ -184,14 +184,14 @@ function listEntriesOrEmpty(directory: string): Dirent[] {
 
 /**
  * Lists (recursively, paths relative to the project root, always with `/`) every PRODUCTION
- * `.ts` inside `directory`, skipping entirely any guard fixture subdirectory (`_guarda-*`, see
+ * `.ts` inside `directory`, skipping entirely any guard fixture subdirectory (`_guard-*`, see
  * `guardSubdirectory`) — and tolerating a (test, never production) directory that vanishes
  * mid-scan, see `listEntriesOrEmpty`.
  */
 function listProductionTsFiles(directory: string): string[] {
   const result: string[] = [];
   for (const entry of listEntriesOrEmpty(directory)) {
-    if (entry.name.startsWith('_guarda-')) {
+    if (entry.name.startsWith('_guard-')) {
       continue;
     }
     const absolutePath = path.join(directory, entry.name);
@@ -220,12 +220,12 @@ function listProductionTsFiles(directory: string): string[] {
  *
  * The real fix: instead of having dependency-cruiser LIST the directory (and risk listing a file
  * another test deletes an instant later), this function lists the production `.ts` files itself
- * first (`listProductionTsFiles`), skipping every `_guarda-*` subdirectory — and hands
+ * first (`listProductionTsFiles`), skipping every `_guard-*` subdirectory — and hands
  * dependency-cruiser only that explicit list of FILES. Since no guard fixture ever enters that
  * list, dependency-cruiser never even learns it existed, so it never tries to open it: the TOCTOU
  * disappears by construction, not by retry luck. Only production files are churn-free (nothing
  * besides the guard tests creates/deletes files in `src/` during the suite, and they only touch
- * their own `_guarda-*`), so our own listing doesn't inherit that race.
+ * their own `_guard-*`), so our own listing doesn't inherit that race.
  */
 export function runDependencyCruiserOnFullTree(): DependencyCruiserResult {
   const entries = listProductionTsFiles(path.join(PROJECT_ROOT, 'src'));
@@ -234,7 +234,7 @@ export function runDependencyCruiserOnFullTree(): DependencyCruiserResult {
 
 /**
  * Violations whose source or destination module is the given fixture (path relative to the
- * project root, e.g. `src/core/_guarda-eslint/x.ts` — dependency-cruiser always reports paths
+ * project root, e.g. `src/core/_guard-eslint/x.ts` — dependency-cruiser always reports paths
  * with `/`, even on Windows).
  */
 export function violationsOfFixture(
@@ -245,10 +245,10 @@ export function violationsOfFixture(
   return violations.filter((violation) => violation.from === target || violation.to === target);
 }
 
-const GUARD_SUBDIRECTORY_PATTERN = /\/_guarda-[^/]+\//;
+const GUARD_SUBDIRECTORY_PATTERN = /\/_guard-[^/]+\//;
 
 /**
- * Violations outside any guard fixture subdirectory (`_guarda-*`, see `guardSubdirectory`). Use:
+ * Violations outside any guard fixture subdirectory (`_guard-*`, see `guardSubdirectory`). Use:
  * the only test that doesn't write its own fixture ("approves the real tree, no violation") —
  * without this, an in-flight fixture from ANOTHER test file, running in parallel, would make this
  * control fail for a reason that isn't its own (S1-T0).
@@ -317,14 +317,14 @@ export const SYNTHETIC_TEST_LAYER_NAME = 'application-legacy';
  * deleting any file with the `_` prefix, including another test file's fixture).
  */
 export function guardSubdirectory(guardName: string): string {
-  return `_guarda-${guardName}`;
+  return `_guard-${guardName}`;
 }
 
 /**
  * Path (relative to the project root) of a fixture file for the `guardName` guard, inside the
  * `layerDir` layer (relative to src/, e.g. `'adapters/clock'`). E.g.:
  * `guardFixturePath('eslint', 'core', 'control.ts')` →
- * `'src/core/_guarda-eslint/control.ts'`.
+ * `'src/core/_guard-eslint/control.ts'`.
  */
 export function guardFixturePath(guardName: string, layerDir: string, fileName: string): string {
   return path.join('src', layerDir, guardSubdirectory(guardName), fileName);
@@ -335,7 +335,7 @@ export function guardFixturePath(guardName: string, layerDir: string, fileName: 
  * timeout, for example) before `afterEach` deletes the offending file. Unlike the old scan (every
  * `_` in all of src/), this only deletes the subdirectory reserved for `guardName` — wherever it
  * appears inside src/, since a layer can have more than one occurrence (e.g.
- * `adapters/clock/_guarda-eslint/` and `application/_guarda-eslint/`). Never touches another
+ * `adapters/clock/_guard-eslint/` and `application/_guard-eslint/`). Never touches another
  * test file's fixture.
  */
 export function cleanUpGuardResidue(guardName: string): void {

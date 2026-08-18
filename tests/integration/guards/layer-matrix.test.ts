@@ -33,7 +33,7 @@ const GUARD_NAME = 'matriz-de-camadas';
  *    if it says allowed, it has to accept it. A missing rule (should reject and doesn't) and an
  *    overly tight rule (should accept and doesn't) are equally a bug here.
  *
- * S1-T0: each fixture lives in `src/<layer>/_guarda-matriz-de-camadas/`, a subdirectory reserved
+ * S1-T0: each fixture lives in `src/<layer>/_guard-matriz-de-camadas/`, a subdirectory reserved
  * for THIS file (never shared with dependency-cruiser.test.ts), and dependency-cruiser is called
  * only with THAT fixture as input (`runDependencyCruiser([fixturePath])`), not all of `src/` — the
  * result only speaks to what this test wrote, never to what another test file is doing in
@@ -85,7 +85,7 @@ describe('guard: the 20 ordered pairs of the docs/ARQUITETURA.md matrix have com
   });
 
   /**
-   * Relative import path from the fixture (already inside its `_guarda-matriz-de-camadas`
+   * Relative import path from the fixture (already inside its `_guard-matriz-de-camadas`
    * subdirectory, S1-T0) to `to`'s canonical `index.ts`. `fixturePath` is relative to the
    * project root; the calculation's base is the fixture's DIRECTORY, not `from.fixtureDir`
    * directly, because the fixture now lives one level deeper (isolated from the other guard
