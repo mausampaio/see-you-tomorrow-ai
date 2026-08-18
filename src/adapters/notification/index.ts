@@ -1,5 +1,5 @@
 /**
- * Notification adapter: native per-OS toast, implements `Notificador`. See docs/ARQUITETURA.md.
+ * Notification adapter: native per-OS toast, implements `Notifier`. See docs/ARQUITETURA.md.
  *
  * Still empty — comes in at S4-T1.
  */

@@ -285,7 +285,7 @@ aqui antes de entrar no código.**
 | evidência / assinatura de evidência | `evidence` / `EvidenceSignature` |
 | captura | `capture` |
 | handoff / briefing | `handoff` / `briefing` (já em inglês) |
-| encerrar o dia / iniciar o dia | `endDay` / `startDay` |
+| encerrar o dia / iniciar o dia / capturar sessão | `endDay` / `startDay` / `captureSession` |
 | encerrar processo | `terminate` (nunca `close` nem `kill`) |
 | fatos / fontes | `facts` / `sources` |
 | relógio | `Clock` |
@@ -299,12 +299,19 @@ justamente para que quem os implementar não invente nome:
 | Documento (pt) | Código (en) | Chega em |
 |---|---|---|
 | leitor de transcrição | `TranscriptReader` | S1-T4 |
+| ler fatos (método) | `readFacts` | S1-T4 |
 | fatos da sessão | `SessionFacts` | S1-T4 |
 | gerador de handoff | `HandoffGenerator` | S2-T2 |
+| gerar (método) | `generate` | S2-T2 |
 | entendimento gerado | `GeneratedUnderstanding` | S2-T2 |
 | notificador / aviso | `Notifier` / `Notice` | S4-T1 |
+| notificar (método) | `notify` | S4-T1 |
+| está disponível / suporta ações (métodos) | `isAvailable` / `supportsActions` | S4-T1 |
 | armazenamento | `Storage` | S1-T5 |
+| salvar handoff / ler briefing / ler config (métodos) | `saveHandoff` / `readBriefing` / `readConfig` | S1-T5 |
+| dia | `Day` | S1-T5 |
 | estado do dia | `DayState` | S4-T2 |
+| salvar estado (método) | `saveState` | S4-T2 |
 
 **Identificadores que vão para disco.** Chaves de `config.json`, chaves do handoff e o layout de
 pastas em `~/.seeya/`. Estes são os mais caros de errar: uma vez que o app grava um arquivo, o
@@ -324,6 +331,7 @@ usa. Fixados em S1-T0g, antes de qualquer um deles existir em código.
 | ignorar | `ignore` | config |
 | política por projeto | `projectPolicy` | config |
 | pode encerrar | `canTerminate` | config |
+| captura profunda | `deepCapture` | config (`projectPolicy`) |
 | capturado em | `capturedAt` | handoff |
 | estado da sessão | `sessionState` | handoff |
 | capturado durante turno ativo | `capturedDuringActiveTurn` | handoff |

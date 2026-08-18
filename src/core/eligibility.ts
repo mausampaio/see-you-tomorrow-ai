@@ -36,16 +36,16 @@ export interface PreviousCaptureToday {
 export interface EligibilityCriteria {
   /** The current instant, obtained from the `Clock` port by the caller — never read here (D-019). */
   readonly now: Date;
-  /** `horasDeRelevancia` from `config.json` (default 12h, docs/ARQUITETURA.md § Config). */
+  /** `relevanceHours` from `config.json` (default 12h, docs/ARQUITETURA.md § Config). */
   readonly relevanceHours: number;
   /**
-   * `cwd`s from the `ignorar` list in `config.json`, already normalized by whoever assembles this
+   * `cwd`s from the `ignore` list in `config.json`, already normalized by whoever assembles this
    * object — `core/` can't import `node:path` (guard rule), so path normalization
    * (upper/lowercase, trailing slash, etc.) is the responsibility of code outside the core. The
    * comparison here is exact string equality.
    */
   readonly ignoredCwds: ReadonlySet<string>;
-  /** `sessionId`s registered in `~/.see-you-tomorrow/forks.json` (D-012). */
+  /** `sessionId`s registered in `~/.seeya/forks.json` (D-012, D-027). */
   readonly knownForks: ReadonlySet<string>;
   /** See `PreviousCaptureToday`. `null` when there's no handoff today for this session. */
   readonly previousCaptureToday: PreviousCaptureToday | null;
@@ -68,7 +68,7 @@ export interface EligibilityResult {
  * session.
  *
  * The spec's first two conditions — "at least one evidence source answered" and "had activity in
- * the last `horasDeRelevancia` ... measured by the most recent source available" — are two faces
+ * the last `relevanceHours` ... measured by the most recent source available" — are two faces
  * of the same field, `session.lastActivity`. With no source answering, there's no way to compute
  * "the most recent source" — so `lastActivity === null` is already both things at once: zero
  * evidence **and**, as a consequence, zero provably recent activity. That's why the two

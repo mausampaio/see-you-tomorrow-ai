@@ -10,17 +10,17 @@
  * would mean inventing those types too early, just to fill in a signature, or declaring the port
  * with `unknown` — worse than not declaring it. The four, and the type missing from each:
  *
- * - `LeitorDeTranscricao` — returns `FatosDaSessao`, a type that only appears in S2-T3/S2-T4
+ * - `TranscriptReader` — returns `SessionFacts`, a type that only appears in S2-T3/S2-T4
  *   (out of this task's scope). The cheap transcript reading that Sprint 1 uses (S1-T8, mtime
  *   scan) doesn't go through here: it's `stat`, not content parsing.
- * - `GeradorDeHandoff` — returns `EntendimentoGerado`, also a handoff type. Implemented in
+ * - `HandoffGenerator` — returns `GeneratedUnderstanding`, also a handoff type. Implemented in
  *   S2-T2.
- * - `Notificador` — implemented in S4-T1. S1-T7's pure rule (notify once per `sessionId`,
+ * - `Notifier` — implemented in S4-T1. S1-T7's pure rule (notify once per `sessionId`,
  *   never repeating) doesn't need the whole port to be pure; whoever implements S1-T7 decides
  *   the minimal shape that rule needs.
- * - `Armazenamento` — the signature in docs/ARQUITETURA.md uses `Handoff`, `Briefing`,
- *   `EstadoDoDia`, none of which exist yet. S1-T5 declares here whatever it needs, at whatever
- *   size it has at that point (likely `lerConfig`/`salvarEstado` first, growing in S2 for the
+ * - `Storage` — the signature in docs/ARQUITETURA.md uses `Handoff`, `Briefing`,
+ *   `DayState`, none of which exist yet. S1-T5 declares here whatever it needs, at whatever
+ *   size it has at that point (likely `readConfig`/`saveState` first, growing in S2 for the
  *   handoff/briefing methods).
  *
  * Open question about this scope cut: docs/QUESTOES.md Q-004.

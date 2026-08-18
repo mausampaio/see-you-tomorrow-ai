@@ -122,7 +122,7 @@ export interface SessionWithoutPid extends CommonSessionFields {
  *   D-013) — `null` isn't a sign of inactivity, it's absence of data, and `idle` is a claim that
  *   requires a real timestamp (D-025).
  * - `idle` — process running right now, **and** a real timestamp of the last transcript write
- *   that has already passed `minutosParaOcioso`. A refinement of `alive` that only applies when
+ *   that has already passed `idleMinutes`. A refinement of `alive` that only applies when
  *   there is positive evidence of silence, never from transcript absence (D-025).
  * - `ended` — process is no longer alive (it died, or the record entry is stale: a recycled PID
  *   with a divergent `procStart`). Reported, not discarded (D-016).

@@ -1,6 +1,6 @@
 /**
  * The pure slice of the process-termination policy (D-002, D-024). The whole policy — checking
- * `podeEncerrar` by `cwd` in the config, confirming the handoff is written to disk before
+ * `canTerminate` by `cwd` in the config, confirming the handoff is written to disk before
  * terminating — is orchestration that belongs to `application/` (S2-T3), out of this task's scope.
  * What lives here is only the type gate D-024 requires: extracting the data needed to terminate a
  * process is only possible from the shape that guarantees `pid`.

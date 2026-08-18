@@ -28,7 +28,7 @@ Pare e registre em `docs/QUESTOES.md`.
   a autenticação do usuário. Sem SDK HTTP, sem manipular chave de API.
 - **Analytics, telemetria ou qualquer envio de dados para fora.**
 - **Plugin ou hook do Claude Code.** A v1 é externa e não instala nada em `~/.claude/`.
-- **Retomar automaticamente ao ligar a máquina.** `seeya iniciar-dia` é sempre uma ação do
+- **Retomar automaticamente ao ligar a máquina.** `seeya start-day` é sempre uma ação do
   usuário.
 - **Histórico com busca, métricas ou relatórios.** Os handoffs ficam em disco; ler é `cat`.
 
@@ -41,7 +41,7 @@ Registradas para não se perderem. **Não implementar sem decisão nova.**
   configuração — nomes de comando e mensagens por locale. Só é barata se o texto voltado ao
   usuário estiver **concentrado** desde já, e não espalhado pela lógica; essa parte já é regra em
   `AGENTS.md` § Idioma.
-- `seeya ontem` para reler handoffs antigos formatados.
+- `seeya yesterday` para reler handoffs antigos formatados.
 - Captura periódica de segurança durante o dia (snapshot a cada N horas), para o caso de a
   máquina morrer antes do encerramento.
 - Métricas de foco por projeto a partir do histórico de handoffs.
