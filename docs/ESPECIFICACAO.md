@@ -101,14 +101,14 @@ Loop de verificação a cada 30 s, decidindo sempre por relógio de parede:
 - Se hoje foi pulado → não faz nada.
 - Nos instantes `horario - antecedencia` (para cada antecedência configurada, ex. 30 min e
   15 min) → dispara notificação prévia com as ações disponíveis.
-- No `horario` efetivo (já somados os adiamentos) → executa o encerramento.
+- No horário efetivo (já somados os adiamentos) → executa o encerramento.
 - Se a máquina estava suspensa e o horário passou sem disparo, o encerramento acontece assim
   que o daemon acorda, com aviso de que houve atraso.
 
 **Guarda de turno ativo.** Antes de capturar, o app checa se o transcript da sessão foi escrito
 nos últimos 60 s. Se foi, a sessão está no meio de um turno: adia a captura daquela sessão por
 até 5 minutos, tentando de novo. Esgotado o prazo, captura assim mesmo e marca o handoff como
-`capturadoDuranteTurnoAtivo: true`.
+`capturedDuringActiveTurn: true`.
 
 ## Fontes de evidência (D-013)
 
@@ -163,7 +163,7 @@ apenas quais fontes responderam.
   Ver D-018.
 - **Captura.** Cai para git + registro. Com worktree ativo o handoff continua bom: qual
   worktree, qual branch, o que foi commitado hoje, o que ficou sujo.
-- **Marcação.** `origem: "noTranscript"`. Não é erro, não polui a saída com aviso de falha.
+- **Marcação.** `source: "noTranscript"`. Não é erro, não polui a saída com aviso de falha.
 
 ### Worktrees
 

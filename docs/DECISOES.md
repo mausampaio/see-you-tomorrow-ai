@@ -33,7 +33,7 @@ em disco e gera o handoff em um **processo headless separado**
 
 **Decisão.** O comportamento padrão do encerramento é: gerar o handoff, notificar o usuário e
 **deixar a sessão viva intacta**. O usuário pode marcar sessões específicas como
-`podeEncerrar: true` na config; só essas têm o processo finalizado após o handoff ser gravado
+`canTerminate: true` na config; só essas têm o processo finalizado após o handoff ser gravado
 com sucesso.
 
 **Consequências.**
@@ -56,7 +56,7 @@ com sucesso.
    Claude headless a partir dos fatos + transcript.
 
 **Decisão de falha.** Se a camada 2 falhar (rede, cota, timeout, binário ausente), o handoff é
-gravado **mesmo assim**, só com os fatos, e marcado `origem: "deterministic"`. O encerramento
+gravado **mesmo assim**, só com os fatos, e marcado `source: "deterministic"`. O encerramento
 do dia nunca falha inteiro por causa do modelo.
 
 **Consequências.** A camada 1 é testável sem rede e é o que os testes cobrem com rigor. A
@@ -117,10 +117,15 @@ precisa ser tocado. O caminho raiz é injetável para que os testes rodem em `tm
 
 ## D-008 — Node 22 + TypeScript, tudo em português
 
+> **A parte de idioma desta decisão foi revogada por D-028.** O texto abaixo fica como estava
+> porque decisão revogada é registro, não erro — mas **não** siga a regra de idioma daqui. Hoje:
+> identificador, comentário, texto do CLI e mensagem de commit em **inglês**; documentação em
+> `docs/` em português. O resto de D-008 (Node 22 LTS, TypeScript estrito, ESM) continua valendo.
+
 **Decisão.** Node 22 LTS, TypeScript estrito, ESM. Identificadores, comentários, mensagens de
 commit, documentação e texto do CLI em português.
 
-**Consequências.** Nomes de módulo e de função em PT (`descoberta`, `captureSession`). Nomes que
+**Consequências.** Nomes de módulo e de função em PT (`descoberta`, `capturarSessao`). Nomes que
 vêm de fora — campos de JSON do Claude Code, APIs de bibliotecas — mantêm a grafia original.
 
 ---
@@ -131,7 +136,7 @@ vêm de fora — campos de JSON do Claude Code, APIs de bibliotecas — mantêm 
 atrás das interfaces `ProvedorDeSessoes` e `GeradorDeHandoff`. Nenhum outro harness é
 implementado agora.
 
-**Consequências.** Nada específico do Claude pode vazar para `nucleo/`. Adicionar Cursor ou
+**Consequências.** Nada específico do Claude pode vazar para `core/`. Adicionar Cursor ou
 Codex depois deve ser escrever um adapter novo, não editar o núcleo.
 
 ---
@@ -210,9 +215,9 @@ gera handoff bom.
 do dia, e notifica na hora — quando ainda dá para reagir.
 
 **Consequências.**
-- `adaptadores/git` cresce: precisa enumerar worktrees (`git worktree list`), não só o `cwd`.
+- `adapters/git` cresce: precisa enumerar worktrees (`git worktree list`), não só o `cwd`.
 - O handoff ganha `fontes: []` declarando de onde cada informação veio.
-- `origem: "noTranscript"` é um estado normal, não um erro.
+- `source: "noTranscript"` é um estado normal, não um erro.
 
 ---
 
@@ -262,7 +267,7 @@ agente de execução, que é justamente o caso que mais precisa de handoff.
    `relevanceHours`. Enxerga headless também. Não dá `pid` nem liveness.
 
 Sessão vista pelas duas tem os dados fundidos; sessão vista só pela varredura entra com
-`pid: null` e estado `desconhecido` — nunca é candidata a encerramento de processo (D-002).
+`pid: null` e estado `unknown` — nunca é candidata a encerramento de processo (D-002).
 
 **Consequências.**
 - A varredura precisa ser barata: `stat` por arquivo, sem ler conteúdo, antes de qualquer parse.
@@ -433,15 +438,15 @@ A sugestão foi transformar o item numa união discriminada dentro do schema.
 
 | | Responsabilidade | Consequência |
 |---|---|---|
-| **Schema** (`adaptadores/`) | reproduzir a realidade com **fidelidade** | se existe variante sem `pid`, ele aceita. Apertar aqui seria mentir sobre o mundo. |
-| **Tipo de domínio** (`nucleo/`) | tornar estado inválido **irrepresentável** | `pid` não é campo opcional de um tipo só; são **duas formas distintas** de sessão. |
+| **Schema** (`adapters/`) | reproduzir a realidade com **fidelidade** | se existe variante sem `pid`, ele aceita. Apertar aqui seria mentir sobre o mundo. |
+| **Tipo de domínio** (`core/`) | tornar estado inválido **irrepresentável** | `pid` não é campo opcional de um tipo só; são **duas formas distintas** de sessão. |
 
 O tipo de domínio de sessão descoberta é uma **união discriminada**: uma forma que carrega `pid`
 garantido e outra que não tem PID nenhum. A política de encerramento (D-002) só aceita a primeira,
 e o compilador recusa a segunda — sem `!`, sem `as`, sem depender de ninguém ler comentário.
 
 **Consequências.**
-- Vira requisito de **S1-T1**, que define os tipos de `nucleo/`. Não é correção de schema.
+- Vira requisito de **S1-T1**, que define os tipos de `core/`. Não é correção de schema.
 - O adapter de descoberta converte da forma do schema para a forma de domínio, e é ali que a
   decisão "tem PID ou não" acontece **uma vez**, em vez de em cada chamador.
 - Regra geral: `!` e `as` em código de produção são sinal de que o tipo está errado, não de que o
@@ -458,33 +463,33 @@ não perder. Exigir `pid` ou `id` reintroduziria o bug que D-021 corrigiu.
 ## D-025 — Ausência de dado não vira afirmação sobre o mundo
 
 **Contexto.** Ao classificar o estado de uma sessão viva cuja última escrita no transcript é
-`null` — porque não há transcript —, a implementação de S1-T1 retornou **`ociosa`**, com o
+`null` — porque não há transcript —, a implementação de S1-T1 retornou **`idle`**, com o
 argumento de que é a leitura literal de "sessão viva sem escrita no transcript há mais de
 `idleMinutes`" no caso degenerado.
 
-**Decisão. Está errado, e a resposta correta é `viva`.** O próprio glossário resolve:
+**Decisão. Está errado, e a resposta correta é `alive`.** O próprio glossário resolve:
 
-- **`viva`** = "sessão cujo processo está em execução agora". É exatamente o que se sabe quando o
+- **`alive`** = "sessão cujo processo está em execução agora". É exatamente o que se sabe quando o
   PID está vivo.
-- **`ociosa`** = "sessão **viva** sem escrita no transcript há mais de `idleMinutes`". É um
-  **refinamento** de `viva`, e depende de evidência de não-escrita.
+- **`idle`** = "sessão **viva** sem escrita no transcript há mais de `idleMinutes`". É um
+  **refinamento** de `alive`, e depende de evidência de não-escrita.
 
 Com `null` não há transcript, logo não há como estabelecer "sem escrita há mais de X minutos" —
-não há como estabelecer nada sobre escrita. `ociosa` é uma **afirmação**; `null` é **ausência de
+não há como estabelecer nada sobre escrita. `idle` é uma **afirmação**; `null` é **ausência de
 dado**. Converter uma na outra é o erro.
 
 **Por que isso importa mais do que parece.** `null` é precisamente o caso de D-013: transcript
-suprimido, que é o agente de execução autônomo. Marcá-lo como `ociosa` diria "não está fazendo
+suprimido, que é o agente de execução autônomo. Marcá-lo como `idle` diria "não está fazendo
 nada" justamente sobre a sessão com maior probabilidade de estar trabalhando a todo vapor e
 invisível. O `seeya sessions` mentiria com confiança, e sobre o caso que mais importa.
 
 **Consequências.**
-- `classifyState` devolve `viva` quando o processo está vivo e `lastTranscriptWrite` é
-  `null`. Só devolve `ociosa` com um timestamp real que já passou do limite.
+- `classifyState` devolve `alive` quando o processo está vivo e `lastTranscriptWrite` é
+  `null`. Só devolve `idle` com um timestamp real que já passou do limite.
 - Vale como princípio geral do domínio: **nenhuma regra converte "não sei" em afirmação
   positiva.** Quando faltar dado, o resultado é o estado menos específico que a evidência
   sustenta, nunca o mais específico que ela permitiria imaginar.
-- Teste obrigatório: sessão viva com `null` é `viva`; sessão viva com timestamp antigo é `ociosa`.
+- Teste obrigatório: sessão viva com `null` é `alive`; sessão viva com timestamp antigo é `idle`.
   Os dois casos, sempre — sem o primeiro, alguém "otimiza" de volta.
 
 ---
@@ -531,7 +536,7 @@ o nome do comando. É o precedente do próprio Claude Code — comando `claude`,
 
 **Consequências.**
 - Trocado enquanto custava uma substituição em documento: **zero linha de código** usava o
-  caminho, porque `adaptadores/armazenamento` (S1-T5) ainda era stub. Depois do S1-T5 e de uma
+  caminho, porque `adapters/armazenamento` (S1-T5) ainda era stub. Depois do S1-T5 e de uma
   semana de uso, custaria código de migração, detecção de diretório antigo e o risco de handoff
   órfão numa pasta que ninguém olha mais.
 - A raiz continua **injetável**: nenhum teste toca o diretório real, e o nome não fica espalhado
@@ -590,16 +595,16 @@ para depois.
 ## D-019 — O que é proibido é ler o relógio, não construir uma data
 
 **Contexto.** O guard de S0-T2 baniu o identificador `Date` inteiro fora de
-`adaptadores/relogio/`. O review apontou, com razão, que isso vai além do que `CLAUDE.md` pedia e
+`adapters/relogio/`. O review apontou, com razão, que isso vai além do que `CLAUDE.md` pedia e
 gera atrito real: `new Date(stringIso)` para parsear um timestamp de transcript, de `procStart`
 ou de data de commit é **transformação determinística de dado**, não leitura do "agora". Sem
 isso, S1-T2, S1-T4 e S2-T1 precisariam de `eslint-disable` em cascata — e guard que todo mundo
 desliga deixa de ser guard.
 
-**Decisão.** O que é proibido fora de `adaptadores/relogio/` é a **fonte não-determinística de
+**Decisão.** O que é proibido fora de `adapters/relogio/` é a **fonte não-determinística de
 tempo**, não o tipo `Date`:
 
-| Construção | Fora de `relogio/` |
+| Construção | Fora de `clock/` |
 |---|---|
 | `new Date()` sem argumento | **proibido** — use a porta `Relogio` |
 | `Date.now()` | **proibido** — use a porta `Relogio` |
@@ -621,7 +626,7 @@ passa por review. Não chame estes seletores de "à prova de bala" na documenta�
 - A porta `Relogio` **não** ganha método de parsing. Ela existe para responder "que horas são",
   e essa continua sendo a única pergunta não-determinística.
 - Testes de guarda obrigatórios para os dois lados: `new Date()` reprovado, `new Date(iso)`
-  aprovado, ambos fora de `relogio/`. Sem o teste do caso permitido, a regra pode voltar a ser
+  aprovado, ambos fora de `clock/`. Sem o teste do caso permitido, a regra pode voltar a ser
   estrita demais sem ninguém notar.
 
 ---
@@ -629,21 +634,21 @@ passa por review. Não chame estes seletores de "à prova de bala" na documenta�
 ## D-020 — `cli/` é a única raiz de composição
 
 **Contexto.** `docs/ARQUITETURA.md` diz que todo acesso ao mundo passa por uma porta de
-`nucleo/portas.ts`, mas as regras de camada não impediam `aplicacao/` de importar
-`adaptadores/` direto. Verificado na prática: `aplicacao` importando `adaptadores/git` passa sem
+`nucleo/portas.ts`, mas as regras de camada não impediam `application/` de importar
+`adapters/` direto. Verificado na prática: `application` importando `adapters/git` passa sem
 reclamação. Isso deixaria um caso de uso instanciar adapter concreto e furar as portas — e
 levaria junto a garantia de que teste unitário não toca disco.
 
 **Decisão.** Só `cli/` pode nomear adapter concreto. É ele que constrói as implementações e as
-injeta em `aplicacao/` e em `agendador/`.
+injeta em `application/` e em `scheduler/`.
 
 | De → Para | |
 |---|---|
-| `aplicacao` → `adaptadores` | **proibido** — dependa da porta em `nucleo/` |
-| `agendador` → `adaptadores` | **proibido** — recebe injetado do `cli` |
-| `cli` → `adaptadores` | permitido — é a raiz de composição |
-| `cli` → `agendador`, `cli` → `aplicacao` | permitido |
-| `agendador` → `aplicacao` | permitido |
+| `application` → `adapters` | **proibido** — dependa da porta em `core/` |
+| `scheduler` → `adapters` | **proibido** — recebe injetado do `cli` |
+| `cli` → `adapters` | permitido — é a raiz de composição |
+| `cli` → `scheduler`, `cli` → `application` | permitido |
+| `scheduler` → `application` | permitido |
 
 **Consequências.**
 - Todo caso de uso recebe suas dependências por parâmetro ou construtor. Nenhum faz `import`
