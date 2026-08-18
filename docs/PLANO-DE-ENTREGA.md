@@ -173,20 +173,25 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       verde; nenhum identificador em português em `src/` e `tests/`; `docs/` intocado exceto os
       nomes de caminho.
 
-- [ ] **S1-T0e — Fechar o buraco do `passWithNoTests`.** Achado durante o S1-T0d, e é da pior
+- [~] **S1-T0e — Fechar o buraco do `passWithNoTests`.** Achado durante o S1-T0d, e é da pior
       classe: **falso verde**.
       `passWithNoTests: true` está ligado globalmente desde S0-T1, quando as faixas ainda estavam
       vazias. Consequência hoje: **qualquer projeto cujo glob deixe de casar passa verde, sem
       rodar teste nenhum.** Durante a migração, renomear o diretório antes de atualizar o config
       produziu `No test files found, exiting with code 0` — o portão teria aprovado uma migração
       pela metade.
-      Não dá para simplesmente desligar: `tests/e2e/` está legitimamente vazio até S1-T6.
+      Não dá para simplesmente desligar: **duas** faixas estão legitimamente vazias hoje, não só
+      uma como este item dizia antes de alguém contar de verdade. `integration` resolve para
+      **zero**: os 4 arquivos que existem sob `tests/integration/` estão todos em
+      `tests/integration/guards/`, que o projeto `integration` exclui por glob — as integrações
+      de verdade (`discovery/`, `storage/`, `git/`, `process/`) só chegam nas tarefas seguintes.
+      `tests/e2e/` também está vazio, até S1-T6.
       - guard que afirma que **cada projeto do vitest resolve para pelo menos um arquivo de
         teste**, dirigido por uma lista declarada — mesmo padrão da matriz de camadas
-      - a lista declara explicitamente quais faixas podem estar vazias **e por quê** (hoje só
-        `e2e`, até S1-T6)
+      - a lista declara explicitamente quais faixas podem estar vazias **e por quê** (hoje
+        `integration`, até S1-T2, e `e2e`, até S1-T6)
       - **simétrico**: o teste falha também se uma faixa declarada como vazia deixar de estar.
-        Sem isso, a exceção do `e2e` vira permanente sem ninguém notar quando o primeiro e2e
+        Sem isso, a exceção vira permanente sem ninguém notar quando o primeiro teste da faixa
         chegar.
       *Aceite:* renomear um diretório de teste sem atualizar o `vitest.config.ts` **reprova** o
       portão. Provado por execução, não por leitura.
