@@ -358,7 +358,30 @@ deixar a interface inteira como está — por isso as quatro interfaces não-imp
 **Opções:** A) fica como está — quando cada porta for implementada (S1-T4, S2-T2, S4-T1, S1-T5),
 quem implementar decide o nome do método e atualiza o esboço junto. B) o PO fixa agora os nomes de
 método no glossário, e eu volto para completar a tradução do bloco.
-**Resposta:** (a preencher pelo PO)
+**Resposta:** **FECHADA em 2026-08-18 — opção B, e a opção A estava errada, não só arriscada.**
+O ponto de "não inventar" não se aplicava aqui: esses métodos já tinham sido inventados, em
+português, quando o documento foi escrito — traduzir uma invenção existente não é inventar de
+novo, é aplicar a mesma invenção no idioma que já estava decidido (D-028). Um bloco de código em
+dois idiomas ao mesmo tempo é pior que qualquer um dos dois extremos, e `LeitorDeTranscricao`
+sobrevivendo ao lado de `TranscriptReader` (o nome que o próprio glossário já reservava) era
+exatamente a deriva que o glossário existe para impedir — só que dentro do repositório. As quatro
+interfaces foram traduzidas por inteiro, tipo e método, e os nomes de método entraram na tabela 2
+de `AGENTS.md` § Idioma:
+
+| pt | en |
+|---|---|
+| `LeitorDeTranscricao.lerFatos(sessao)` | `TranscriptReader.readFacts(session)` |
+| `GeradorDeHandoff.gerar(fatos)` | `HandoffGenerator.generate(facts)` |
+| `Notificador.notificar(aviso)` | `Notifier.notify(notice)` |
+| `Armazenamento.salvarHandoff(dia, handoff)` | `Storage.saveHandoff(day, handoff)` |
+| `Armazenamento.lerBriefing(dia)` | `Storage.readBriefing(day)` |
+| `Armazenamento.lerConfig()` | `Storage.readConfig()` |
+| `Armazenamento.salvarEstado(estado)` | `Storage.saveState(state)` |
+| `Dia` | `Day` |
+| `estaDisponivel()` | `isAvailable()` |
+| `suportaAcoes()` | `supportsActions()` |
+
+Ver `docs/ARQUITETURA.md` § "Portas" — o bloco inteiro está em inglês agora.
 
 **2) `capturaProfunda` (flag de `politicaPorProjeto`) não está em nenhuma tabela do glossário.**
 Aparece em `docs/DECISOES.md` D-011 linha 155, ainda em português — e como não posso alterar
@@ -367,7 +390,12 @@ estava em `docs/TESTES.md` (linha do teste "sessão suprimida não tenta captura
 inventar um nome que divergiria do que `DECISOES.md` já tem escrito.
 **Opções:** A) fica em português até virar campo real de código (S1-T5/S2-T2), quando quem
 implementar decide o nome. B) o PO fixa `capturaProfunda` → `?` no glossário agora.
-**Resposta:** (a preencher pelo PO)
+**Resposta:** **FECHADA em 2026-08-18 — opção B.** `capturaProfunda` é flag de `projectPolicy`,
+ou seja, é identificador que vai para disco — pertence à tabela 3 (identificadores persistidos),
+que o PO tinha esquecido dela ao escrever o glossário original em S1-T0g. `capturaProfunda` →
+`deepCapture`, acrescentado à tabela 3 de `AGENTS.md` § Idioma e aplicado em `docs/TESTES.md`.
+`docs/DECISOES.md` D-011 continua com `capturaProfunda` em português — é arquivo do PO, corrigido
+por ele depois de integrar este branch, fora do escopo desta tarefa.
 
 **3) `seeya ontem` (comando ainda não decidido, listado em "Ideias boas guardadas para depois") e
 `capturarSessao` (nome de caso de uso em `docs/ARQUITETURA.md` linha 17) não estão literalmente na
@@ -378,4 +406,9 @@ compondo com "Sessão" no mesmo padrão de `endDay`/`startDay`); `seeya ontem` �
 porque nenhum dos dois estava literal no glossário.
 **Opções:** A) as duas traduções ficam confirmadas — acrescentar ao glossário para não haver
 deriva. B) alguma das duas está errada.
-**Resposta:** (a preencher pelo PO)
+**Resposta:** **FECHADA em 2026-08-18 — opção A, as duas confirmadas.** `capturarSessao` →
+`captureSession` estava certo porque a *regra* (verbo "capturar" → `capture`, compondo no mesmo
+padrão de `endDay`/`startDay`) já estava no glossário, mesmo a linha não estando literal — é essa
+regra que o PO tinha em mente ao afirmar "todos estão no glossário" em S1-T0g. `seeya ontem` →
+`seeya yesterday` estava certo por ser tradução literal de palavra comum, não termo de domínio.
+`captureSession` acrescentado à tabela 1 de `AGENTS.md` § Idioma, junto de `endDay`/`startDay`.

@@ -66,23 +66,23 @@ interface SessionProvider {
   list(): Promise<DiscoveredSession[]>;
 }
 
-interface LeitorDeTranscricao {
-  lerFatos(sessao: SessaoDescoberta): Promise<FatosDaSessao>;
+interface TranscriptReader {
+  readFacts(session: DiscoveredSession): Promise<SessionFacts>;
 }
 
-interface GeradorDeHandoff {
-  gerar(fatos: FatosDaSessao): Promise<EntendimentoGerado>;
+interface HandoffGenerator {
+  generate(facts: SessionFacts): Promise<GeneratedUnderstanding>;
 }
 
-interface Notificador {
-  notificar(aviso: Aviso): Promise<void>;
+interface Notifier {
+  notify(notice: Notice): Promise<void>;
 }
 
-interface Armazenamento {
-  salvarHandoff(dia: Dia, handoff: Handoff): Promise<void>;
-  lerBriefing(dia: Dia): Promise<Briefing | null>;
-  lerConfig(): Promise<Config>;
-  salvarEstado(estado: EstadoDoDia): Promise<void>;
+interface Storage {
+  saveHandoff(day: Day, handoff: Handoff): Promise<void>;
+  readBriefing(day: Day): Promise<Briefing | null>;
+  readConfig(): Promise<Config>;
+  saveState(state: DayState): Promise<void>;
 }
 
 interface ProcessControl {
@@ -153,10 +153,10 @@ Adapter por plataforma, escolhido em runtime. Conforme o Spike B:
 - **macOS:** `terminal-notifier` se presente, senão `osascript -e 'display notification'`.
 - **Linux:** `notify-send`; fallback stderr.
 
-Cada backend implementa `estaDisponivel()`. A seleção é uma cadeia de fallback testável em
+Cada backend implementa `isAvailable()`. A seleção é uma cadeia de fallback testável em
 unidade com backends falsos.
 
-**Contrato mínimo sem ações.** Ações clicáveis são capacidade opcional (`suportaAcoes()`), nunca
+**Contrato mínimo sem ações.** Ações clicáveis são capacidade opcional (`supportsActions()`), nunca
 pressuposto. No Windows, se forem implementadas, o caminho é `activationType="protocol"` com
 esquema `seeya://` registrado em `HKCU\Software\Classes` — evita servidor COM e processo
 residente. Não validado; ver S4-T1.

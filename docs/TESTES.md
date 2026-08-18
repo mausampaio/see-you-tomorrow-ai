@@ -45,7 +45,7 @@ O que precisa estar coberto com rigor, porque é onde os bugs vão doer:
 - **Detecção precoce sem transcript**: notifica na primeira vez que vê o `sessionId`, e não
   notifica de novo nas passagens seguintes. A mensagem inclui a correção (D-018).
 - **Sessão suprimida não tenta captura profunda**: sessão registrada sem transcript, com
-  `capturaProfunda: true`, cai para enxuto sem tentar `--resume` (D-018).
+  `deepCapture: true`, cai para enxuto sem tentar `--resume` (D-018).
 - **Sanitização de ambiente (D-017)**: o `env` entregue ao processo filho não contém
   `CLAUDE_CODE_CHILD_SESSION`, `CLAUDE_CODE_SESSION_ID`, `CLAUDE_PID` nem `CLAUDECODE`, mesmo
   quando o processo do `seeya` os tem. Modo enxuto passa `--no-session-persistence`; modo
