@@ -1,25 +1,25 @@
 #!/usr/bin/env node
 /**
- * Ponto de entrada do CLI `seeya`. Nesta tarefa (S0-T1) só existe `--version` — nenhum outro
- * comando de negócio é implementado aqui ainda. Ver docs/PLANO-DE-ENTREGA.md.
+ * Entry point for the `seeya` CLI. In this task (S0-T1) only `--version` exists — no other
+ * business command is implemented here yet. See docs/PLANO-DE-ENTREGA.md.
  */
 import { Command } from 'commander';
 import { z } from 'zod';
-import pacote from '../../package.json' with { type: 'json' };
+import packageJson from '../../package.json' with { type: 'json' };
 
-const EsquemaPackageJson = z.object({
+const PackageJsonSchema = z.object({
   version: z.string(),
 });
 
-const { version } = EsquemaPackageJson.parse(pacote);
+const { version } = PackageJsonSchema.parse(packageJson);
 
-const programa = new Command();
+const program = new Command();
 
-programa
+program
   .name('seeya')
   .description(
-    'Descobre sessões do Claude Code, captura o estado no fim do dia e retoma no dia seguinte.',
+    'Discovers Claude Code sessions, captures their state at the end of the day, and resumes them the next day.',
   )
   .version(version);
 
-programa.parse();
+program.parse();

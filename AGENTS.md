@@ -228,7 +228,7 @@ descobria quais eram os 2 erros até alguém instrumentar à mão.
   framework. Caminhos previsíveis: `src/<camada>/`, `tests/<faixa>/`.
 - Módulos pequenos e focados. Arquivo que vira depósito de funções soltas perdeu a
   responsabilidade única.
-- Teste espelha a origem: `src/nucleo/x.ts` → `tests/unidade/nucleo/x.teste.ts`.
+- Teste espelha a origem: `src/core/x.ts` → `tests/unit/core/x.test.ts`.
 
 ---
 
@@ -293,8 +293,28 @@ aqui antes de entrar no código.**
 | provedor de sessões | `SessionProvider` |
 | aceitos / rejeitados | `accepted` / `rejected` |
 
+Termos de portas e tipos que **ainda não existem no código**, fixados aqui antes de existirem
+justamente para que quem os implementar não invente nome:
+
+| Documento (pt) | Código (en) | Chega em |
+|---|---|---|
+| leitor de transcrição | `TranscriptReader` | S1-T4 |
+| fatos da sessão | `SessionFacts` | S1-T4 |
+| gerador de handoff | `HandoffGenerator` | S2-T2 |
+| entendimento gerado | `GeneratedUnderstanding` | S2-T2 |
+| notificador / aviso | `Notifier` / `Notice` | S4-T1 |
+| armazenamento | `Storage` | S1-T5 |
+| estado do dia | `DayState` | S4-T2 |
+
 **Nomes de decisão não se traduzem.** `D-021` é `D-021` em qualquer idioma, e é assim que o
 código aponta para o porquê.
+
+**Exceção medida: os nomes dos scripts npm ficam em português.** `verificar`, `cobertura`,
+`dependencias`. Não é esquecimento — foi medido: renomeá-los tocaria 77 ocorrências em 18
+arquivos, incluindo texto de decisão em `docs/DECISOES.md` e de spike, que são registro histórico
+e não se reescrevem por conveniência. O ganho seria marginal: quem chega lê o nome uma vez no
+README, com a explicação em inglês ao lado. **Não relitigue isto** — se um dia o custo mudar, vira
+decisão nova.
 
 ## Texto voltado ao usuário
 

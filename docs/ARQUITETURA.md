@@ -2,9 +2,9 @@
 
 ## Princípio
 
-O núcleo é puro e o mundo é sujo. Toda regra de decisão vive em `nucleo/`, sem I/O, sem
+O núcleo é puro e o mundo é sujo. Toda regra de decisão vive em `core/`, sem I/O, sem
 relógio, sem rede, sem processo. Tudo que toca o mundo é um adapter atrás de uma interface
-declarada em `nucleo/portas.ts`.
+declarada em `core/ports.ts`.
 
 Isso não é preferência estética: é o que torna a pirâmide de testes viável e o que impede o
 agente dev de espalhar `child_process.exec` pelo projeto.
@@ -14,20 +14,20 @@ agente dev de espalhar `child_process.exec` pelo projeto.
 ```
 cli/           ← comandos, parsing de argumento, saída para o terminal
   ↓
-aplicacao/     ← casos de uso: encerrarDia, iniciarDia, capturarSessao
+application/   ← casos de uso: encerrarDia, iniciarDia, capturarSessao
   ↓
-nucleo/        ← regras puras + interfaces (portas). NÃO importa nada de I/O.
+core/          ← regras puras + interfaces (portas). NÃO importa nada de I/O.
   ↑
-adaptadores/   ← implementam as portas do núcleo
-  descoberta/      lê ~/.claude/sessions e ~/.claude/projects
-  transcricao/     parseia o JSONL do transcript
-  geracao/         chama o claude headless
-  notificacao/     toast por SO
-  armazenamento/   ~/.seeya/
-  processo/        liveness de PID, terminação graciosa
+adapters/      ← implementam as portas do núcleo
+  discovery/       lê ~/.claude/sessions e ~/.claude/projects
+  transcript/      parseia o JSONL do transcript
+  generation/      chama o claude headless
+  notification/    toast por SO
+  storage/         ~/.seeya/
+  process/         liveness de PID, terminação graciosa
   git/             branch e status do cwd
-  relogio/         a única fonte de "agora"
-agendador/     ← o daemon; orquestra aplicacao/ no tempo
+  clock/           a única fonte de "agora"
+scheduler/     ← o daemon; orquestra application/ no tempo
 ```
 
 **Regra de dependência.** Setas apontam para dentro, e `cli/` é a **única raiz de composição** —
@@ -40,20 +40,20 @@ listou" — porque a tabela era parcial e "não está na lista" era ambíguo ent
 *esquecido*. Aqui não há omissão possível: par que não estiver nesta matriz é erro da matriz, e
 vira questão em `docs/QUESTOES.md`.
 
-| De ↓ / Para → | `nucleo` | `adaptadores` | `aplicacao` | `agendador` | `cli` |
+| De ↓ / Para → | `core` | `adapters` | `application` | `scheduler` | `cli` |
 |---|---|---|---|---|---|
-| **`nucleo`** | — | ✗ | ✗ | ✗ | ✗ |
-| **`adaptadores`** | ✓ portas | — | ✗ | ✗ | ✗ |
-| **`aplicacao`** | ✓ | ✗ D-020 | — | ✗ | ✗ |
-| **`agendador`** | ✓ | ✗ D-020 | ✓ | — | ✗ |
+| **`core`** | — | ✗ | ✗ | ✗ | ✗ |
+| **`adapters`** | ✓ portas | — | ✗ | ✗ | ✗ |
+| **`application`** | ✓ | ✗ D-020 | — | ✗ | ✗ |
+| **`scheduler`** | ✓ | ✗ D-020 | ✓ | — | ✗ |
 | **`cli`** | ✓ | ✓ raiz | ✓ | ✓ | — |
 
 ✓ permitido · ✗ proibido · 8 permitidos, 12 proibidos
 
-`nucleo` também não importa `node:*`. Não há ciclos, em nenhuma direção.
+`core` também não importa `node:*`. Não há ciclos, em nenhuma direção.
 
-Leitura em uma frase: **tudo aponta para `nucleo`; só `cli` conhece implementação; `agendador`
-manda em `aplicacao` e nunca o contrário.**
+Leitura em uma frase: **tudo aponta para `core`; só `cli` conhece implementação; `scheduler`
+manda em `application` e nunca o contrário.**
 
 Cada ✗ tem regra no `dependency-cruiser` **e** teste provando a reprovação. Cada ✓ tem teste
 provando que não é bloqueado por engano — sem isso, alguém aperta um regex e quebra a raiz de
@@ -99,7 +99,7 @@ Nos testes, cada porta tem um duplo em memória. Nenhum teste unitário toca dis
 
 ## Decisões técnicas por adapter
 
-### `descoberta/`
+### `discovery/`
 Lê `~/.claude/sessions/*.json`, valida com zod, filtra por liveness (`ControleDeProcesso`) e
 resolve o caminho do transcript. O slug do diretório em `~/.claude/projects/` é derivado do
 `cwd`; a derivação é frágil, então a estratégia primária é **procurar o arquivo
@@ -116,7 +116,7 @@ Na v2 este adapter passa a ter duas origens — registro e wrapper PTY — e pre
 `sessionId` (D-014). A interface já é desenhada para isso: `listar()` devolve a união, não a
 concatenação.
 
-### `transcricao/`
+### `transcript/`
 Streaming linha a linha (arquivos passam de 1 MB). Ignora tipos desconhecidos em vez de falhar
 — o Claude Code adiciona tipos novos com o tempo. Extrai só o que a spec pede.
 
@@ -126,7 +126,7 @@ Mais importante do que parecia. Além de branch e status do `cwd`, enumera **wor
 commits do dia. Para sessões sem transcript, esta é a única fonte substantiva (D-013). Não
 quebra quando o `cwd` não é repositório: devolve "sem git" e segue.
 
-### `geracao/`
+### `generation/`
 Duas implementações da mesma porta, escolhidas por config (D-011):
 
 - **Enxuta (padrão).** Monta o contexto a partir das evidências já coletadas e chama
@@ -141,9 +141,9 @@ Regras comuns, todas com origem em spike e todas testadas:
 - `--tools ""`, `--system-prompt` curto e `--json-schema` do handoff: derruba o piso de ~12 k
   tokens e evita saída em prosa livre.
 - Timeout duro e `--max-budget-usd`.
-- Erro tipado. Quem decide o fallback é `aplicacao/`, não o adapter.
+- Erro tipado. Quem decide o fallback é `application/`, não o adapter.
 
-### `notificacao/`
+### `notification/`
 Adapter por plataforma, escolhido em runtime. Conforme o Spike B:
 
 - **Windows:** WinRT via PowerShell, **sem dependência alguma**. Carregar explicitamente
@@ -161,11 +161,11 @@ pressuposto. No Windows, se forem implementadas, o caminho é `activationType="p
 esquema `seeya://` registrado em `HKCU\Software\Classes` — evita servidor COM e processo
 residente. Não validado; ver S4-T1.
 
-### `armazenamento/`
+### `storage/`
 Raiz injetada (nunca `os.homedir()` direto no código de negócio). Escrita atômica. Todo arquivo
 lido passa por zod. `versaoDoEsquema` em todo documento persistido, com migração explícita.
 
-### `relogio/`
+### `clock/`
 Um único módulo produz `agora()`. Nenhum outro arquivo do projeto pode chamar `new Date()`,
 `Date.now()` ou `setTimeout` com prazo longo — imposto por regra de lint.
 
