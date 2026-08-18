@@ -5,7 +5,7 @@
  *
  * **Important difference from this task's (S0-T5) other three schemas.** The schemas in
  * `discovery/schemas.ts` and `transcript/schemas.ts` were confirmed line by line against real
- * files and commands on this machine (`tests/contrato/`). This one **could not be confirmed the
+ * files and commands on this machine (`tests/contract/`). This one **could not be confirmed the
  * same way**: `docs/PLANO-DE-ENTREGA.md` and `CLAUDE.md` forbid any test that touches the
  * network, and producing this output requires a real API call. The shape below is what the PO
  * gathered on this machine and handed over as task input — it's treated as the best evidence

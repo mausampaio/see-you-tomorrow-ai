@@ -10,7 +10,7 @@
  *
  * `from`/`to` paths are anchored per segment (`($|/)` after the layer name): without this,
  * `^src/application` would also match a future `src/application-legacy/`, which isn't the
- * `application/` layer from the matrix. See tests/integracao/guardas/dependency-cruiser.teste.ts
+ * `application/` layer from the matrix. See tests/integration/guards/dependency-cruiser.test.ts
  * for the regression test of that anchor.
  *
  * File in CommonJS (`.cjs`) on purpose: the package is `"type": "module"`, and

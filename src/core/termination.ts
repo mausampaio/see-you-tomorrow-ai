@@ -25,7 +25,7 @@ export interface ProcessTerminationData {
  * }
  * ```
  *
- * See tests/unidade/core/termination.teste.ts for the proof that the PID-less shape **does
+ * See tests/unit/core/termination.test.ts for the proof that the PID-less shape **does
  * not** compile (`@ts-expect-error`) — it's the test docs/PLANO-DE-ENTREGA.md S1-T1 literally
  * requires.
  */

@@ -12,7 +12,7 @@
  * Only `user` and `assistant` have a structural schema — they're the only two entries the spec
  * says the parser will read ("last prompts, files touched, last activity"), and the only two
  * docs/TESTES.md's contract requires validating against reality
- * (tests/contrato/transcript.teste.ts). Confirmed against 1048 real `user` entries and 1760
+ * (tests/contract/transcript.test.ts). Confirmed against 1048 real `user` entries and 1760
  * `assistant` entries, from every project on this machine, with no required field missing in any
  * of them.
  */

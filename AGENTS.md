@@ -228,7 +228,7 @@ descobria quais eram os 2 erros até alguém instrumentar à mão.
   framework. Caminhos previsíveis: `src/<camada>/`, `tests/<faixa>/`.
 - Módulos pequenos e focados. Arquivo que vira depósito de funções soltas perdeu a
   responsabilidade única.
-- Teste espelha a origem: `src/nucleo/x.ts` → `tests/unidade/nucleo/x.teste.ts`.
+- Teste espelha a origem: `src/core/x.ts` → `tests/unit/core/x.test.ts`.
 
 ---
 

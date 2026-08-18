@@ -17,7 +17,7 @@
  * validation: no collection from an external source can be all-or-nothing.
  *
  * Both schemas were confirmed against real files and real output from two machines before being
- * written — see tests/contrato/registro-de-sessoes.teste.ts and tests/contrato/agents-json.teste.ts.
+ * written — see tests/contract/session-registry.test.ts and tests/contract/agents-json.test.ts.
  * If they ever diverge from reality, the answer is to log it in docs/QUESTOES.md with the raw
  * output observed, never to loosen the schema to make it pass.
  */
