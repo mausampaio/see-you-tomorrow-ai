@@ -119,6 +119,26 @@ anotada não prova nada.
 Rodar antes de cada release e quando o Claude Code atualizar. Falha aqui = issue, não hotfix
 às cegas.
 
+## Teste de tipo: cuidado com `const` anotado pela união
+
+Prova de compilação (`@ts-expect-error`, ou o caso positivo "isto só passa depois de estreitar")
+é o mecanismo que faz valer D-024 e a recusa de D-023 — e é fácil escrevê-la de forma que ela
+**deixe de testar o que afirma, em silêncio**.
+
+A armadilha, achada na S1-T10 e confirmada por experimento:
+
+```ts
+const session: DiscoveredSession = createSessionWithPid();
+```
+
+Isso **não** dá a `session` o tipo da união para efeito de estreitamento. A análise de fluxo do
+TypeScript estreita um `const` recém-inicializado para o tipo do **inicializador**, ignorando a
+anotação mais larga. Um `@ts-expect-error` construído em cima disso passa a testar outra coisa,
+e nada avisa.
+
+Quem precisa da união de verdade **recebe por parâmetro de função**: o tipo de fluxo de um
+parâmetro na entrada é exatamente o declarado, porque não há inicializador de onde estreitar.
+
 ## Regras que valem para toda a suíte
 
 - Nenhum teste depende de rede.

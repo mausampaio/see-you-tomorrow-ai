@@ -303,7 +303,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       legível em nenhuma linha é **rejeitado**, não descartado em silêncio nem inventado como
       sessão (D-025) — decisão registrada em Q-009 por ambiguidade quanto ao tipo de domínio.
       `npm run verificar` e `npm run verificar:linux` verdes.
-- [~] **S1-T10 — Terceira estratégia: processo e `.key` sem `.json` (D-023).** Cobre o agente de
+- [x] **S1-T10 — Terceira estratégia: processo e `.key` sem `.json` (D-023).** Cobre o agente de
       execução autônomo, que as duas estratégias anteriores não veem: sem `.json` no registro e
       sem transcript.
       - listar `~/.claude/sessions/` e achar `<pid>.<hash>.key` **sem** `<pid>.json` — só o nome
@@ -330,6 +330,10 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       Nenhuma das duas é candidata a encerramento de processo.
       *Aceite:* sessão presente em duas ou três origens aparece **uma** vez, com os campos
       fundidos, e o teste cobre as três combinações de par.
+      **Q-010:** para a origem de S1-T10 (`SessionWithoutSessionId`), **PID não é identidade
+      estável**. Ela não tem `procStart`, então "mesmo PID em duas varreduras" não prova "mesma
+      sessão" — ao contrário de `SessionWithPid`. A janela é estreita e aceita na v1; o que não se
+      aceita é deduplicar por PID sem saber disso.
 - [ ] **S1-T4 — `adapters/transcript`.** Parser streaming; últimos prompts, arquivos
       tocados, última atividade.
 - [ ] **S1-T7 — Detecção precoce de sessão sem transcript.** Notificação uma vez por

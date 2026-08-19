@@ -744,7 +744,23 @@ B) `adapters/process/inspection.ts` ganha uma captura de horário de início (me
    algo equivalente a `procStart`, ainda sem fonte prévia para comparar na primeira varredura, mas
    comparável entre a varredura N e N+1 do próprio `seeya` (que passaria a persistir o valor visto
    por sessão, não só usá-lo dentro de uma única chamada).
-**Resposta:** (preenchida pelo PO)
+**Resposta:** **FECHADA — aceito na v1, e a anotação vai para a S1-T9, que é onde ela morde.**
+
+Você identificou bem e endereçou no lugar errado da primeira vez; a correção que pedi era
+exatamente esta: comentário dentro do seu adapter não chega em quem vai usar o PID como
+identidade. Agora chega.
+
+A janela é estreita — o processo teria de morrer **e** o SO reciclar aquele PID **entre duas**
+varreduras, com o `.key` antigo ainda no diretório. Numa ferramenta que varre no fim do dia,
+isso é raro o bastante para não pagar código na v1.
+
+O que **não** é aceitável é a S1-T9 deduplicar por PID sem saber disso. Anotado no plano, na
+S1-T9: para esta origem, "mesmo PID em duas varreduras" **não** prova "mesma sessão" — ao
+contrário de `SessionWithPid`, que tem o `procStart` para provar. Quem escrever a fusão decide
+o que fazer com isso sabendo; se concluir que precisa de defesa, aí vira decisão nova.
+
+Se um dia esta estratégia passar a rodar em varredura periódica em vez de uma vez por dia, a
+janela deixa de ser estreita e isto reabre.
 
 ---
 
