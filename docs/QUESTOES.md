@@ -764,6 +764,11 @@ janela deixa de ser estreita e isto reabre.
 
 ---
 
+> **PREJUDICADA em 2026-08-19 (D-029).** A resposta acima continua correta para o desenho que
+> existia, mas ficou sem objeto: o D-029 revoga o D-023 e a terceira estratégia sai. Sem ela não
+> há origem deduplicada por PID, e a S1-T9 volta a deduplicar só por `sessionId`. Fica como
+> registro de um raciocínio correto sobre um desenho que saiu.
+
 ## Q-011 — Linha de comando como fonte de handoff: mascarar padrão de segredo antes de persistir, ou aceitar o risco documentado?
 **Tarefa:** S1-T10
 **Bloqueia:** não esta tarefa (o dado já nasce como `string | null` opaco, sem parsing); talvez
@@ -796,4 +801,14 @@ B) mascarar padrões suspeitos antes de persistir (ex.: `--token`, `--password`,
 C) não persistir `commandLine` bruto no handoff — só um resumo derivado (ex.: primeiro token do
    comando, sem os argumentos) — mais seguro, mas perde exatamente a informação que D-023
    descreveu como o valor desta origem ("qual item de trabalho").
-**Resposta:** (preenchida pelo PO)
+**Resposta:** **PREJUDICADA — não há mais captura de linha de comando (D-029).**
+
+A pergunta era se o `seeya` deveria mascarar padrões de segredo antes de gravar a linha de
+comando no handoff. Com o D-029 nenhuma linha de comando é lida nem persistida, então o risco
+desaparece **na origem**, em vez de ser mitigado.
+
+Registro a inclinação, caso o assunto volte: **não mascarar**. Máscara por heurística erra nos
+dois sentidos e, pior, **parece** resolver — quem confia nela para de tomar cuidado, e o dia em
+que a lista não cobre o formato é o dia em que ninguém está olhando. Proteção incompleta que
+passa por completa troca um risco conhecido por um invisível. Se um dia for preciso, o caminho
+é **não capturar**, não capturar-e-limpar.

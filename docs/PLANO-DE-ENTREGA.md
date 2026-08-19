@@ -303,7 +303,10 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       legível em nenhuma linha é **rejeitado**, não descartado em silêncio nem inventado como
       sessão (D-025) — decisão registrada em Q-009 por ambiguidade quanto ao tipo de domínio.
       `npm run verificar` e `npm run verificar:linux` verdes.
-- [x] **S1-T10 — Terceira estratégia: processo e `.key` sem `.json` (D-023).** Cobre o agente de
+- [x] **S1-T10 (REVOGADA por D-029) — Terceira estratégia: processo e `.key` sem `.json` (D-023).** Cobre o agente de
+      **Entregue e depois revogada.** O D-029 tirou esta estratégia: a causa que o D-023
+      atribuía não se confirmou em medição, e o custo era desproporcional. O código sai na
+      S1-T11. Fica marcada como entregue porque foi — e como revogada porque não vale mais.
       execução autônomo, que as duas estratégias anteriores não veem: sem `.json` no registro e
       sem transcript.
       - listar `~/.claude/sessions/` e achar `<pid>.<hash>.key` **sem** `<pid>.json` — só o nome
@@ -340,6 +343,22 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       `sessionId`, disparada quando a sessão é vista, não no encerramento (D-013).
       *Aceite:* sessão registrada sem `.jsonl` gera exatamente uma notificação, e a segunda
       passagem da descoberta não repete.
+      **D-029 estende esta tarefa:** além da sessão registrada sem transcript, avisar também
+      sobre `.key` sem `.json` — sessões que o `seeya` vê existir e **não consegue inspecionar**.
+      Só o **nome** do arquivo, nunca o conteúdo (modo 600). O aviso **não afirma** a causa: ela
+      não está estabelecida (ver D-029). Diga o que se sabe e aponte o caminho conhecido.
+- [ ] **S1-T11 — Reverter a terceira estratégia (D-029).** Remove o que a S1-T10 acrescentou,
+      mantendo a detecção barata para a S1-T7.
+      - sai: `adapters/discovery/process-key.ts`, `adapters/process/inspection.ts`, os métodos
+        `readCwd`/`readCommandLine` de `ProcessControl`, e a terceira forma da união de tipos
+      - fica: a listagem de `.key` sem `.json` (só nomes), que a S1-T7 vai consumir
+      - `spawn-stdout.ts` é compartilhado com `proc-start.ts`: **não remova** sem conferir
+      - a união volta a duas formas. Confira se o discriminante `hasSessionId` ainda paga o
+        próprio custo com uma forma só — se não pagar, remova-o também
+      - a regra de teste de tipo registrada em `docs/TESTES.md` (o `const` anotado pela união)
+        **fica**: ela não depende desta estratégia e custou caro para ser achada
+      *Aceite:* núcleo de volta a duas formas, `verificar` e `verificar:linux` verdes, e nenhuma
+      leitura de linha de comando em lugar nenhum do código.
 - [ ] **S1-T5 — `adapters/storage`.** Raiz injetável, escrita atômica, config com
       defaults, `schemaVersion`.
 - [ ] **S1-T6 — `seeya sessions` e `seeya status`.**
