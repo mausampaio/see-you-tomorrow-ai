@@ -88,8 +88,6 @@ interface Storage {
 interface ProcessControl {
   isAlive(pid: number, procStart?: string): Promise<boolean>;
   terminateGracefully(pid: number, deadlineMs: number): Promise<boolean>;
-  readCwd(pid: number): Promise<string | null>;
-  readCommandLine(pid: number): Promise<string | null>;
 }
 
 interface Clock {

@@ -347,7 +347,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       sobre `.key` sem `.json` — sessões que o `seeya` vê existir e **não consegue inspecionar**.
       Só o **nome** do arquivo, nunca o conteúdo (modo 600). O aviso **não afirma** a causa: ela
       não está estabelecida (ver D-029). Diga o que se sabe e aponte o caminho conhecido.
-- [ ] **S1-T11 — Reverter a terceira estratégia (D-029).** Remove o que a S1-T10 acrescentou,
+- [~] **S1-T11 — Reverter a terceira estratégia (D-029).** Remove o que a S1-T10 acrescentou,
       mantendo a detecção barata para a S1-T7.
       - sai: `adapters/discovery/process-key.ts`, `adapters/process/inspection.ts`, os métodos
         `readCwd`/`readCommandLine` de `ProcessControl`, e a terceira forma da união de tipos
