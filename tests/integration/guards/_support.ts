@@ -189,8 +189,12 @@ function listEntriesOrEmpty(directory: string): Dirent[] {
  * `.ts` inside `directory`, skipping entirely any guard fixture subdirectory (`_guard-*`, see
  * `guardSubdirectory`) — and tolerating a (test, never production) directory that vanishes
  * mid-scan, see `listEntriesOrEmpty`.
+ *
+ * Exported (S1-T12) so `coverage-directories.test.ts` can derive the real set of leaf source
+ * directories from the same TOCTOU-safe scan, instead of writing a second recursive walker that
+ * could drift from this one's exclusions (`_guard-*`) or its ENOENT tolerance.
  */
-function listProductionTsFiles(directory: string): string[] {
+export function listProductionTsFiles(directory: string): string[] {
   const result: string[] = [];
   for (const entry of listEntriesOrEmpty(directory)) {
     if (entry.name.startsWith('_guard-')) {

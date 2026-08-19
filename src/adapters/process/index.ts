@@ -8,10 +8,12 @@
  * - `liveness.ts` — pure decision (`resolveIsAlive`) and OS-error interpretation, no I/O.
  * - `existence.ts` — the one "does this PID exist" OS call, shared by both port methods.
  * - `proc-start.ts` — per-platform capture of the OS's current `procStart`.
- * - `termination.ts` — `terminateGracefully`: real `SIGTERM` on POSIX, `CTRL_BREAK_EVENT` via a
- *   PowerShell helper on Windows (`console-signal.ts`, docs/spikes/G-ctrl-break-no-windows.md).
- * - `console-signal.ts` — the Windows-only P/Invoke helper `termination.ts` sends the console
- *   event through.
+ * - `termination.ts` — `terminateGracefully`: dispatches to `termination-posix.ts` (real
+ *   `SIGTERM`) or `termination-windows.ts` (`CTRL_BREAK_EVENT` via a PowerShell helper,
+ *   docs/spikes/G-ctrl-break-no-windows.md). Split into three files in S1-T12 so each
+ *   platform-only branch can be excluded from the OTHER platform's coverage denominator.
+ * - `console-signal.ts` — the Windows-only P/Invoke helper `termination-windows.ts` sends the
+ *   console event through.
  *
  * **This list briefly included `inspection.ts` — `readCwd`/`readCommandLine` (D-023, S1-T10) —
  * removed in S1-T11 (D-029)** along with the discovery strategy that was its only caller. See

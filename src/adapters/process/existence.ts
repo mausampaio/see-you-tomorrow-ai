@@ -28,10 +28,25 @@ export function processExists(pid: number): Promise<boolean> {
     process.kill(pid, 0);
     return Promise.resolve(true);
   } catch (error) {
+    // ESRCH ('no such process') is unit-testable for real: any impossible/already-dead PID
+    // reliably produces it, on every platform (see tests/integration/process). The EPERM/unknown
+    // fallthrough below ('alive' for EPERM, pitfall 2; rethrows for anything else, see
+    // interpretExistenceCheckError) is a different story: that logic is fully unit-tested with a
+    // FABRICATED error in liveness.test.ts, but reaching it through a REAL `process.kill(pid, 0)`
+    // needs a PID the test runner has no permission to signal. Reproducible on Windows (PID 4,
+    // "System", measured — see liveness.ts's module comment) but not portably: `npm run
+    // verificar:linux` runs as root inside `node:22-bookworm` (scripts/verificar-linux.mjs), and
+    // root can signal any PID, so no process is ever permission-denied there — the same call
+    // would just succeed instead of throwing. A test hard-coded to one platform's protected PID
+    // would be exactly the instability AGENTS.md's F.I.R.S.T. rule warns against, not a
+    // guardrail. Excluded from coverage below (branch AND the fallthrough statement) for that
+    // reason, not because it's untested — the logic is, the real syscall path isn't reachable.
+    // v8 ignore else
     if (errorCode(error) === 'ESRCH') {
       return Promise.resolve(false);
     }
-    // 'alive' for EPERM (pitfall 2); throws for anything else (interpretExistenceCheckError).
+    /* v8 ignore next -- the statement itself, not just the branch above; see the comment above
+       the `if` for why this line's own real-syscall path can't be portably exercised. */
     return Promise.resolve(interpretExistenceCheckError(error) === 'alive');
   }
 }
