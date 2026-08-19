@@ -6,8 +6,9 @@
  * gracefulness happened (the child's own SIGTERM handler ran to completion). On Windows it now
  * proves the same thing, by a different mechanism (`CTRL_BREAK_EVENT` via a PowerShell helper,
  * docs/spikes/G-ctrl-break-no-windows.md, S1-T2b) — plus the one case that mechanism genuinely
- * can't reach: a session with no console at all. See `src/adapters/process/termination.ts`'s
- * module comment for what was measured and what wasn't.
+ * can't reach: a session with no console at all. See
+ * `src/adapters/process/termination-windows.ts`'s module comment for what was measured and what
+ * wasn't.
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import { spawn, type ChildProcess } from 'node:child_process';

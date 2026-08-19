@@ -2,8 +2,9 @@
  * Sends `CTRL_BREAK_EVENT` to a Windows console by PID, and waits for a process to leave it, both
  * via a PowerShell helper (P/Invoke into `kernel32.dll`) — no native dependency, same technique
  * `adapters/notification/` already uses for the WinRT toast (docs/spikes/B-notificacoes.md).
- * `src/adapters/process/termination.ts` is the only caller; see that file's module comment for
- * what this technique proves and doesn't prove (docs/spikes/G-ctrl-break-no-windows.md).
+ * `src/adapters/process/termination-windows.ts` is the only caller (split out of `termination.ts`
+ * in S1-T12); see that file's module comment for what this technique proves and doesn't prove
+ * (docs/spikes/G-ctrl-break-no-windows.md).
  *
  * **Why the script is a template literal sent through `-EncodedCommand`, not a `.ps1` file on
  * disk or a `-Command` string.** Two alternatives were considered:
@@ -113,8 +114,9 @@ Write-Output 'sent'
 }
 
 /** Builds the script that blocks until `pid` disappears or `waitMs` elapses — the Windows analog
- * of `termination.ts#waitForExit`'s `sh` loop, since `sh` isn't guaranteed to exist on Windows and
- * D-019 bans `setTimeout`/`setInterval` outside `adapters/clock/` for this kind of bounded pause. */
+ * of `termination-posix.ts#waitForExit`'s `sh` loop, since `sh` isn't guaranteed to exist on
+ * Windows and D-019 bans `setTimeout`/`setInterval` outside `adapters/clock/` for this kind of
+ * bounded pause. */
 function buildWaitScript(pid: number, waitMs: number): string {
   assertSafePid(pid);
   const boundedWaitMs = Math.max(0, Math.trunc(waitMs));
