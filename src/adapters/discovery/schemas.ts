@@ -49,13 +49,31 @@ import { z } from 'zod';
  * `procStart` is a string, not a number: the real observed values (e.g. "134313811658518463")
  * exceed `Number.MAX_SAFE_INTEGER` — storing as a number would lose precision in exactly the
  * field used for tie-breaking.
+ *
+ * **`procStart` gets no format check beyond "non-empty" — do not add a `regex` back (Q-006,
+ * docs/QUESTOES.md).** It used to be `.regex(/^\d+$/)`, which is right for Windows and Linux
+ * (both give digits) and wrong for macOS: `docs/spikes/F-procstart-por-so.md` confirmed the
+ * Claude Code binary reads it there from `ps -o lstart=`, a human-readable date like
+ * `"Mon Aug 17 14:23:01 2026"`, not digits. That regex rejected every real macOS record, and
+ * because validation here is item-by-item (D-022), the failure wasn't a crash — the session just
+ * vanished from the list, silently, on the whole platform.
+ *
+ * This schema has no way to know which OS wrote the record it's reading, and that's exactly the
+ * information a platform-specific check would need — codifying one platform's shape here means
+ * rejecting another platform's legitimate record. The adapter that DOES know the shape is
+ * `adapters/process`, which compares this stored value against a freshly observed one on the
+ * machine it's running on right now (`core/classification.ts#pidRepresentsSameProcess`). A value
+ * that adapter can't parse or compare degrades to `unavailable`, and by D-025 `unavailable` never
+ * becomes `false` — so an unrecognized shape there is safe (liveness falls back to "alive", not
+ * "gone"), while a `regex` here was unsafe (the whole session disappeared). Leave this as
+ * `min(1)`; teach `adapters/process` about new shapes, never this schema.
  */
 export const sessionRecordSchema = z.object({
   pid: z.number().int().positive(),
   sessionId: z.uuid(),
   cwd: z.string().min(1),
   startedAt: z.number().int().positive(),
-  procStart: z.string().regex(/^\d+$/, 'procStart must be a digits-only string'),
+  procStart: z.string().min(1),
   kind: z.string().min(1).optional(),
   entrypoint: z.string().min(1).optional(),
   name: z.string().min(1).optional(),
