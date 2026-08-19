@@ -764,7 +764,7 @@ janela deixa de ser estreita e isto reabre.
 
 ---
 
-## Q-011 — Linha de comando como fonte de handoff: redigir padrão de segredo antes de persistir, ou aceitar o risco documentado?
+## Q-011 — Linha de comando como fonte de handoff: mascarar padrão de segredo antes de persistir, ou aceitar o risco documentado?
 **Tarefa:** S1-T10
 **Bloqueia:** não esta tarefa (o dado já nasce como `string | null` opaco, sem parsing); talvez
 bloqueie S2 quando a linha de comando vira conteúdo de handoff gravado em `~/.seeya/`
@@ -788,9 +788,9 @@ o valor de um PID candidato genuíno ainda pode conter um segredo, e ele ainda v
 **Opções que enxergo:**
 A) aceitar o risco na v1, documentado — `commandLine` é gravado como veio, sem transformação. Mais
    simples, mais fiel ao dado real, mas expõe o usuário a gravar um segredo em disco sem saber.
-B) redigir padrões suspeitos antes de persistir (ex.: `--token`, `--password`, `--api-key`,
+B) mascarar padrões suspeitos antes de persistir (ex.: `--token`, `--password`, `--api-key`,
    sequências que parecem `sk-...`/JWT) numa camada de saneamento antes do handoff. Reduz o risco,
-   mas é uma heurística — vai errar nos dois sentidos (redige texto legítimo que só *parece*
+   mas é uma heurística — vai errar nos dois sentidos (mascara texto legítimo que só *parece*
    segredo; deixa passar um formato de segredo que a lista não previu), e cria uma falsa sensação
    de segurança se alguém achar que ela "resolve" o problema.
 C) não persistir `commandLine` bruto no handoff — só um resumo derivado (ex.: primeiro token do
