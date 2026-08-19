@@ -23,9 +23,9 @@
  * failure was the race of the process dying between the liveness check and this read; if the PID
  * is still there, the failure is something else and D-025 applies — "unavailable", not "false".
  */
-import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import type { ProcStartCapture } from './liveness.js';
+import { runForStdout } from './spawn-stdout.js';
 
 type ExistenceRecheck = (pid: number) => Promise<boolean>;
 
@@ -76,23 +76,6 @@ async function captureLinux(pid: number, recheck: ExistenceRecheck): Promise<Pro
     );
   }
   return { kind: 'value', value };
-}
-
-/** Runs `command` with `args`, returning trimmed stdout, or `undefined` on any failure. */
-function runForStdout(
-  command: string,
-  args: string[],
-  env?: NodeJS.ProcessEnv,
-): Promise<string | undefined> {
-  return new Promise((resolve) => {
-    const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'ignore'], shell: false, env });
-    let stdout = '';
-    child.stdout.on('data', (chunk: Buffer) => {
-      stdout += chunk.toString('utf8');
-    });
-    child.on('error', () => resolve(undefined));
-    child.on('close', (code) => resolve(code === 0 ? stdout.trim() : undefined));
-  });
 }
 
 /**

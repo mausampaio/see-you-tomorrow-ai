@@ -69,6 +69,7 @@ describe('buildSessionWithPid', () => {
 
     expect(session).toStrictEqual({
       hasPid: true,
+      hasSessionId: true,
       sessionId: baseRecord.sessionId,
       cwd: baseRecord.cwd,
       name: 'projeto-03',

@@ -303,7 +303,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       legível em nenhuma linha é **rejeitado**, não descartado em silêncio nem inventado como
       sessão (D-025) — decisão registrada em Q-009 por ambiguidade quanto ao tipo de domínio.
       `npm run verificar` e `npm run verificar:linux` verdes.
-- [ ] **S1-T10 — Terceira estratégia: processo e `.key` sem `.json` (D-023).** Cobre o agente de
+- [~] **S1-T10 — Terceira estratégia: processo e `.key` sem `.json` (D-023).** Cobre o agente de
       execução autônomo, que as duas estratégias anteriores não veem: sem `.json` no registro e
       sem transcript.
       - listar `~/.claude/sessions/` e achar `<pid>.<hash>.key` **sem** `<pid>.json` — só o nome

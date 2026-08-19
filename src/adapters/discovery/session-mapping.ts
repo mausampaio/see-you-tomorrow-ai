@@ -63,6 +63,7 @@ export function buildSessionWithPid(
 ): SessionWithPid {
   return {
     hasPid: true,
+    hasSessionId: true,
     sessionId: record.sessionId,
     cwd: record.cwd,
     name: record.name ?? deriveNameFromCwd(record.cwd),

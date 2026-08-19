@@ -38,16 +38,28 @@ export interface Clock {
 }
 
 /**
- * Process liveness and termination (D-002, D-023). Implemented in `adapters/process/`
- * (S1-T2). `isAlive` receives `procStart` to break ties on a recycled PID
- * (docs/ESPECIFICACAO.md § "Como as sessões são descobertas") — the pure decision of when two
- * `procStart` values count as the same process lives in
+ * Process liveness, termination and inspection (D-002, D-023). Implemented in
+ * `adapters/process/` (S1-T2, grown by S1-T10). `isAlive` receives `procStart` to break ties on a
+ * recycled PID (docs/ESPECIFICACAO.md § "Como as sessões são descobertas") — the pure decision of
+ * when two `procStart` values count as the same process lives in
  * `core/classification.ts#pidRepresentsSameProcess`; this port only declares the async
  * contract that the adapter fulfills by querying the real OS.
+ *
+ * `readCwd`/`readCommandLine` (S1-T10/D-023) read a **live** PID's working directory and command
+ * line straight from the OS — the two facts the `.key`-without-`.json` discovery strategy needs
+ * and neither the registry nor a transcript can give for that shape of session. Each returns
+ * `null`, never throws and never invents a value, when the OS didn't give one: an unsupported
+ * platform (Windows has no `cwd` for an arbitrary PID without native code, D-023), a permission
+ * error, or the process exiting in the gap between confirming liveness and this read. The caller
+ * (`adapters/discovery/process-key.ts`) is the one that decides what a `null` means for discovery
+ * — this port only reports what it found, per-call, with no richer failure reason: the two
+ * possible responses ("here's the value" / "couldn't get it") are all discovery ever acts on.
  */
 export interface ProcessControl {
   isAlive(pid: number, procStart?: string): Promise<boolean>;
   terminateGracefully(pid: number, deadlineMs: number): Promise<boolean>;
+  readCwd(pid: number): Promise<string | null>;
+  readCommandLine(pid: number): Promise<string | null>;
 }
 
 /**
