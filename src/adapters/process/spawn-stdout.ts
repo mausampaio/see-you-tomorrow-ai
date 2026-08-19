@@ -1,11 +1,13 @@
 /**
  * Runs `command` with `args` (array, `shell: false` — AGENTS.md § "Processos": never `exec` with
  * an interpolated string), returning trimmed stdout on a zero exit code, or `undefined` on any
- * failure (spawn error, non-zero exit). Shared by every per-platform capture in this adapter that
- * shells out to an OS tool instead of reading a file directly — `proc-start.ts` (macOS/Windows
- * `procStart`) and `inspection.ts` (macOS `cwd`/command line) both need this, so it's extracted
- * here instead of each carrying its own copy of the same ten lines (AGENTS.md: "nada de
- * duplicação"). Originally lived only inside `proc-start.ts`.
+ * failure (spawn error, non-zero exit). Extracted out of `proc-start.ts` (macOS/Windows
+ * `procStart`), which still uses it, instead of that module carrying it inline.
+ *
+ * **Also used by `inspection.ts` (macOS `cwd`/command line) between S1-T10 and S1-T11 — removed
+ * with that module in S1-T11 (D-029).** Kept here on its own, unchanged: `proc-start.ts` is still
+ * a live caller, so this file stays despite losing its second one (docs/PLANO-DE-ENTREGA.md
+ * S1-T11's own warning not to delete it along with `inspection.ts`).
  */
 import { spawn } from 'node:child_process';
 
