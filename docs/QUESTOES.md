@@ -681,4 +681,28 @@ B) `cwd` passa a `string | null` em `SessionWithoutPid` (ou uma terceira forma d
    (ex.: mostrar "cwd desconhecido" em vez de nome derivado). Mais fiel ao "a sessão existiu",
    mas exigiria alterar `core/types.ts` (S1-T1, já fechada) e provavelmente `CommonSessionFields`
    inteiro, com efeito em `session-mapping.ts` e em toda a S1-T9 (fusão).
-**Resposta:** (preenchida pelo PO)
+**Resposta:** **FECHADA — opção A, confirmada.**
+
+Você seguiu o padrão certo (não inventar, não descartar em silêncio) e apresentou a alternativa
+de forma justa. O que decide entre as duas é uma coisa que a opção B esconde: ela produz uma
+sessão **descobrível mas inacionável**.
+
+Sem `cwd`, a sessão não pode ser conferida contra a lista `ignore` da config, não tem árvore git
+para capturar, não tem de onde derivar nome de exibição, e o `start-day` não tem diretório para
+retomar. Ela apareceria na lista e falharia em todo passo seguinte — e cada consumidor ganharia
+um ramo "e se não tiver cwd" para tratar um caso que nunca vai render trabalho útil. Isso é pior
+que uma rejeição visível: troca um número honesto por uma entrada que promete algo que não
+entrega.
+
+Some-se que o caso realista é **transitório por natureza**. Um transcript truncado na primeira
+escrita é uma sessão que começou há segundos; na próxima varredura ela já terá linhas completas
+e será descoberta normalmente. Perder uma sessão de segundos de idade custa quase nada; mudar o
+tipo de domínio inteiro para acomodá-la custa em toda a S1-T9 e em tudo que vier depois.
+
+**A condição da confirmação:** a rejeição tem de continuar **visível e contável**, nunca
+silenciosa — é isso que impede esta decisão de virar o modo de falha que D-021 e D-025 combatem.
+O usuário poder ler "3 sessões, 1 transcript ignorado" é o que torna a opção A honesta.
+
+Se um dia aparecer um transcript **persistente** sem `cwd` — que continue assim entre varreduras —,
+isso é sinal novo e reabre a questão. Transitório é aceitável; permanente seria um formato que
+não entendemos.

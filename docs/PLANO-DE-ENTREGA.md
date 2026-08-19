@@ -282,7 +282,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       tipo de S1-T1 diziam). Formato de `~/.seeya/forks.json`: Q-008 fechada, opção B — objeto
       raiz com `schemaVersion` (`{ "schemaVersion": 1, "forks": [...] }`), `schemaVersion` ou
       `forks` ausentes/inválidos viram rejeição visível, cada item segue exigindo só `sessionId`.
-- [~] **S1-T8 — Estratégia por varredura de transcripts (D-016).** Varre
+- [x] **S1-T8 — Estratégia por varredura de transcripts (D-016).** Varre
       `~/.claude/projects/**/*.jsonl` por mtime dentro de `relevanceHours`, sem ler conteúdo
       antes de filtrar. Reconstrói o `cwd` a partir do transcript, já que o slug não é
       reversível com segurança.
