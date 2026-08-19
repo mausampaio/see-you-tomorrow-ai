@@ -56,7 +56,19 @@ export async function writeRawSessionFile(
   await writeFile(path.join(fixture.sessionsDir, fileName), content, 'utf8');
 }
 
-export async function writeForksJson(fixture: DiscoveryFixture, content: unknown): Promise<void> {
+/** Writes a well-formed `forks.json` — `{ schemaVersion: 1, forks }` (Q-008, docs/QUESTOES.md) —
+ * from just the `forks` array, since every well-formed-file test only varies that part. */
+export async function writeForksJson(fixture: DiscoveryFixture, forks: unknown[]): Promise<void> {
+  await writeForksJsonRaw(fixture, { schemaVersion: 1, forks });
+}
+
+/** Writes `forks.json` with whatever root value `content` serializes to, no wrapping — for tests
+ * of a malformed root itself (wrong/missing `schemaVersion`, missing/non-array `forks`, a root
+ * that isn't even an object), where `writeForksJson`'s automatic wrapper would get in the way. */
+export async function writeForksJsonRaw(
+  fixture: DiscoveryFixture,
+  content: unknown,
+): Promise<void> {
   await writeFile(path.join(fixture.seeyaHome, 'forks.json'), JSON.stringify(content), 'utf8');
 }
 

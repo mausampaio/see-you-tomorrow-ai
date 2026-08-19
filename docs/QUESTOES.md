@@ -635,4 +635,8 @@ O resto do seu desenho fica: a descoberta exige **só** `sessionId` e ignora o r
 arquivo ausente é "nenhum fork ainda", não corrupção; arquivo presente e malformado vira
 rejeição **visível**, nunca falha silenciosa nem derruba a descoberta das sessões reais.
 
+`schemaVersion` ausente ou diferente de `1` é rejeição **visível** do arquivo inteiro, no mesmo
+padrão de `forks` ausente ou não-array. Implementado em
+`src/adapters/discovery/fork-registry.ts`.
+
 Anotado em S2-T2, que escreve o arquivo pela primeira vez.

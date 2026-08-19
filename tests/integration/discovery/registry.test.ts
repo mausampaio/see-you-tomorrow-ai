@@ -17,6 +17,7 @@ import {
   createDiscoveryFixture,
   removeDiscoveryFixture,
   writeForksJson,
+  writeForksJsonRaw,
   writeRawSessionFile,
   writeSessionRecord,
   writeTranscript,
@@ -326,16 +327,97 @@ describe('discoverSessionsFromRegistry — fork exclusion (D-012)', () => {
     expect(result.rejected[0]?.file).toMatch(/forks\.json$/);
   });
 
-  it('a forks.json that parses but is not a JSON array is rejected as a whole file', async () => {
+  /**
+   * Q-008 (docs/QUESTOES.md), answered option B: `forks.json` is a root **object** carrying
+   * `schemaVersion`, not a bare array — the same convention docs/ARQUITETURA.md § `storage/`
+   * requires for every persisted document under `~/.seeya/`. The five cases below are the whole
+   * shape of that contract: a root that isn't an object at all, `forks` missing or not an array,
+   * `schemaVersion` missing or wrong, and the happy path with an extra field (`createdAt`,
+   * S2-T6's future need) present and silently ignored. None of the failure cases ever block the
+   * real sessions from being discovered — only forks.json's own entry set degrades to empty.
+   */
+  it('a forks.json root that is not even an object (a bare array) is rejected as a whole file', async () => {
     fixture = await createDiscoveryFixture();
     await writeSessionRecord(fixture, 'a-normal', validRecord());
-    await writeForksJson(fixture, { sessionId: SESSION_A }); // object, not array
+    await writeForksJsonRaw(fixture, [{ sessionId: SESSION_A }]); // the old bare-array shape
 
     const result = await discover();
 
     expect(result.sessions).toHaveLength(1);
     expect(result.rejected).toHaveLength(1);
-    expect(result.rejected[0]?.reason).toContain('must be a JSON array');
+    expect(result.rejected[0]?.file).toMatch(/forks\.json$/);
+  });
+
+  it('a forks.json whose forks field is missing is rejected as a whole file', async () => {
+    fixture = await createDiscoveryFixture();
+    await writeSessionRecord(fixture, 'a-normal', validRecord());
+    await writeForksJsonRaw(fixture, { schemaVersion: 1 });
+
+    const result = await discover();
+
+    expect(result.sessions).toHaveLength(1);
+    expect(result.rejected).toHaveLength(1);
+    expect(result.rejected[0]?.reason).toContain('forks');
+  });
+
+  it('a forks.json whose forks field is not an array is rejected as a whole file', async () => {
+    fixture = await createDiscoveryFixture();
+    await writeSessionRecord(fixture, 'a-normal', validRecord());
+    await writeForksJsonRaw(fixture, { schemaVersion: 1, forks: { sessionId: SESSION_A } });
+
+    const result = await discover();
+
+    expect(result.sessions).toHaveLength(1);
+    expect(result.rejected).toHaveLength(1);
+    expect(result.rejected[0]?.reason).toContain('forks');
+  });
+
+  it('a forks.json with no schemaVersion at all is rejected as a whole file', async () => {
+    fixture = await createDiscoveryFixture();
+    await writeSessionRecord(fixture, 'a-normal', validRecord());
+    await writeForksJsonRaw(fixture, { forks: [{ sessionId: SESSION_A }] });
+
+    const result = await discover();
+
+    expect(result.sessions).toHaveLength(1);
+    expect(result.rejected).toHaveLength(1);
+    expect(result.rejected[0]?.reason).toContain('schemaVersion');
+  });
+
+  it('a forks.json with the wrong schemaVersion is rejected as a whole file', async () => {
+    fixture = await createDiscoveryFixture();
+    await writeSessionRecord(fixture, 'a-normal', validRecord());
+    await writeForksJsonRaw(fixture, { schemaVersion: 2, forks: [{ sessionId: SESSION_A }] });
+
+    const result = await discover();
+
+    expect(result.sessions).toHaveLength(1);
+    expect(result.rejected).toHaveLength(1);
+    expect(result.rejected[0]?.reason).toContain('schemaVersion');
+  });
+
+  it("a fork entry carrying createdAt (S2-T6's future field) is accepted, and createdAt is ignored without complaint", async () => {
+    fixture = await createDiscoveryFixture();
+    await writeSessionRecord(fixture, 'a-fork', validRecord({ pid: 1001, sessionId: SESSION_A }));
+    await writeSessionRecord(
+      fixture,
+      'b-normal',
+      validRecord({
+        pid: 1002,
+        sessionId: SESSION_B,
+        cwd: 'c:\\code\\projeto-02',
+        name: 'projeto-02',
+      }),
+    );
+    await writeForksJson(fixture, [
+      { sessionId: SESSION_A, createdAt: '2026-08-18T21:00:00.000Z' },
+    ]);
+
+    const result = await discover();
+
+    expect(result.sessions).toHaveLength(1);
+    expect(result.sessions[0]?.sessionId).toBe(SESSION_B);
+    expect(result.rejected).toStrictEqual([]);
   });
 
   it('a fork entry without a valid sessionId is rejected item-by-item, the rest of the array still applies (D-022)', async () => {

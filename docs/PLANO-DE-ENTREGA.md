@@ -279,8 +279,9 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       não é excluída nem tratada como sinal de trabalho concluído (docs/spikes/E: o registro é
       apagado na saída graciosa, então uma entrada obsoleta só sobrevive a queda anormal, e é
       reportada como sessão encerrada, não descartada — já era o que `docs/ESPECIFICACAO.md` e o
-      tipo de S1-T1 diziam). Formato de `~/.seeya/forks.json` ainda não fixado por nenhuma tarefa
-      anterior: assumido um mínimo e registrado em Q-008 para confirmação, sem bloquear a tarefa.
+      tipo de S1-T1 diziam). Formato de `~/.seeya/forks.json`: Q-008 fechada, opção B — objeto
+      raiz com `schemaVersion` (`{ "schemaVersion": 1, "forks": [...] }`), `schemaVersion` ou
+      `forks` ausentes/inválidos viram rejeição visível, cada item segue exigindo só `sessionId`.
 - [ ] **S1-T8 — Estratégia por varredura de transcripts (D-016).** Varre
       `~/.claude/projects/**/*.jsonl` por mtime dentro de `relevanceHours`, sem ler conteúdo
       antes de filtrar. Reconstrói o `cwd` a partir do transcript, já que o slug não é

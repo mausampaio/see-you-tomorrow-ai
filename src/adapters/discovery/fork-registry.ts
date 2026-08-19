@@ -3,20 +3,33 @@
  * via `--fork-session` (D-012). Discovery excludes them, or a fork gets discovered as a session,
  * captured, and forked again: a feedback loop.
  *
- * **The file's format is not fixed by any task before this one.** D-012 only says "every fork
- * `sessionId` is registered" — it doesn't specify the shape, and no task before S1-T3 writes this
- * file (S2-T2 is the writer, S2-T6 the cleanup reader that needs `forkCleanupDays` age). This
- * module commits to the minimal shape D-012's exclusion actually needs — a JSON array of objects
- * each carrying at least `sessionId` — validated item by item and tolerant of unknown fields
- * (D-021 style), so S2-T2 can add `createdAt` later without breaking this reader. Flagged in
- * docs/QUESTOES.md Q-008 so S1-T5/S2-T2 confirm or correct the shape before any real forks.json
- * exists on disk (D-027's own closing principle: this kind of decision is cheap before the first
- * byte is written and expensive after).
+ * **Format fixed by Q-008 (docs/QUESTOES.md), answered option B**: a root object, not a bare
+ * array, carrying `schemaVersion` like every other persisted document under `~/.seeya/`
+ * (docs/ARQUITETURA.md § `storage/`: "schemaVersion em todo documento persistido, com migração
+ * explícita") —
+ *
+ * ```jsonc
+ * { "schemaVersion": 1, "forks": [{ "sessionId": "uuid-do-fork", "createdAt": "..." }] }
+ * ```
+ *
+ * `schemaVersion` missing or not `1` is a visible whole-file rejection, same as `forks` missing
+ * or not an array — none of that is silent. Each entry in `forks` is still validated
+ * independently (D-022) and only `sessionId` is required; every other field (`createdAt`, needed
+ * by S2-T6's `forkCleanupDays`, or anything added later) is read and ignored here without
+ * complaint (D-021 style) — this module only needs identity, never age.
  */
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
 import { isEnoent } from './fs-errors.js';
+
+/** The root document shape (Q-008). `forks` stays `z.unknown()` per element on purpose: D-022
+ * validates collection items one at a time, so a bad entry is reported and dropped instead of
+ * failing this schema (and rejecting the whole file) the way `z.array(forkEntrySchema)` would. */
+const forkRegistryFileSchema = z.object({
+  schemaVersion: z.literal(1),
+  forks: z.array(z.unknown()),
+});
 
 const forkEntrySchema = z.object({ sessionId: z.uuid() });
 
@@ -49,8 +62,11 @@ async function readForksFileText(forksPath: string): Promise<string | ForkRegist
   }
 }
 
-/** Parses `text` as JSON and confirms it's an array — the two ways a whole file (not one entry)
- * is rejected, since there's no per-item boundary until this succeeds. */
+/** Parses `text` as JSON and confirms the root document shape — `schemaVersion: 1` and a `forks`
+ * array (Q-008) — the ways a whole file (not one entry) is rejected, since there's no per-item
+ * boundary until this succeeds. A malformed or missing `schemaVersion` and a missing/non-array
+ * `forks` can both be reported by the same `safeParse`, so a file broken in both ways gets one
+ * rejection naming both problems instead of only the first one found. */
 function parseForksJson(forksPath: string, text: string): unknown[] | ForkRegistryReadResult {
   let parsed: unknown;
   try {
@@ -58,14 +74,11 @@ function parseForksJson(forksPath: string, text: string): unknown[] | ForkRegist
   } catch (error) {
     return singleRejection(text, `${forksPath} is not valid JSON: ${String(error)}`);
   }
-  if (!Array.isArray(parsed)) {
-    return singleRejection(parsed, `${forksPath} must be a JSON array, got ${typeof parsed}`);
+  const result = forkRegistryFileSchema.safeParse(parsed);
+  if (!result.success) {
+    return singleRejection(parsed, `${forksPath}: ${z.prettifyError(result.error)}`);
   }
-  // `Array.isArray`'s built-in type predicate narrows to `any[]`, not `unknown[]` — a known gap
-  // in lib.es5.d.ts, not a sign this code doesn't know its own types. `parsed` was `unknown`
-  // right up to this line; validateForkEntries immediately re-validates every element with zod,
-  // so nothing downstream trusts this cast to mean more than "it's an array".
-  return parsed as unknown[];
+  return result.data.forks;
 }
 
 /** Validates each array entry independently (D-022 spirit): a bad entry doesn't drop the good
