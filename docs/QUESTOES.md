@@ -567,3 +567,47 @@ não estranhar o diff em `tsconfig.json`.
 tarefa** — não havia máquina macOS disponível. Only Linux (container Docker) e Windows (esta
 máquina) foram confirmados por medição direta. Ver o relatório da tarefa para o que foi
 confirmado e como.
+
+---
+
+## Q-008 — Formato de `~/.seeya/forks.json` ainda não fixado; S1-T3 assumiu um mínimo
+**Tarefa:** S1-T3
+**Bloqueia:** não esta tarefa — bloqueia (na prática, precisa de confirmação antes de) S2-T2 (quem
+escreve o arquivo pela primeira vez) e S2-T6 (limpeza de forks, que lê `forkCleanupDays`).
+**Contexto:** D-012 exige que a descoberta exclua `sessionId`s listados em `~/.seeya/forks.json`
+(retomado explicitamente no item de escopo de S1-T3 do plano). Nenhuma tarefa anterior a esta
+fixou o **formato** do arquivo — D-012 só diz "todo `sessionId` de fork é registrado", sem dizer
+lista ou mapa, nem quais outros campos existem. `forks.json` só ganha um escritor de verdade em
+S2-T2, e um segundo leitor (para idade, via `forkCleanupDays`) em S2-T6.
+
+Para cumprir a exclusão agora, `src/adapters/discovery/fork-registry.ts` assumiu o formato mínimo
+que a própria exclusão precisa: um array JSON no nível raiz, cada item pelo menos com
+`sessionId` (uuid), validado item a item (tolerante a campos desconhecidos, no espírito de
+D-021) — para que S2-T2 possa acrescentar `createdAt` (necessário para `forkCleanupDays`) sem
+quebrar esta leitura:
+
+```jsonc
+[{ "sessionId": "uuid-do-fork" }]
+```
+
+Arquivo ausente é tratado como "nenhum fork registrado ainda" (caso normal, não corrompido) — faz
+sentido hoje porque nenhum escritor existe. Arquivo presente mas malformado (JSON inválido, não é
+array, item sem `sessionId`) é reportado como rejeição visível (mesmo padrão `{accepted,
+rejected}` do resto do projeto), nunca faz a leitura falhar silenciosamente nem derruba a
+descoberta das sessões de verdade.
+
+**Por que isso é uma questão, não só uma implementação.** D-027 registra o princípio: "nome de
+diretório, arquivo de estado ou chave persistida é decisão barata antes do primeiro byte gravado
+e cara depois." Este é literalmente o primeiro byte deste arquivo em qualquer máquina — hoje
+nenhum `forks.json` real existe, então o formato ainda pode mudar de graça. Sigo com o mínimo
+acima (não parei a tarefa, D-012 exigia a exclusão agora), mas não decidi o formato final sozinho:
+é exatamente o tipo de decisão que `AGENTS.md` pede para não inventar sem registrar.
+
+**Opções que enxergo:** A) confirmar o formato acima como definitivo, deixando S2-T2 apenas
+acrescentar campos tolerados (`createdAt` etc.), sem mudar a forma raiz. B) preferir um objeto no
+nível raiz (`{ "schemaVersion": 1, "forks": [...] }`), seguindo o padrão de `schemaVersion em todo
+documento persistido` que `docs/ARQUITETURA.md` § `storage/` já define para outros documentos de
+`~/.seeya/` — mais consistente, mas ainda não confirmado que `forks.json` conta como um desses
+documentos "versionáveis" (ele nunca migra sozinho na spec atual). C) outro formato, definido por
+quem torna isto decisão em `docs/DECISOES.md`.
+**Resposta:** (preenchida pelo PO)

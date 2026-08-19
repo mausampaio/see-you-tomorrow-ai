@@ -271,9 +271,16 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* teste que prova **graciosidade**, não morte — processo de controle com handler que
       grava marcador antes de sair; marcador escrito = teve chance de salvar. Mais o caso sem
       console devolvendo `false`. `verificar` e `verificar:linux` verdes (o caminho POSIX não muda).
-- [ ] **S1-T3 — `adapters/discovery`, estratégia por registro.** Lê
+- [~] **S1-T3 — `adapters/discovery`, estratégia por registro.** Lê
       `~/.claude/sessions/*.json`, tolerante a arquivo corrompido. Exclui forks de `forks.json`
       (D-012). Sessão sem transcript entra normalmente, com `hasTranscript: false` (D-013).
+      Corrige Q-006 (`procStart` do macOS): o `regex` saiu do schema, virou `z.string().min(1)`.
+      Entrada obsoleta (PID morto) entra na lista normalmente, com `processIsAlive: false` —
+      não é excluída nem tratada como sinal de trabalho concluído (docs/spikes/E: o registro é
+      apagado na saída graciosa, então uma entrada obsoleta só sobrevive a queda anormal, e é
+      reportada como sessão encerrada, não descartada — já era o que `docs/ESPECIFICACAO.md` e o
+      tipo de S1-T1 diziam). Formato de `~/.seeya/forks.json` ainda não fixado por nenhuma tarefa
+      anterior: assumido um mínimo e registrado em Q-008 para confirmação, sem bloquear a tarefa.
 - [ ] **S1-T8 — Estratégia por varredura de transcripts (D-016).** Varre
       `~/.claude/projects/**/*.jsonl` por mtime dentro de `relevanceHours`, sem ler conteúdo
       antes de filtrar. Reconstrói o `cwd` a partir do transcript, já que o slug não é
