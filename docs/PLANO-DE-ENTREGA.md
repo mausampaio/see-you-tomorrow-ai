@@ -347,11 +347,17 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       sobre `.key` sem `.json` — sessões que o `seeya` vê existir e **não consegue inspecionar**.
       Só o **nome** do arquivo, nunca o conteúdo (modo 600). O aviso **não afirma** a causa: ela
       não está estabelecida (ver D-029). Diga o que se sabe e aponte o caminho conhecido.
+      A listagem de `.key` sem `.json` foi removida pela S1-T11 em vez de ficar parada sem uso.
+      Recupere de `src/adapters/discovery/process-key.ts` no commit `e45b348` — ela já era testada,
+      e reescrever do zero seria desperdício.
 - [ ] **S1-T11 — Reverter a terceira estratégia (D-029).** Remove o que a S1-T10 acrescentou,
       mantendo a detecção barata para a S1-T7.
       - sai: `adapters/discovery/process-key.ts`, `adapters/process/inspection.ts`, os métodos
         `readCwd`/`readCommandLine` de `ProcessControl`, e a terceira forma da união de tipos
-      - fica: a listagem de `.key` sem `.json` (só nomes), que a S1-T7 vai consumir
+      - **sai também a listagem de `.key` sem `.json`** (mudei de ideia depois de escrever esta
+        tarefa): a S1-T7 ainda não existe, então mantê-la deixaria código de produção sem uso, e
+        este projeto não guarda código especulativo. A lógica não se perde — está em
+        `src/adapters/discovery/process-key.ts` no commit `e45b348`, de onde a S1-T7 recupera
       - `spawn-stdout.ts` é compartilhado com `proc-start.ts`: **não remova** sem conferir
       - a união volta a duas formas. Confira se o discriminante `hasSessionId` ainda paga o
         próprio custo com uma forma só — se não pagar, remova-o também
