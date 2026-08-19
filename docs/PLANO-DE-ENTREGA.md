@@ -327,6 +327,26 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       linha de comando, num `~/.claude` falso + processo de teste. E um `.key` cujo PID **não**
       está vivo é ignorado, não reportado como sessão.
 
+- [ ] **S1-T12 — O piso de cobertura por diretório não existe.** Achado ao revisar a S1-T11, e é
+      a **terceira** vez que este projeto encontra a mesma forma: uma garantia que existe só no
+      texto (antes foram o `passWithNoTests` em S1-T0e e o prettier em S1-T0f).
+      Medido, não suposto:
+      - `docs/TESTES.md` afirma: "Cobertura mínima: `core/` 95%, demais diretórios de produção
+        80%. **Configurado por diretório no vitest, e o CI falha abaixo disso.**"
+      - o comentário do próprio `vitest.config.ts` repete "Per-directory coverage"
+      - a realidade: a chave `'src/**'` aplica o limite ao **agregado**, não por diretório
+      - prova: hoje `adapters/process` está em **78,19%** e o portão passa, porque o agregado
+        está em 91,7%. Um diretório inteiro pode despencar sem ninguém saber
+      O risco não é teórico: quanto mais código bem coberto entra, **mais folga o agregado dá**
+      para um diretório mal coberto se esconder. A proteção afrouxa justamente conforme o projeto
+      cresce, que é o oposto do que se quer.
+      - fazer o limite valer por diretório de verdade, ou **corrigir os dois textos** para
+        descreverem o que existe. As duas saídas são honestas; o que não é aceitável é a
+        divergência atual
+      - se escolher fazer valer: `adapters/process` vai **reprovar** hoje, e isso é o teste do
+        conserto. Ou cobre, ou registra a exceção com motivo — não afrouxe o piso para caber
+      *Aceite:* baixar a cobertura de um diretório abaixo do piso **reprova** o portão. Provado
+      por execução, não por leitura.
 - [ ] **S1-T9 — Fusão das três estratégias.** União deduplicada: por `sessionId` quando existe,
       por **PID** quando a origem não fornece `sessionId` (D-023). Sessão vista só pela varredura
       de transcripts entra com `pid: null`; a vinda só do processo entra com `sessionId: null`.
