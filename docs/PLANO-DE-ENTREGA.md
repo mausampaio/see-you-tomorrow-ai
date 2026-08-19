@@ -251,7 +251,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       `TerminateProcess`, que mata sem o processo salvar nada — usar isso viola D-002 parecendo
       cumpri-lo. E `EPERM` em `process.kill(pid, 0)` significa **vivo**, não morto.
       Quando o desempate não puder ser avaliado, `isAlive` **não** responde `false` (D-025).
-- [~] **S1-T2b — Encerramento gracioso no Windows, por evento de console.** Nasce do Spike G,
+- [x] **S1-T2b — Encerramento gracioso no Windows, por evento de console.** Nasce do Spike G,
       que **revoga** a conclusão do S1-T2 de que não havia caminho no Windows. Aquela conclusão
       foi tirada por raciocínio e não sobreviveu à primeira medição.
       **Leia `docs/spikes/G-ctrl-break-no-windows.md` antes de começar** — ele traz a técnica, os

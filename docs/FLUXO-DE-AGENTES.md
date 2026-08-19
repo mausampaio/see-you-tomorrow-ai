@@ -23,6 +23,20 @@ aprovada. É o único que altera os documentos de autoridade.
 > estourou. **Acordo que só existe na conversa não sobrevive à compactação** — é por isso que
 > este parágrafo está aqui e não lá.
 
+> **Todo agente roda em worktree isolada, nunca no checkout compartilhado.** Não é preferência de
+> organização: um agente ativo **troca o branch do checkout**, e a partir daí qualquer `git add`,
+> `git commit` ou `npm run verificar` que o PO rode passa a operar no branch dele, sobre arquivos
+> no meio da escrita.
+>
+> Aconteceu em 2026-08-18: o PO editou duas docs, rodou `git add -A` sem conferir o branch, e
+> commitou três `.ts` inacabados do agente num commit rotulado `docs:`. O portão estava vermelho
+> por causa do código incompleto e foi publicado assim. O `main` escapou por acaso — o commit tinha
+> ido para o branch do agente —, não por cuidado.
+>
+> Regra irmã, do mesmo incidente: **nunca encadear `npm run verificar` com `git commit` ou
+> `git push` na mesma linha.** Rode o portão, **leia o código de saída**, e só então publique.
+> Encadear foi o que deixou o vermelho passar despercebido, duas vezes na mesma sessão.
+
 ## Dev — Sonnet 5
 
 Implementa **uma tarefa por vez** do plano de entrega. Lê `AGENTS.md` no início de cada tarefa.

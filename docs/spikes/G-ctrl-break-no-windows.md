@@ -23,12 +23,28 @@ tinha sido raciocinado.
 
 ## A técnica
 
-`AttachConsole(pid)` + `SetConsoleCtrlHandler(NULL, TRUE)` + `GenerateConsoleCtrlEvent`, por
-P/Invoke no PowerShell — **a mesma técnica que o adapter de notificação já usa**. Sem dependência
-nova: sem C, sem Rust, sem addon nativo, sem FFI.
+`AttachConsole(pid)` + auto-proteção do emissor + `GenerateConsoleCtrlEvent`, por P/Invoke no
+PowerShell — **a mesma técnica que o adapter de notificação já usa**. Sem dependência nova: sem C,
+sem Rust, sem addon nativo, sem FFI.
 
-O `SetConsoleCtrlHandler(NULL, TRUE)` no processo que envia não é opcional: sem ele o próprio
-emissor recebe o evento que acabou de gerar e morre antes de o alvo reagir.
+O processo que envia precisa se proteger do evento que ele mesmo gera, senão morre antes de o alvo
+reagir.
+
+> **CORREÇÃO (S1-T2b, medida).** A primeira versão deste spike dizia que essa proteção era
+> `SetConsoleCtrlHandler(NULL, TRUE)`. **Está errado.** Aquele sinalizador de "ignorar" cobre
+> **só o `CTRL_C_EVENT`**; o `CTRL_BREAK_EVENT` passa por cima dele. O meu teste não pegou isso
+> porque eu media os dois eventos no mesmo helper, e o que sobreviveu foi lido como se valesse para
+> os dois.
+>
+> O que funciona é registrar um **handler de verdade** — um delegate que devolve `true` para
+> qualquer `CtrlType`. O princípio segue valendo; errado era **qual chamada** o entrega. Detalhe de
+> P/Invoke que acompanha: o delegate precisa ficar guardado numa variável, ou o CLR o coleta antes
+> de o lado nativo chamá-lo.
+>
+> **Segunda medição, da mesma tarefa:** mesmo com o delegate certo, o `powershell.exe` que gera o
+> evento sai com **código 2** — depois de já ter escrito na saída padrão. Reproduzido inclusive
+> contra um alvo que sobrevive ao evento, logo não é efeito cascata da morte do alvo. Para quem
+> implementar: **o que foi escrito em stdout é o sinal confiável, não o código de saída.**
 
 ## 1. O evento tem de ser CTRL_BREAK, não CTRL_C
 

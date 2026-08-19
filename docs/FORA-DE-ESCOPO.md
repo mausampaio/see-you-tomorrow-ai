@@ -41,6 +41,20 @@ Registradas para não se perderem. **Não implementar sem decisão nova.**
   configuração — nomes de comando e mensagens por locale. Só é barata se o texto voltado ao
   usuário estiver **concentrado** desde já, e não espalhado pela lógica; essa parte já é regra em
   `AGENTS.md` § Idioma.
+- **`closeHostTerminal`** — fechar também o terminal que hospedava a sessão, depois do
+  encerramento gracioso confirmado. Sugestão do mantenedor. O mecanismo é a parte fácil: o mintty
+  **tem** janela própria, então `taskkill` sem `/F` manda `WM_CLOSE` e o shell termina normalmente,
+  gravando histórico — exatamente o que não funcionou para o `claude`, que é app de console sem
+  janela.
+  A parte difícil é **identificar** qual processo é "o terminal", e isso é um spike por si só. No
+  Git Bash a árvore é `mintty → bash --login -i → bash stub → claude`, e o pai direto do `claude`
+  **não** é o shell do usuário — o PO leu isso errado em 2026-08-18 e afirmou que a janela do
+  mantenedor tinha fechado (ver Spike G § 4). Ali o custo do erro foi zero; aqui seria matar o
+  processo errado. Em Linux e macOS piora: tmux, screen, sessão SSH, shell aninhado. Em tmux, "o
+  terminal" é um painel, uma janela ou o servidor inteiro?
+  Se um dia entrar, o recorte conservador é seguir só a cadeia direta até a primeira janela real e
+  **recusar** ao encontrar multiplexador ou sessão remota, dizendo que não fechou — mesma
+  honestidade que Q-007 já exige para quando não há console.
 - `seeya yesterday` para reler handoffs antigos formatados.
 - Captura periódica de segurança durante o dia (snapshot a cada N horas), para o caso de a
   máquina morrer antes do encerramento.
