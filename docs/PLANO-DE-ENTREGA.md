@@ -251,6 +251,26 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       `TerminateProcess`, que mata sem o processo salvar nada — usar isso viola D-002 parecendo
       cumpri-lo. E `EPERM` em `process.kill(pid, 0)` significa **vivo**, não morto.
       Quando o desempate não puder ser avaliado, `isAlive` **não** responde `false` (D-025).
+- [ ] **S1-T2b — Encerramento gracioso no Windows, por evento de console.** Nasce do Spike G,
+      que **revoga** a conclusão do S1-T2 de que não havia caminho no Windows. Aquela conclusão
+      foi tirada por raciocínio e não sobreviveu à primeira medição.
+      **Leia `docs/spikes/G-ctrl-break-no-windows.md` antes de começar** — ele traz a técnica, os
+      dois hospedeiros medidos e duas armadilhas de interpretação que já produziram leitura errada.
+      - trocar o no-op do Windows em `src/adapters/process/termination.ts` por
+        `CTRL_BREAK_EVENT` (nunca `CTRL_C_EVENT` — medido, é ignorado), via `AttachConsole` +
+        `SetConsoleCtrlHandler(NULL, TRUE)` + `GenerateConsoleCtrlEvent`, por P/Invoke no
+        PowerShell. **Sem dependência nova** — mesma técnica do adapter de notificação
+      - `AttachConsole` falhando (sessão sem console, erro 6) devolve `false` honesto: é o caso
+        que sobrou do aviso exigido por Q-007
+      - depois de enviar, espera limitada e **reconfere a realidade**, como o caminho POSIX já faz
+      - o comentário do módulo hoje **afirma que isso é impossível**. Ele não fica desatualizado:
+        fica mentindo, e persuade quem ler a não tentar. Reescrever é parte da tarefa
+      **Risco de desenho, receba pronto:** o evento vai para o **console**, não para o PID. Se o
+      `seeya` estiver no mesmo console do alvo, ele se atinge. O helper se protege soltando o
+      próprio console antes de anexar; o processo `seeya` pai **não**. Trate explicitamente.
+      *Aceite:* teste que prova **graciosidade**, não morte — processo de controle com handler que
+      grava marcador antes de sair; marcador escrito = teve chance de salvar. Mais o caso sem
+      console devolvendo `false`. `verificar` e `verificar:linux` verdes (o caminho POSIX não muda).
 - [ ] **S1-T3 — `adapters/discovery`, estratégia por registro.** Lê
       `~/.claude/sessions/*.json`, tolerante a arquivo corrompido. Exclui forks de `forks.json`
       (D-012). Sessão sem transcript entra normalmente, com `hasTranscript: false` (D-013).
@@ -344,8 +364,8 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 - [ ] **S4-T1 — `adapters/notification`** conforme o Spike B, com a cadeia de fallback e o
       contrato mínimo **sem ações**. Validação manual do `activationType="protocol"` com esquema
       `seeya://` no Windows; se não se provar, o produto segue sem ações clicáveis e nada quebra.
-      **Q-007:** quando `canTerminate: true` estiver ligado e a terminação não acontecer (hoje,
-      sempre no Windows), o aviso diz **qual sessão não foi encerrada e por quê**. Não é falha da
+      **Q-007:** quando `canTerminate: true` estiver ligado e a terminação não acontecer (depois da
+      S1-T2b: quando não há console para anexar), o aviso diz **qual sessão não foi encerrada e por
       captura — o handoff foi gravado; só a terminação não ocorreu.
 - [ ] **S4-T2 — `core/schedule`.** Puro: dado config + estado + agora, o que deve acontecer.
       É aqui que moram os testes de horário de verão e de máquina suspensa.
