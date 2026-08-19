@@ -516,6 +516,11 @@ runtime, o que o próprio Claude Code faz).
 > olhar só o pai imediato conclui que o terminal do usuário caiu. Foi o que eu concluí antes de
 > olhar a árvore inteira.
 >
+> **A retomada foi verificada pelo mantenedor:** `claude --resume` sobre uma sessão encerrada por
+> Ctrl+Break volta normalmente. Era a última pergunta em aberto, e sem ela o resto provaria apenas
+> que o processo morre de forma organizada — não que o trabalho ficou preservado, que é o que o
+> produto promete.
+>
 > A ideia foi do mantenedor. O S1-T2 tinha descartado essa via **por raciocínio, não por medição** —
 > alegando dano colateral ao shell — e o raciocínio não sobreviveu ao teste. Ver
 > `docs/spikes/G-ctrl-break-no-windows.md`.

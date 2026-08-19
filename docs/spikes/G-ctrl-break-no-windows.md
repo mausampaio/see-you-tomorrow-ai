@@ -1,7 +1,8 @@
 # Spike G — Encerramento gracioso no Windows existe, via evento de console
 
 **Status: medido nesta máquina em 2026-08-18, contra sessões reais em dois hospedeiros
-diferentes.** Feito pelo PO, a partir de uma proposta do mantenedor. **Revoga a conclusão original
+diferentes, incluindo a retomada.** Feito pelo PO, a partir de uma proposta do mantenedor, com a
+verificação de `--resume` feita por ele. **Revoga a conclusão original
 do Q-007**, que dizia não haver caminho gracioso no Windows — aquela conclusão estava errada, e o
 erro foi meu.
 
@@ -64,7 +65,17 @@ energia). Registro removido é evidência de saída graciosa, não de morte for�
 O Git Bash era o caso com maior chance de falhar — mintty não é console clássico do Windows — e foi
 o que passou com a margem mais larga.
 
-## 3. A armadilha de interpretação: o stub do MSYS
+## 3. A sessão encerrada é retomável
+
+Verificado pelo **mantenedor**, não por mim: `claude --resume` sobre uma sessão encerrada por
+Ctrl+Break retoma normalmente.
+
+Isso fecha a única pergunta que faltava. Transcript íntegro é condição necessária mas não
+suficiente — "o arquivo parseia" e "a sessão volta ao ponto em que estava" são afirmações
+diferentes, e a segunda é a que o produto promete. Sem esta verificação, tudo acima provaria apenas
+que o processo morre de forma organizada, o que não é o mesmo que o trabalho estar preservado.
+
+## 4. A armadilha de interpretação: o stub do MSYS
 
 **Isto derrubou a primeira leitura do teste do Git Bash, e vai derrubar a próxima pessoa.**
 
@@ -86,7 +97,7 @@ concluir que o shell do usuário morreu — foi exatamente o que eu concluí, e 
 **Ao medir dano colateral aqui, olhe a árvore inteira e identifique o shell interativo
 (`bash --login -i`), não o pai imediato.**
 
-## 4. Armadilha de método: como validar o transcript
+## 5. Armadilha de método: como validar o transcript
 
 Cheguei a registrar "transcript truncado" no Git Bash. Era falso: o defeito estava em gravar a
 linha num arquivo temporário pelo shell e reparsear. Validar JSONL assim introduz problema de fim
@@ -97,9 +108,6 @@ de linha e codificação que não existe no arquivo original.
 
 ## O que **não** foi provado
 
-- **Retomada.** Não rodei `claude --resume` sobre nenhuma das sessões encerradas. O transcript
-  ficou válido, que é o que o `--resume` lê, mas "válido" não é "retomável". Medir antes de
-  prometer.
 - **Sessão sem console.** Uma sessão iniciada com `DETACHED_PROCESS` não aceita `AttachConsole` —
   erro 6, reproduzido. Nesse caso não há caminho, e a resposta honesta segue sendo "não encerrei".
 - **PowerShell como hospedeiro.** Não testado. É um app de console como o `cmd`, então a
