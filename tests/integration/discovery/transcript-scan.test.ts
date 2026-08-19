@@ -95,7 +95,6 @@ describe('discoverSessionsFromTranscriptScan — headless session discovery (the
     expect(result.sessions).toHaveLength(1);
     expect(result.sessions[0]).toStrictEqual({
       hasPid: false,
-      hasSessionId: true,
       sessionId: SESSION_A,
       cwd: 'c:\\code\\headless',
       name: 'headless',

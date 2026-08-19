@@ -279,7 +279,6 @@ aqui antes de entrar no código.**
 | núcleo / adaptadores / aplicação / agendador | `core` / `adapters` / `application` / `scheduler` |
 | sessão descoberta | `DiscoveredSession` |
 | sessão com PID / sem PID | `SessionWithPid` / `SessionWithoutPid` |
-| sessão com PID sem `sessionId` | `SessionWithoutSessionId` |
 | estado da sessão | `SessionState` |
 | viva / ociosa / encerrada / desconhecida | `alive` / `idle` / `ended` / `unknown` |
 | elegibilidade | `eligibility` |

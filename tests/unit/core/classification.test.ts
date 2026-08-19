@@ -4,11 +4,7 @@ import {
   pidRepresentsSameProcess,
   type ClassificationParams,
 } from '../../../src/core/classification.js';
-import {
-  createSessionWithPid,
-  createSessionWithoutPid,
-  createSessionWithoutSessionId,
-} from './_fixtures.js';
+import { createSessionWithPid, createSessionWithoutPid } from './_fixtures.js';
 
 const NOW = new Date('2026-08-16T20:45:00.000Z');
 const DEFAULT_PARAMS: ClassificationParams = { now: NOW, idleMinutes: 45 };
@@ -109,31 +105,9 @@ describe('classifyState', () => {
     });
   });
 
-  /**
-   * D-023/S1-T10: `SessionWithoutSessionId` has a pid (`hasPid: true`) but a `processIsAlive`
-   * that's the *literal* type `true`, not `boolean` — its own discovery strategy
-   * (`adapters/discovery/process-key.ts`) never builds one for a dead pid, so `classifyState`
-   * always clears the `!processIsAlive` branch for this shape. Combined with `hasTranscript:
-   * false` always (this source never has a transcript), it always lands on `alive`, never `idle`
-   * or `ended` — proven here, not just claimed in `core/types.ts`'s docstring.
-   */
-  describe('SessionWithoutSessionId (D-023) — always alive, never idle or ended', () => {
-    it('is "alive", never "ended" — this shape is only ever constructed for a live pid', () => {
-      const session = createSessionWithoutSessionId();
-
-      expect(classifyState(session, DEFAULT_PARAMS)).toBe('alive');
-    });
-
-    it('stays "alive" even at an idleMinutes-sized now/lastActivity gap — there is no transcript to be idle by', () => {
-      const farInTheFuture: ClassificationParams = {
-        now: new Date(NOW.getTime() + 999 * 60_000),
-        idleMinutes: 45,
-      };
-      const session = createSessionWithoutSessionId();
-
-      expect(classifyState(session, farInTheFuture)).toBe('alive');
-    });
-  });
+  // A third describe block lived here between S1-T10 and S1-T11, proving that
+  // `SessionWithoutSessionId` (D-023) always classified as "alive". Removed with that shape —
+  // see docs/DECISOES.md D-029.
 });
 
 describe('pidRepresentsSameProcess', () => {

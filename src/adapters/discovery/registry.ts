@@ -47,8 +47,10 @@ export interface RegistryDiscoveryResult {
   readonly rejected: RejectedSessionRecord[];
 }
 
-/** Lists `sessionsDir`'s `.json` files. `.key` files (D-023's third strategy) are left alone —
- * they aren't this strategy's concern and are never even read, let alone parsed as JSON. A
+/** Lists `sessionsDir`'s `.json` files. `.key` files are left alone — they aren't this strategy's
+ * concern and are never even read, let alone parsed as JSON. (D-023 once built a third discovery
+ * strategy around them; revoked by D-029 — S1-T7 is expected to read their bare names for the
+ * "sessions seeya can't inspect" warning, per that decision, but that's not this module's job.) A
  * missing directory (no session has ever registered on this machine) is empty, not an error. */
 async function listSessionJsonFiles(sessionsDir: string): Promise<string[]> {
   let entries: string[];

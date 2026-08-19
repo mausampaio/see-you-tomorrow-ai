@@ -350,8 +350,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       A listagem de `.key` sem `.json` foi removida pela S1-T11 em vez de ficar parada sem uso.
       Recupere de `src/adapters/discovery/process-key.ts` no commit `e45b348` — ela já era testada,
       e reescrever do zero seria desperdício.
-- [ ] **S1-T11 — Reverter a terceira estratégia (D-029).** Remove o que a S1-T10 acrescentou,
-      mantendo a detecção barata para a S1-T7.
+- [x] **S1-T11 — Reverter a terceira estratégia (D-029).** Remove o que a S1-T10 acrescentou.
       - sai: `adapters/discovery/process-key.ts`, `adapters/process/inspection.ts`, os métodos
         `readCwd`/`readCommandLine` de `ProcessControl`, e a terceira forma da união de tipos
       - **sai também a listagem de `.key` sem `.json`** (mudei de ideia depois de escrever esta

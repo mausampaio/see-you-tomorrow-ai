@@ -4,54 +4,45 @@ import type {
   SessionWithPid,
   DiscoveredSession,
   SessionWithoutPid,
-  SessionWithoutSessionId,
 } from '../../../src/core/types.js';
-import {
-  createSessionWithPid,
-  createSessionWithoutPid,
-  createSessionWithoutSessionId,
-} from './_fixtures.js';
+import { createSessionWithPid, createSessionWithoutPid } from './_fixtures.js';
 
 /**
- * Proof of D-024 (grown by S1-T10/D-023, which adds a *second* PID-bearing shape,
- * `SessionWithoutSessionId`, that must be refused for a different reason than `SessionWithoutPid`
- * — see `core/termination.ts`'s own docstring). The compiler, not a comment, is what refuses the
- * wrong shapes — no `!`, no `as`, anywhere in these tests. `tsc -p tsconfig.json --noEmit` (part
- * of `npm run verificar`) type-checks this file: if any `@ts-expect-error` below stops finding a
- * real error, the directive becomes "unused" and the type check fails — that's what makes this
- * test "impossible to compile" in practice, as docs/PLANO-DE-ENTREGA.md S1-T1 requires.
+ * Proof of D-024: `processTerminationData` accepts exclusively `SessionWithPid`. The compiler,
+ * not a comment, is what refuses the other shape — no `!`, no `as`, anywhere in these tests.
+ * `tsc -p tsconfig.json --noEmit` (part of `npm run verificar`) type-checks this file: if any
+ * `@ts-expect-error` below stops finding a real error, the directive becomes "unused" and the
+ * type check fails — that's what makes this test "impossible to compile" in practice, as
+ * docs/PLANO-DE-ENTREGA.md S1-T1 requires.
  *
- * **A trap found while writing the S1-T10 additions, worth recording so nobody reintroduces it:**
- * `const session: DiscoveredSession = createSessionWithPid();` looks like it declares `session`
- * with the full union type, but it doesn't, for narrowing purposes — TypeScript's control-flow
- * analysis narrows a freshly-initialized `const` to the *initializer's own* type
- * (`SessionWithPid` here) from the very first line, regardless of the wider annotation. A
- * `@ts-expect-error` (or a "this needs narrowing first" positive case) built on a `const` shaped
- * that way silently stops testing what it claims to, because the union was never really in play —
- * confirmed here by direct experiment: swapping such a line back and forth changed nothing about
- * whether the following call compiled. Every test below that needs a *genuine* `DiscoveredSession`
- * — not secretly a narrower type wearing the union's name — takes it as a **function parameter**
- * instead: a parameter's flow type at function entry is exactly its declared type, with no
- * initializer to narrow from.
+ * **This file briefly (S1-T10 to S1-T11) proved refusal of a second PID-bearing shape,
+ * `SessionWithoutSessionId` (D-023), which needed narrowing on two discriminants
+ * (`hasPid && hasSessionId`) instead of one. D-029 (S1-T11) removed that shape, and this file
+ * shrank back to proving the single discriminant — see docs/DECISOES.md D-029.**
+ *
+ * A `DiscoveredSession`-typed value used for a genuine union proof is taken as a **function
+ * parameter**, not a directly-initialized `const`: TypeScript's control-flow analysis narrows a
+ * freshly-initialized `const` to the *initializer's own* type from the very first line, ignoring
+ * a wider annotation, so `const session: DiscoveredSession = createSessionWithPid()` doesn't
+ * actually carry the union for narrowing purposes. A parameter's flow type at function entry is
+ * exactly its declared type, with no initializer to narrow from. See docs/TESTES.md § "Teste de
+ * tipo: cuidado com `const` anotado pela união" — that rule was found while working on this file
+ * during S1-T10 and doesn't depend on the strategy that motivated it; it still applies here.
  */
-describe('processTerminationData (D-024, D-023)', () => {
+describe('processTerminationData (D-024)', () => {
   it('accepts SessionWithPid and returns pid + procStart', () => {
     const session = createSessionWithPid({ pid: 9999, procStart: '111222333' });
 
     expect(processTerminationData(session)).toStrictEqual({ pid: 9999, procStart: '111222333' });
   });
 
-  it('DiscoveredSession (the union, unnarrowed) is accepted after checking hasPid AND hasSessionId', () => {
-    // A real DiscoveredSession-typed parameter (see the module docstring for why this can't be a
-    // directly-initialized const): narrowing needs BOTH discriminants now that hasPid alone
-    // matches two shapes (SessionWithPid and SessionWithoutSessionId, D-023) instead of one.
+  it('DiscoveredSession (the union, unnarrowed) is accepted after checking session.hasPid', () => {
     function callIfTerminable(
       session: DiscoveredSession,
     ): ReturnType<typeof processTerminationData> | undefined {
-      if (session.hasPid && session.hasSessionId) {
-        // Compiles only because the `if` above narrowed `session` all the way to `SessionWithPid`
-        // — see the `@ts-expect-error` cases below for what's still refused with only one of the
-        // two conditions checked.
+      if (session.hasPid) {
+        // Compiles only because the `if` above narrowed `session` to `SessionWithPid` — see the
+        // `@ts-expect-error` cases below for what's refused without that narrowing.
         return processTerminationData(session);
       }
       return undefined;
@@ -73,50 +64,16 @@ describe('processTerminationData (D-024, D-023)', () => {
     expect(callRefusedByTheCompiler).toBeTypeOf('function');
   });
 
-  it('refuses SessionWithoutSessionId at compile time — has a pid, but D-023 forbids it anyway', () => {
-    const sessionWithoutSessionId: SessionWithoutSessionId = createSessionWithoutSessionId();
-
-    // @ts-expect-error D-023: SessionWithoutSessionId carries a real pid, but is a different,
-    // unrelated interface from SessionWithPid (no sessionId, no procStart) — never assignable,
-    // by construction. Widening this function's parameter to also accept it is exactly the "fix"
-    // core/termination.ts's own docstring warns against: a session known only from the .key
-    // strategy has no sessionId to verify a handoff against before terminating (D-002's ordering
-    // requirement), so it must stay refused even though it, too, has a pid.
-    const callRefusedByTheCompiler = () => processTerminationData(sessionWithoutSessionId);
-
-    expect(callRefusedByTheCompiler).toBeTypeOf('function');
-  });
-
   it('refuses the unnarrowed DiscoveredSession union at compile time (D-024)', () => {
-    const session: DiscoveredSession = createSessionWithoutPid();
+    function callWithoutNarrowing(session: DiscoveredSession) {
+      // @ts-expect-error D-024: without `if (session.hasPid)`, TypeScript doesn't know `session`
+      // is the PID-bearing shape — the whole union, including the PID-less side, would need to
+      // be accepted, and it isn't.
+      return () => processTerminationData(session);
+    }
 
-    // @ts-expect-error D-024: without narrowing, the whole union — including both shapes that
-    // aren't SessionWithPid — would need to be accepted, and it isn't. (This particular const IS
-    // safe from the module docstring's trap: the initializer's own type, SessionWithoutPid, is
-    // already wrong on its own merits, so the flow-narrowing quirk doesn't change the outcome.)
-    const callRefusedByTheCompiler = () => processTerminationData(session);
-
-    expect(callRefusedByTheCompiler).toBeTypeOf('function');
+    expect(callWithoutNarrowing(createSessionWithoutPid())).toBeTypeOf('function');
   });
-
-  it(
-    'narrowing on hasPid alone is not enough once SessionWithoutSessionId exists (D-023): the ' +
-      'union still refuses processTerminationData without narrowing on hasSessionId too',
-    () => {
-      function narrowedOnlyByHasPid(session: DiscoveredSession): void {
-        if (session.hasPid) {
-          // @ts-expect-error D-023: `session` here is `SessionWithPid | SessionWithoutSessionId`
-          // — hasPid alone doesn't get you back to SessionWithPid anymore, now that a second
-          // PID-bearing shape exists. This is the regression this test exists to catch: before
-          // S1-T10, `if (session.hasPid)` alone was sufficient, and a careless widening of
-          // processTerminationData's parameter type could make this compile again by accident.
-          processTerminationData(session);
-        }
-      }
-
-      expect(narrowedOnlyByHasPid).toBeTypeOf('function');
-    },
-  );
 
   it('documented return type: exactly { pid, procStart }, nothing else', () => {
     const session: SessionWithPid = createSessionWithPid();

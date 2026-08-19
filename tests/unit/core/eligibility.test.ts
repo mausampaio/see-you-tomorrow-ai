@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { evaluateEligibility, type EligibilityCriteria } from '../../../src/core/eligibility.js';
-import { createSessionWithPid, createSessionWithoutSessionId } from './_fixtures.js';
+import { createSessionWithPid } from './_fixtures.js';
 
 const NOW = new Date('2026-08-16T20:00:00.000Z');
 
@@ -89,23 +89,9 @@ describe('evaluateEligibility', () => {
       expect(result.eligible).toBe(true);
     });
 
-    /**
-     * D-023/S1-T10: `SessionWithoutSessionId` has no `sessionId` at all — `evaluateEligibility`
-     * has to narrow on `hasSessionId` before reading it (`core/eligibility.ts`'s own comment
-     * explains why), and the semantically right answer for a session with no `sessionId` is that
-     * it can never match anything in `knownForks` (which is keyed by `sessionId`, D-012) — not a
-     * crash, not a false positive.
-     */
-    it('a session with no sessionId at all (D-023) is never flagged as a known fork', () => {
-      const session = createSessionWithoutSessionId();
-
-      const result = evaluateEligibility(
-        session,
-        criteria({ knownForks: new Set(['99999999-9999-4999-8999-999999999999']) }),
-      );
-
-      expect(result.reasons).not.toContain('ownSeeyaFork');
-    });
+    // A third test lived here between S1-T10 and S1-T11, covering `SessionWithoutSessionId`
+    // (D-023), a shape with no `sessionId` at all that `evaluateEligibility` had to narrow around
+    // before reading `session.sessionId`. Removed with that shape — see docs/DECISOES.md D-029.
   });
 
   describe('condition 4 — cwd is not in the ignore list', () => {
