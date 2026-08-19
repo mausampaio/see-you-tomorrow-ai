@@ -12,6 +12,8 @@
  *   PowerShell helper on Windows (`console-signal.ts`, docs/spikes/G-ctrl-break-no-windows.md).
  * - `console-signal.ts` — the Windows-only P/Invoke helper `termination.ts` sends the console
  *   event through.
+ * - `inspection.ts` — `readCwd`/`readCommandLine` (D-023, S1-T10): a live PID's working directory
+ *   and command line, for the `.key`-without-`.json` discovery strategy.
  */
 import type { ProcessControl } from '../../core/ports.js';
 import { pidRepresentsSameProcess } from '../../core/classification.js';
@@ -19,6 +21,7 @@ import { resolveIsAlive } from './liveness.js';
 import { processExists } from './existence.js';
 import { captureObservedProcStart } from './proc-start.js';
 import { terminateGracefully } from './termination.js';
+import { readCwd, readCommandLine } from './inspection.js';
 
 async function isAlive(pid: number, procStart?: string): Promise<boolean> {
   const pidExists = await processExists(pid);
@@ -32,4 +35,6 @@ async function isAlive(pid: number, procStart?: string): Promise<boolean> {
 export const processControl: ProcessControl = {
   isAlive,
   terminateGracefully,
+  readCwd,
+  readCommandLine,
 };
