@@ -271,7 +271,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* teste que prova **graciosidade**, não morte — processo de controle com handler que
       grava marcador antes de sair; marcador escrito = teve chance de salvar. Mais o caso sem
       console devolvendo `false`. `verificar` e `verificar:linux` verdes (o caminho POSIX não muda).
-- [~] **S1-T3 — `adapters/discovery`, estratégia por registro.** Lê
+- [x] **S1-T3 — `adapters/discovery`, estratégia por registro.** Lê
       `~/.claude/sessions/*.json`, tolerante a arquivo corrompido. Exclui forks de `forks.json`
       (D-012). Sessão sem transcript entra normalmente, com `hasTranscript: false` (D-013).
       Corrige Q-006 (`procStart` do macOS): o `regex` saiu do schema, virou `z.string().min(1)`.

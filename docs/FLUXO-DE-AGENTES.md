@@ -33,6 +33,12 @@ aprovada. É o único que altera os documentos de autoridade.
 > por causa do código incompleto e foi publicado assim. O `main` escapou por acaso — o commit tinha
 > ido para o branch do agente —, não por cuidado.
 >
+> **Armadilha da worktree: o `node_modules` dela nasce vazio.** Encontrada na S1-T3, a primeira
+> tarefa a rodar isolada. O `npm` sobe a árvore de diretórios procurando pacote, acha o do
+> checkout pai e "funciona" — com a árvore errada. Só apareceu porque os testes de guard
+> resolvem `node_modules` por caminho explícito. **Rode `npm ci` na worktree antes de qualquer
+> verificação**, senão o portão mede outra coisa e você não percebe.
+>
 > Regra irmã, do mesmo incidente: **nunca encadear `npm run verificar` com `git commit` ou
 > `git push` na mesma linha.** Rode o portão, **leia o código de saída**, e só então publique.
 > Encadear foi o que deixou o vermelho passar despercebido, duas vezes na mesma sessão.
