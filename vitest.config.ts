@@ -13,6 +13,20 @@ import { configDefaults, defineConfig } from 'vitest/config';
  * of this file, which project is expected to be empty and why, and fails if any project's real
  * file count disagrees (S1-T0e).
  */
+/**
+ * `console-signal.ts` (S1-T2b) is Windows-only by construction: every line in it either builds a
+ * PowerShell/P-Invoke script or spawns `powershell.exe` to run one, and its purpose — attaching
+ * to another process's console and broadcasting `CTRL_BREAK_EVENT`
+ * (docs/spikes/G-ctrl-break-no-windows.md) — has no Linux/macOS equivalent to fall back to.
+ * `npm run verificar` (this machine) exercises it for real, at ~90% coverage
+ * (`tests/integration/process/termination.test.ts`'s Windows describe block). Counting it against
+ * `npm run verificar:linux`'s coverage denominator would penalize the project for code that
+ * structurally cannot run in that container — not a gap in testing, a gap in what Linux can even
+ * attempt. Measured: leaving it in dropped the Linux run's aggregate to ~74%, below the 80%
+ * threshold, entirely from this one file's Windows-only lines.
+ */
+const WINDOWS_ONLY_SOURCE = ['src/adapters/process/console-signal.ts'];
+
 export default defineConfig({
   test: {
     passWithNoTests: true,
@@ -25,7 +39,10 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
-      exclude: ['src/cli/index.ts'],
+      exclude:
+        process.platform === 'win32'
+          ? ['src/cli/index.ts']
+          : ['src/cli/index.ts', ...WINDOWS_ONLY_SOURCE],
       thresholds: {
         'src/core/**': {
           statements: 95,

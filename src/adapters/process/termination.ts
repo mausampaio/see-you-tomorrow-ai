@@ -26,29 +26,38 @@
  * `cmd.exe`. And a forced kill is still banned in v1 by D-002, independent of any of this.
  *
  * **The technique, and why the interactive shell surviving isn't the point of it.**
- * `AttachConsole(pid)` + `SetConsoleCtrlHandler(NULL, TRUE)` + `GenerateConsoleCtrlEvent`, by
- * P/Invoke from PowerShell (`console-signal.ts`) — the same dependency-free technique
+ * `AttachConsole(pid)` + a registered `SetConsoleCtrlHandler` callback + `GenerateConsoleCtrlEvent`,
+ * by P/Invoke from PowerShell (`console-signal.ts`) — the same dependency-free technique
  * `adapters/notification/` already uses for the WinRT toast. The event is delivered to the
  * *console*, not to one PID: it goes to every process attached to the target's console, which is
  * why the helper frees its own inherited console before attaching to the target's, and why it
- * tells itself to ignore the event before generating it — without that, the helper would kill
- * itself first and the target would never see anything. That the user's own interactive shell
- * happened to survive being on the same console (measured on both hosts) is not a feature this
- * design leans on — it's the specific objection that got `GenerateConsoleCtrlEvent` dismissed in
- * the original S1-T2 pass, and measuring it false is what reopened this path. If the day is
- * already over, that terminal closing along with everything else on its console would be no loss
- * either way.
+ * registers a handler that swallows the event before generating it — without that, the helper
+ * would kill itself first and the target would never see anything (see `console-signal.ts` for
+ * why the handler has to be a real callback, not the `SetConsoleCtrlHandler(NULL, TRUE)` "ignore"
+ * flag the spike originally described — that flag only covers `CTRL_C_EVENT`, and this event is
+ * `CTRL_BREAK_EVENT`). That the user's own interactive shell happened to survive being on the
+ * same console (measured on both hosts) is not a feature this design leans on — it's the specific
+ * objection that got `GenerateConsoleCtrlEvent` dismissed in the original S1-T2 pass, and
+ * measuring it false is what reopened this path. If the day is already over, that terminal
+ * closing along with everything else on its console would be no loss either way.
  *
- * **The one console-sharing case that *is* this module's problem, not the shell's:** a
- * long-running `seeya` process — the daemon — can end up on the *same* console as a session it's
- * about to terminate (`seeya daemon &` followed by `claude` in the same shell window is the
- * concrete case). The broadcast above would then hit the daemon too, mid-shutdown of the very
- * session it's trying to close gracefully. Node maps `CTRL_BREAK_EVENT` onto the `'SIGBREAK'`
- * process event on Windows and terminates the process by default when nothing is listening for
- * it — so `terminateGracefullyWindows` installs a no-op `'SIGBREAK'` listener for the span of the
- * send, the same "ignore this one event" the PowerShell helper gives itself via
- * `SetConsoleCtrlHandler`, just reachable from the Node side without needing FFI to call that API
- * directly.
+ * **The one console-sharing case that would be this module's problem, not the shell's — and why
+ * it's resolved elsewhere.** A long-running `seeya` process could, in principle, end up on the
+ * *same* console as a session it's about to terminate (`seeya daemon &` followed by `claude` in
+ * the same shell window was the concrete case). The broadcast above would then hit that process
+ * too, mid-shutdown of the very session it's trying to close gracefully. **This is resolved by
+ * construction, not by a guard here:** D-005 requires the daemon to detach from whatever shell
+ * started it — `DETACHED_PROCESS` on Windows, meaning no console at all — precisely so it can
+ * never be attached to a session's console in the first place (S4-T3). A process with no console
+ * can't receive a console event, the same `AttachConsole` failure this file already treats as
+ * `'no-console'`.
+ *
+ * `terminateGracefullyWindows` still installs a no-op `'SIGBREAK'` listener for the span of the
+ * send below — belt and suspenders, not the load-bearing defense. Node maps `CTRL_BREAK_EVENT`
+ * onto the `'SIGBREAK'` process event on Windows and terminates the process by default when
+ * nothing is listening for it; ignoring it for that one moment is cheap and cannot make anything
+ * worse, but the reason a same-console self-hit doesn't happen in practice is D-005, not this
+ * listener — don't read this line as the thing that makes the daemon case safe.
  */
 import { spawn } from 'node:child_process';
 import { errorCode, interpretExistenceCheckError } from './liveness.js';
@@ -111,10 +120,10 @@ async function terminateGracefullyWindows(pid: number, deadlineMs: number): Prom
     return true; // already gone, nothing to terminate
   }
 
-  // See the module comment's "one console-sharing case" section: if this `seeya` process shares
-  // a console with `pid` (the daemon scenario), the broadcast below reaches it too. A no-op
-  // listener for the span of the send is this process's own version of the "ignore this event"
-  // trick the PowerShell helper applies to itself via `SetConsoleCtrlHandler`.
+  // Belt and suspenders, not the load-bearing defense — see the module comment. D-005 (S4-T3)
+  // keeps the daemon off any console entirely, which is what actually prevents a self-hit; this
+  // listener just means that *if* some other caller of this function ever did share a console
+  // with `pid`, it would survive the broadcast it's about to generate instead of dying from it.
   const ignoreSelfSignal = (): void => {};
   process.on('SIGBREAK', ignoreSelfSignal);
   try {
