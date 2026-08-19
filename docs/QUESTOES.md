@@ -505,10 +505,16 @@ runtime, o que o próprio Claude Code faz).
 > **CORREÇÃO (2026-08-18), posterior à resposta abaixo.** A premissa desta questão — "não existe
 > encerramento gracioso no Windows" — **estava errada**, e o erro foi do PO. Existe: um evento de
 > console `CTRL_BREAK_EVENT`, entregue por `AttachConsole` + `GenerateConsoleCtrlEvent`, faz o
-> Claude Code sair graciosamente. Medido contra sessão real: ele descarrega estado no caminho da
-> saída, deixa o transcript íntegro e limpa o próprio registro de sessão — os três sinais de saída
-> graciosa segundo o Spike E. O shell hospedeiro sobrevive. Sem dependência nova: é a mesma técnica
-> de P/Invoke que o adapter de notificação já usa.
+> Claude Code sair graciosamente. Medido contra sessões reais em **dois hospedeiros** — `cmd.exe` e
+> **Git Bash** —, com o mesmo resultado nos dois: ele descarrega estado no caminho da saída, deixa o
+> transcript íntegro e limpa o próprio registro de sessão, que são os três sinais de saída graciosa
+> segundo o Spike E. O shell interativo do usuário sobrevive em ambos. Sem dependência nova: é a
+> mesma técnica de P/Invoke que o adapter de notificação já usa.
+>
+> Cuidado ao reler essa medição: no Git Bash o pai direto do `claude` é um bash transitório do
+> `fork`+`exec` do MSYS, não o shell do usuário. Ele morre junto e isso é inofensivo — mas quem
+> olhar só o pai imediato conclui que o terminal do usuário caiu. Foi o que eu concluí antes de
+> olhar a árvore inteira.
 >
 > A ideia foi do mantenedor. O S1-T2 tinha descartado essa via **por raciocínio, não por medição** —
 > alegando dano colateral ao shell — e o raciocínio não sobreviveu ao teste. Ver
