@@ -610,4 +610,24 @@ documento persistido` que `docs/ARQUITETURA.md` § `storage/` já define para ou
 `~/.seeya/` — mais consistente, mas ainda não confirmado que `forks.json` conta como um desses
 documentos "versionáveis" (ele nunca migra sozinho na spec atual). C) outro formato, definido por
 quem torna isto decisão em `docs/DECISOES.md`.
-**Resposta:** (preenchida pelo PO)
+**Resposta:** **FECHADA — opção B.** Decisão do PO.
+
+A regra de `docs/ARQUITETURA.md` § `storage/` — `schemaVersion` em todo documento persistido, com
+migração explícita — não abre exceção por arquivo. O argumento levantado contra a opção B em
+"nunca migra sozinho na spec atual" é exatamente o que deixa de ser verdade no dia em que precisar
+migrar, e por D-027 a hora barata de corrigir o formato é agora, antes do primeiro `forks.json`
+real existir em disco.
+
+**Formato definitivo:**
+
+```jsonc
+{
+  "schemaVersion": 1,
+  "forks": [{ "sessionId": "uuid-do-fork", "createdAt": "2026-08-18T21:00:00.000Z" }]
+}
+```
+
+`schemaVersion` ausente ou diferente de `1` é rejeição visível do arquivo inteiro, no mesmo padrão
+de `forks` ausente ou não-array. A descoberta continua exigindo só `sessionId` de cada item e
+ignorando o resto (`createdAt` incluso), sem reclamar — essa parte da resposta original já estava
+certa e não mudou. Implementado em `src/adapters/discovery/fork-registry.ts`.
