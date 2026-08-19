@@ -327,7 +327,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       linha de comando, num `~/.claude` falso + processo de teste. E um `.key` cujo PID **não**
       está vivo é ignorado, não reportado como sessão.
 
-- [ ] **S1-T12 — O piso de cobertura por diretório não existe.** Achado ao revisar a S1-T11, e é
+- [~] **S1-T12 — O piso de cobertura por diretório não existe.** Achado ao revisar a S1-T11, e é
       a **terceira** vez que este projeto encontra a mesma forma: uma garantia que existe só no
       texto (antes foram o `passWithNoTests` em S1-T0e e o prettier em S1-T0f).
       Medido, não suposto:
