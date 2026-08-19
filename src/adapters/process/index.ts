@@ -8,8 +8,10 @@
  * - `liveness.ts` — pure decision (`resolveIsAlive`) and OS-error interpretation, no I/O.
  * - `existence.ts` — the one "does this PID exist" OS call, shared by both port methods.
  * - `proc-start.ts` — per-platform capture of the OS's current `procStart`.
- * - `termination.ts` — `terminateGracefully`, real `SIGTERM` on POSIX, no-op on Windows (see that
- *   file's comment and docs/QUESTOES.md Q-007 for why).
+ * - `termination.ts` — `terminateGracefully`: real `SIGTERM` on POSIX, `CTRL_BREAK_EVENT` via a
+ *   PowerShell helper on Windows (`console-signal.ts`, docs/spikes/G-ctrl-break-no-windows.md).
+ * - `console-signal.ts` — the Windows-only P/Invoke helper `termination.ts` sends the console
+ *   event through.
  */
 import type { ProcessControl } from '../../core/ports.js';
 import { pidRepresentsSameProcess } from '../../core/classification.js';
