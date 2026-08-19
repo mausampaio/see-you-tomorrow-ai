@@ -51,11 +51,34 @@ describe('sessionRecordSchema', () => {
     expect(result.procStart).toBe(giantProcStart);
   });
 
-  it('rejects a procStart that is not digits-only', () => {
+  /**
+   * Regression for Q-006 (docs/QUESTOES.md): the schema used to have
+   * `.regex(/^\d+$/, 'procStart must be a digits-only string')` here, which is exactly what a
+   * macOS `procStart` never satisfies — `ps -o lstart=` produces a human-readable date, not
+   * digits (docs/spikes/F-procstart-por-so.md). This test fails against the old regex (a real
+   * macOS record gets rejected) and passes now that the field is just `z.string().min(1)`.
+   */
+  it('accepts procStart in the macOS date format from `ps -o lstart=` (Q-006 regression)', () => {
     const result = sessionRecordSchema.safeParse({
       ...validRecord,
-      procStart: '134313811658518463n',
+      procStart: 'Mon Aug 17 14:23:01 2026',
     });
+
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.procStart).toBe('Mon Aug 17 14:23:01 2026');
+  });
+
+  it('still accepts the digits-only Windows/Linux shape', () => {
+    const result = sessionRecordSchema.safeParse({
+      ...validRecord,
+      procStart: '134313811658518463',
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an empty procStart', () => {
+    const result = sessionRecordSchema.safeParse({ ...validRecord, procStart: '' });
 
     expect(result.success).toBe(false);
   });
