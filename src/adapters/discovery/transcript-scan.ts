@@ -199,6 +199,7 @@ async function processTranscriptFile(
       kind: 'accepted',
       session: {
         hasPid: false,
+        hasSessionId: true,
         sessionId,
         cwd,
         name: deriveNameFromCwd(cwd),
