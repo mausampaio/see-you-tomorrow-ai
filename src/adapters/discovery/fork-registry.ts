@@ -109,3 +109,32 @@ export async function readForkRegistry(seeyaHome: string): Promise<ForkRegistryR
   }
   return validateForkEntries(itemsOrResult);
 }
+
+/** One rejected external record, in the shape every discovery strategy in this adapter reports
+ * rejections with (`registry.ts`'s `RejectedSessionRecord`, `transcript-scan.ts`'s
+ * `RejectedTranscriptRecord`): the file it came from, the raw value, and why it was rejected. */
+export interface RejectedExternalRecord {
+  readonly file: string;
+  readonly raw: unknown;
+  readonly reason: string;
+}
+
+/**
+ * Turns `readForkRegistry`'s own rejections into the caller's generic `{file, raw, reason}`
+ * rejection shape, tagged with `forks.json`'s own path — every discovery strategy that excludes
+ * forks (D-012) needs this, so it lives here once instead of once per strategy (AGENTS.md: "nada
+ * de duplicação"). Both `registry.ts` (S1-T3) and `transcript-scan.ts` (S1-T8) call this on the
+ * `rejected` side of `readForkRegistry`'s result; the caller's own rejection type is structurally
+ * identical to `RejectedExternalRecord`, so no cast is needed at either call site.
+ */
+export function forkRejectionsAsRecords(
+  seeyaHome: string,
+  forkRejected: readonly RejectedForkEntry[],
+): RejectedExternalRecord[] {
+  const file = path.join(seeyaHome, 'forks.json');
+  return forkRejected.map((entry) => ({
+    file,
+    raw: entry.raw,
+    reason: `fork registry entry ignored: ${entry.reason}`,
+  }));
+}

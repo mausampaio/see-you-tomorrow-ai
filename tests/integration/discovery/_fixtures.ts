@@ -5,7 +5,7 @@
  * `removeDiscoveryFixture` in its own `afterEach` (same pattern as
  * tests/integration/process/termination.test.ts).
  */
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -82,4 +82,56 @@ export async function writeTranscript(
   const dir = path.join(fixture.projectsDir, slug);
   await mkdir(dir, { recursive: true });
   await writeFile(path.join(dir, `${sessionId}.jsonl`), '{"type":"user"}\n', 'utf8');
+}
+
+/** `~/.claude/projects/<slug>/<sessionId>.jsonl` with caller-controlled `content` and (optionally)
+ * a backdated mtime — S1-T8's transcript-scan strategy needs both: real `cwd`-bearing content to
+ * exercise `readCwdFromTranscript`, and mtime control to place a file inside or outside
+ * `relevanceHours` on demand instead of relying on "just created" freshness. Returns the full path,
+ * useful for assertions that reference a specific rejected file. */
+export async function writeTranscriptWithContent(
+  fixture: DiscoveryFixture,
+  slug: string,
+  sessionId: string,
+  content: string,
+  mtime?: Date,
+): Promise<string> {
+  const dir = path.join(fixture.projectsDir, slug);
+  await mkdir(dir, { recursive: true });
+  const filePath = path.join(dir, `${sessionId}.jsonl`);
+  await writeFile(filePath, content, 'utf8');
+  if (mtime !== undefined) {
+    await utimes(filePath, mtime, mtime);
+  }
+  return filePath;
+}
+
+/** A JSONL line for a transcript entry carrying `cwd` — the one field the transcript-scan
+ * strategy's cheap content read (`readCwdFromTranscript`) looks for. Shaped loosely like a real
+ * `user`/`assistant` entry (docs/ESPECIFICACAO.md), but only `cwd` is validated by that reader, so
+ * only `cwd` needs to be realistic for these fixtures. */
+export function transcriptLine(cwd: string, extra: Record<string, unknown> = {}): string {
+  return `${JSON.stringify({ type: 'user', cwd, ...extra })}\n`;
+}
+
+/**
+ * A directory placed where a transcript file would be: `stat` succeeds (so the scan's mtime
+ * filter sees it and can decide to skip it), but *opening it as file content fails immediately*
+ * (`EISDIR`). This is the proof instrument for S1-T8's acceptance item 2 ("500 transcripts
+ * filtered without a content parse"): if the scan ever tried to read one of these, the read
+ * failure would surface as a visible rejection (D-022) instead of vanishing silently — so a
+ * placeholder's *absence* from `rejected` is what proves its content was never opened, not just
+ * a claim that it wasn't.
+ */
+export async function writeUnreadableTranscriptPlaceholder(
+  fixture: DiscoveryFixture,
+  slug: string,
+  sessionId: string,
+  mtime: Date,
+): Promise<void> {
+  const dir = path.join(fixture.projectsDir, slug);
+  await mkdir(dir, { recursive: true });
+  const placeholder = path.join(dir, `${sessionId}.jsonl`);
+  await mkdir(placeholder);
+  await utimes(placeholder, mtime, mtime);
 }

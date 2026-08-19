@@ -282,12 +282,27 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       tipo de S1-T1 diziam). Formato de `~/.seeya/forks.json`: Q-008 fechada, opção B — objeto
       raiz com `schemaVersion` (`{ "schemaVersion": 1, "forks": [...] }`), `schemaVersion` ou
       `forks` ausentes/inválidos viram rejeição visível, cada item segue exigindo só `sessionId`.
-- [ ] **S1-T8 — Estratégia por varredura de transcripts (D-016).** Varre
+- [~] **S1-T8 — Estratégia por varredura de transcripts (D-016).** Varre
       `~/.claude/projects/**/*.jsonl` por mtime dentro de `relevanceHours`, sem ler conteúdo
       antes de filtrar. Reconstrói o `cwd` a partir do transcript, já que o slug não é
       reversível com segurança.
       *Aceite:* sessão headless — que não aparece no registro — é descoberta. Um `~/.claude`
       falso com 500 transcripts é filtrado sem parse de conteúdo.
+      **Implementado:** `src/adapters/discovery/transcript-scan.ts` (estratégia,
+      `discoverSessionsFromTranscriptScan`) + `transcript-cwd.ts` (leitura mínima do `cwd`,
+      linha a linha, para de ler assim que encontra). `stat` decide dentro/fora de
+      `relevanceHours` antes de qualquer leitura de conteúdo; forks de `forks.json` são
+      excluídos antes de abrir o arquivo (reaproveita `fork-registry.ts` da S1-T3, sem
+      duplicar leitura). Prova por execução do item 2 do aceite: fixture com 500 transcripts
+      obsoletos, cada um uma *pasta* com o nome `<uuid>.jsonl` (abrir como arquivo falharia,
+      então sua ausência de `rejected` prova que nunca foram abertos) + um caso de controle
+      idêntico *dentro* da janela, que precisa aparecer rejeitado — descarta a hipótese de que
+      o filtro estivesse ignorando todo `.jsonl`-pasta por acidente, não por mtime. Linha
+      truncada no fim tolerada (não derruba a sessão nem o lote); transcript >1 MB com `cwd` na
+      primeira linha lido em poucos KB (`bytesRead` medido no teste). Transcript sem `cwd`
+      legível em nenhuma linha é **rejeitado**, não descartado em silêncio nem inventado como
+      sessão (D-025) — decisão registrada em Q-009 por ambiguidade quanto ao tipo de domínio.
+      `npm run verificar` e `npm run verificar:linux` verdes.
 - [ ] **S1-T10 — Terceira estratégia: processo e `.key` sem `.json` (D-023).** Cobre o agente de
       execução autônomo, que as duas estratégias anteriores não veem: sem `.json` no registro e
       sem transcript.

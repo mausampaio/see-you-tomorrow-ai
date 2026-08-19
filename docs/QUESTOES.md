@@ -640,3 +640,45 @@ padrão de `forks` ausente ou não-array. Implementado em
 `src/adapters/discovery/fork-registry.ts`.
 
 Anotado em S2-T2, que escreve o arquivo pela primeira vez.
+
+---
+
+## Q-009 — Transcript sem `cwd` legível em nenhuma linha: rejeitar, ou descobrir sessão sem `cwd`?
+**Tarefa:** S1-T8
+**Bloqueia:** não esta tarefa — decidi seguir com a opção A (rejeitar) para não parar a entrega,
+mas é decisão de tipo de domínio, não só de adapter, e por isso registro em vez de manter
+implícita no código.
+**Contexto:** D-016 diz que a estratégia de varredura "reconstrói o `cwd` a partir do conteúdo do
+transcript". Na prática, isso significa ler linha a linha até achar uma entrada com campo `cwd`
+(implementado em `src/adapters/discovery/transcript-cwd.ts`). Três casos fazem essa leitura
+terminar sem `cwd`: arquivo vazio, arquivo cujas linhas são só tipos sem `cwd` (ex.:
+`queue-operation` sozinho), e — o caso que a tarefa pediu explicitamente para tolerar — arquivo
+cuja única linha é uma escrita truncada em andamento, sem nenhuma entrada completa ainda.
+
+`CommonSessionFields.cwd` (`src/core/types.ts`, S1-T1) é `string`, não `string | null` — é campo
+obrigatório tanto em `SessionWithPid` quanto em `SessionWithoutPid`. Não dá para montar um
+`SessionWithoutPid` sem inventar um `cwd` (violaria D-025: "ausência de dado não vira afirmação")
+nem sem mudar o tipo de domínio, que é escopo de S1-T1 (já `[x]`), não desta tarefa.
+
+**O que implementei:** um transcript nessas condições é **rejeitado** — entra em `rejected[]` com
+o motivo, no mesmo padrão `{accepted, rejected}` de D-022, nunca vira sessão inventada (`cwd:
+""` ou similar) nem some da contagem em silêncio. A sessão "existiu" no sentido de que o arquivo
+existe e está dentro de `relevanceHours`, mas o `seeya` não tem como identificá-la de forma útil
+sem um `cwd` — e um `cwd` inventado seria pior que não descobrir a sessão, porque poluiria
+qualquer decisão downstream que dependa dele (nome de exibição, elegibilidade por `ignore`,
+eventual captura via git).
+
+**Por que isso é uma questão, não só uma implementação.** É o mesmo tipo de escolha que gerou
+D-024/D-025: "o que fazer quando falta um dado que o tipo exige". Nos dois casos anteriores a
+resposta foi "não inventar, e não descartar em silêncio" — o que fiz aqui segue esse padrão, mas
+existe uma alternativa que também é defensável e que muda o tipo de domínio:
+
+**Opções que enxergo:**
+A) confirma o que implementei — transcript sem `cwd` legível é uma rejeição visível, contável, e
+   nunca vira `SessionWithoutPid`. O tipo de domínio não muda.
+B) `cwd` passa a `string | null` em `SessionWithoutPid` (ou uma terceira forma da união) — a
+   sessão é descoberta mesmo sem `cwd`, com o campo `null`, e quem consome decide o que fazer
+   (ex.: mostrar "cwd desconhecido" em vez de nome derivado). Mais fiel ao "a sessão existiu",
+   mas exigiria alterar `core/types.ts` (S1-T1, já fechada) e provavelmente `CommonSessionFields`
+   inteiro, com efeito em `session-mapping.ts` e em toda a S1-T9 (fusão).
+**Resposta:** (preenchida pelo PO)

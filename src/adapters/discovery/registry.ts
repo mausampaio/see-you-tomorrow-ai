@@ -20,7 +20,7 @@ import { z } from 'zod';
 import type { SessionWithPid } from '../../core/types.js';
 import type { ProcessControl } from '../../core/ports.js';
 import { sessionRecordSchema, type SessionRecord } from './schemas.js';
-import { readForkRegistry } from './fork-registry.js';
+import { readForkRegistry, forkRejectionsAsRecords } from './fork-registry.js';
 import { findTranscript } from './transcript-lookup.js';
 import { buildSessionWithPid } from './session-mapping.js';
 import { isEnoent } from './fs-errors.js';
@@ -156,20 +156,6 @@ async function processSessionFile(
   }
 }
 
-/** `forks.json` read failures are surfaced the same way a bad session file is — visible, not
- * silent — just tagged with the fork registry's own path instead of a session file's. */
-function forkRejectionsAsSessionRejections(
-  seeyaHome: string,
-  forkRejected: readonly { readonly raw: unknown; readonly reason: string }[],
-): RejectedSessionRecord[] {
-  const file = path.join(seeyaHome, 'forks.json');
-  return forkRejected.map((entry) => ({
-    file,
-    raw: entry.raw,
-    reason: `fork registry entry ignored: ${entry.reason}`,
-  }));
-}
-
 export async function discoverSessionsFromRegistry(
   options: RegistryDiscoveryOptions,
 ): Promise<RegistryDiscoveryResult> {
@@ -194,7 +180,7 @@ export async function discoverSessionsFromRegistry(
   );
 
   const sessions: SessionWithPid[] = [];
-  const rejected = forkRejectionsAsSessionRejections(options.seeyaHome, forkRegistry.rejected);
+  const rejected = forkRejectionsAsRecords(options.seeyaHome, forkRegistry.rejected);
   if (!Array.isArray(fileNamesOrRejection)) {
     rejected.push(fileNamesOrRejection);
   }
