@@ -251,7 +251,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       `TerminateProcess`, que mata sem o processo salvar nada — usar isso viola D-002 parecendo
       cumpri-lo. E `EPERM` em `process.kill(pid, 0)` significa **vivo**, não morto.
       Quando o desempate não puder ser avaliado, `isAlive` **não** responde `false` (D-025).
-- [ ] **S1-T2b — Encerramento gracioso no Windows, por evento de console.** Nasce do Spike G,
+- [~] **S1-T2b — Encerramento gracioso no Windows, por evento de console.** Nasce do Spike G,
       que **revoga** a conclusão do S1-T2 de que não havia caminho no Windows. Aquela conclusão
       foi tirada por raciocínio e não sobreviveu à primeira medição.
       **Leia `docs/spikes/G-ctrl-break-no-windows.md` antes de começar** — ele traz a técnica, os
@@ -370,6 +370,11 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 - [ ] **S4-T2 — `core/schedule`.** Puro: dado config + estado + agora, o que deve acontecer.
       É aqui que moram os testes de horário de verão e de máquina suspensa.
 - [ ] **S4-T3 — Daemon.** Loop, lockfile de instância única, recuperação de disparo atrasado.
+      **Sobe desanexado do shell que o chamou** (D-005, emendado): `detached` + `stdio` ignorado
+      + `unref()`. Não é comando em segundo plano — sobrevive a fechar a janela e a deslogar.
+      No Windows isso significa **console nenhum**, e é o que torna o daemon inalcançável pelo
+      Ctrl+Break que ele mesmo gera ao encerrar sessões (S1-T2b).
+      *Aceite:* subir o daemon, **fechar o terminal**, e ele continua vivo e disparando.
 - [ ] **S4-T4 — `seeya snooze`, `seeya skip-today`, `seeya config`.**
 - [ ] **S4-T5 — `seeya daemon --stop/--status`.**
       *Aceite do sprint:* e2e 6, 7 e 8 passam. Um dia inteiro de uso real sem intervenção.

@@ -3,27 +3,28 @@
  * (docs/TESTES.md § Integração: "terminar com graça, verificar que morreu ... por plataforma").
  *
  * The two `describe.skipIf` blocks below are not symmetric on purpose. On POSIX this proves
- * gracefulness happened (the child's own SIGTERM handler ran to completion). On Windows it proves
- * the opposite, deliberately: no dependency-free graceful mechanism was found for a PID `seeya`
- * didn't spawn itself (see `src/adapters/process/termination.ts` and docs/QUESTOES.md Q-007 for
- * the measurements), and D-002 forbids a forced kill in v1 — so the correct, honest behavior is to
- * leave the process untouched and report `false`. This test is the evidence
- * docs/PLANO-DE-ENTREGA.md S1-T2 asks for in place of a "graceful termination worked" test, for
- * the platform where none is possible without a new native dependency.
+ * gracefulness happened (the child's own SIGTERM handler ran to completion). On Windows it now
+ * proves the same thing, by a different mechanism (`CTRL_BREAK_EVENT` via a PowerShell helper,
+ * docs/spikes/G-ctrl-break-no-windows.md, S1-T2b) — plus the one case that mechanism genuinely
+ * can't reach: a session with no console at all. See `src/adapters/process/termination.ts`'s
+ * module comment for what was measured and what wasn't.
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import { spawn, type ChildProcess } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { processControl } from '../../../src/adapters/process/index.js';
+import { spawnInNewConsole } from './_windows-console.js';
 
 const CHILD_SCRIPT = fileURLToPath(
   new URL('../../fixtures/process/graceful-child.mjs', import.meta.url),
 );
 
 let spawned: ChildProcess[] = [];
+let spawnedPids: number[] = [];
 let tempDir: string | undefined;
 
 async function markerPath(): Promise<string> {
@@ -31,10 +32,37 @@ async function markerPath(): Promise<string> {
   return path.join(tempDir, 'marker.txt');
 }
 
+/** Companion to `markerPath()`, same temp dir — the file `spawnInNewConsole`-launched fixtures
+ * signal readiness through, since that launch mechanism gives no stdout pipe back to the test
+ * (see `_windows-console.ts`). Must be called after `markerPath()` in the same test. */
+function readyPath(): string {
+  if (tempDir === undefined) {
+    throw new Error('readyPath() called before markerPath() — no temp dir yet');
+  }
+  return path.join(tempDir, 'ready.txt');
+}
+
+/** Polls for a file to appear, bounded by `timeoutMs`. Test-only wait: `src/` bans this style of
+ * polling outside `adapters/clock/` (D-019), but that rule is about product code reading "now"
+ * non-deterministically — this is a test fixture readiness gate, same rationale as the existing
+ * stdout-based one below. */
+async function waitForFile(filePath: string, timeoutMs = 5_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (existsSync(filePath)) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`timed out after ${timeoutMs}ms waiting for ${filePath} to appear`);
+}
+
 /**
  * Spawns the fixture as its own console/process group — matches how a real Claude Code session
  * relates to `seeya` (a pre-existing process `seeya` never spawned itself), and is also what let
  * the Windows measurements in Q-007 send a clean signal without hitting the test's own console.
+ * On Windows, `detached: true` means `DETACHED_PROCESS` (D-005): no console at all — which is
+ * exactly the scenario the "no console" Windows test below needs.
  *
  * Waits for the fixture's own "ready" line before returning: sending a signal right after
  * `spawn()` resolves can race the child's startup and hit it before its handler is registered —
@@ -67,6 +95,18 @@ afterEach(async () => {
     }
   }
   spawned = [];
+  for (const pid of spawnedPids) {
+    try {
+      // Not a `ChildProcess` we hold a handle to (`spawnInNewConsole` launches via PowerShell's
+      // Start-Process) — `process.kill` on a bare external PID is the only way to reach it, and
+      // on Windows any signal name here maps straight to `TerminateProcess` (docs/QUESTOES.md
+      // Q-007), which is exactly what test cleanup wants regardless of product-level gracefulness.
+      process.kill(pid, 'SIGKILL');
+    } catch {
+      // Already dead — test cleanup, not product behavior.
+    }
+  }
+  spawnedPids = [];
   if (tempDir !== undefined) {
     await rm(tempDir, { recursive: true, force: true });
     tempDir = undefined;
@@ -98,20 +138,41 @@ describe.skipIf(process.platform === 'win32')('terminateGracefully (POSIX: real 
 });
 
 describe.skipIf(process.platform !== 'win32')(
-  'terminateGracefully (Windows: no dependency-free graceful mechanism — Q-007)',
+  'terminateGracefully (Windows: CTRL_BREAK_EVENT via console attach — S1-T2b)',
   () => {
-    it('never runs the child shutdown handler, never forces a kill, and reports false', async () => {
+    // Generous budget, not a loose one: every step here is a fresh `powershell.exe` process, and
+    // `Add-Type` pays a real C#-compile cost each time (no cross-process cache) — measured during
+    // development to occasionally exceed vitest's 5s default on a cold run.
+    it('the child runs its own shutdown handler to completion before dying', async () => {
       const marker = await markerPath();
+      const ready = readyPath();
+      // Its own, brand-new console — never this test process's own (see _windows-console.ts
+      // for why: the CTRL_BREAK broadcast this test triggers must never reach vitest itself).
+      const pid = await spawnInNewConsole(CHILD_SCRIPT, [marker, ready]);
+      spawnedPids.push(pid);
+      await waitForFile(ready);
+
+      const died = await processControl.terminateGracefully(pid, 5_000);
+
+      expect(died).toBe(true);
+      expect(await markerExists(marker)).toBe(true);
+      await expect(processControl.isAlive(pid)).resolves.toBe(false);
+    }, 15_000);
+
+    it('a session with no console at all cannot be reached, and the answer is an honest false', async () => {
+      const marker = await markerPath();
+      // detached:true => DETACHED_PROCESS on Windows (D-005): no console to AttachConsole to.
       const child = await spawnDetachedChild(marker);
       const pid = child.pid as number;
 
       const died = await processControl.terminateGracefully(pid, 2_000);
 
-      // D-002 bans a forced kill in v1: with no graceful path available, this must be a no-op.
+      // AttachConsole fails (error 6) — nothing was sent, D-002's forced-kill ban leaves
+      // nothing else this function may do, so it must report false rather than guess (Q-007).
       expect(died).toBe(false);
       expect(await markerExists(marker)).toBe(false);
       await expect(processControl.isAlive(pid)).resolves.toBe(true);
-    });
+    }, 10_000);
 
     it('reports true when the process already happens to be dead — that much is still honest', async () => {
       const marker = await markerPath();
