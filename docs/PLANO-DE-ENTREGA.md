@@ -340,6 +340,9 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       tipado. Registro do fork em `forks.json` no modo profundo.
       *Aceite:* teste com conteúdo contendo quebra de linha, aspas, acento e `%` chega íntegro
       ao processo filho; medição do piso de tokens antes e depois do `--tools ""` registrada.
+      **Q-008:** o formato de `~/.seeya/forks.json` está fixado — `{ schemaVersion: 1,
+      forks: [{ sessionId, createdAt }] }`. O `createdAt` é escrito desde já: S2-T6 precisa dele
+      para `forkCleanupDays`, e acrescentá-lo depois vira migração de arquivo já existente.
 - [ ] **S2-T3 — Caso de uso `endDay`.** Coleta multi-fonte com `sources[]` (D-013),
       concorrência limitada, isolamento de falha por sessão, fallback determinístico,
       anti-duplicidade, guarda de turno ativo. Handoff válido com qualquer fonte respondendo.

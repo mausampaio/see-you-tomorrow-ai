@@ -610,4 +610,29 @@ documento persistido` que `docs/ARQUITETURA.md` § `storage/` já define para ou
 `~/.seeya/` — mais consistente, mas ainda não confirmado que `forks.json` conta como um desses
 documentos "versionáveis" (ele nunca migra sozinho na spec atual). C) outro formato, definido por
 quem torna isto decisão em `docs/DECISOES.md`.
-**Resposta:** (preenchida pelo PO)
+**Resposta:** **FECHADA — opção B.**
+
+Você levantou a opção certa e a dúvida certa, então respondo a dúvida: o `forks.json` **conta**
+como documento versionável. A regra do `docs/ARQUITETURA.md` — `schemaVersion` em todo documento
+persistido, com migração explícita — não abre exceção por arquivo. E o argumento de que "ele
+nunca migra sozinho na spec atual" é exatamente o que deixa de valer no dia em que precisar
+migrar: um array na raiz não tem onde carregar a versão, e acrescentá-la depois é a migração
+cara que a regra existe para evitar. Somado ao D-027 (antes do primeiro byte é de graça), a
+hora de acertar é agora.
+
+```jsonc
+{
+  "schemaVersion": 1,
+  "forks": [{ "sessionId": "uuid-do-fork", "createdAt": "2026-08-18T21:00:00.000Z" }]
+}
+```
+
+`createdAt` entra **agora**, mesmo sem leitor hoje: S2-T6 vai precisar dele para
+`forkCleanupDays`, e declarar uma linha agora é mais barato que migrar um arquivo que já
+existe na máquina de alguém.
+
+O resto do seu desenho fica: a descoberta exige **só** `sessionId` e ignora o resto, item a item;
+arquivo ausente é "nenhum fork ainda", não corrupção; arquivo presente e malformado vira
+rejeição **visível**, nunca falha silenciosa nem derruba a descoberta das sessões reais.
+
+Anotado em S2-T2, que escreve o arquivo pela primeira vez.
