@@ -19,19 +19,13 @@ export interface ProcessTerminationData {
  * `SessionWithoutPid` — the compiler refuses the call in both cases, with no `!` and no `as`
  * anywhere (D-024).
  *
- * **`SessionWithoutSessionId` (D-023, S1-T10) is refused too, on purpose, even though it also
- * carries a real `pid`.** The tempting "fix" is widening this function's parameter to a union of
- * every PID-bearing shape (`SessionWithPid | SessionWithoutSessionId`) so both can reuse the same
- * gate — don't. `SessionWithoutSessionId` has no `procStart` to return in the first place (see
- * that interface's own docstring: there's no prior `.json` entry to tie-break against), so the
- * return type itself would have to grow an optional field just to accommodate a shape that can
- * never legitimately produce it. More importantly, D-023 states plainly that a session known only
- * from this source is never a termination candidate: without a `sessionId`, `seeya` can't verify
- * a handoff was written *for this session* before terminating — D-002's own ordering requirement
- * — because there is no session identity here for that check to key on, only a PID this app
- * inferred from a filename and a live OS process. Keeping the parameter type exactly
- * `SessionWithPid` makes that refusal structural: nobody has to remember the D-023 rule at the
- * call site, because the shape that would violate it doesn't type-check here at all.
+ * **Between S1-T10 and S1-T11, a second PID-bearing shape (`SessionWithoutSessionId`, D-023) also
+ * had to be refused here, on purpose, for a reason narrower typing alone couldn't express: no
+ * `sessionId` to verify a handoff against before terminating (D-002's ordering requirement).**
+ * D-029 (S1-T11) removed that shape from the union entirely, so there's nothing left to widen this
+ * function's parameter to by accident — `SessionWithPid` is once again the only PID-bearing shape
+ * that exists. The reasoning stays on record in docs/DECISOES.md D-029/D-023 in case a future
+ * PID-bearing shape reopens the question.
  *
  * Whoever holds a `DiscoveredSession` has to narrow first:
  *

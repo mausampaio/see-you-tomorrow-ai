@@ -96,11 +96,11 @@ export function evaluateEligibility(
     }
   }
 
-  // A session with no sessionId at all (SessionWithoutSessionId, D-023/S1-T10) can never be
-  // seeya's own fork — forks are tracked by sessionId (D-012), and this shape doesn't have one to
-  // compare. `hasSessionId` also narrows the type: `session.sessionId` doesn't exist on the union
-  // without it (core/types.ts's own reasoning for the second discriminant).
-  if (session.hasSessionId && criteria.knownForks.has(session.sessionId)) {
+  // Between S1-T10 and S1-T11 (D-023/D-029) a third shape had no sessionId at all, and this check
+  // needed `session.hasSessionId &&` in front of it to compile. D-029 removed that shape;
+  // `sessionId` is common to both remaining shapes again (core/types.ts), so it's readable here
+  // with no narrowing.
+  if (criteria.knownForks.has(session.sessionId)) {
     reasons.push('ownSeeyaFork');
   }
 
