@@ -706,3 +706,78 @@ O usuário poder ler "3 sessões, 1 transcript ignorado" é o que torna a opçã
 Se um dia aparecer um transcript **persistente** sem `cwd` — que continue assim entre varreduras —,
 isso é sinal novo e reabre a questão. Transitório é aceitável; permanente seria um formato que
 não entendemos.
+
+---
+
+## Q-010 — `SessionWithoutSessionId` não tem `procStart`: PID não é identidade estável entre duas varreduras
+**Tarefa:** S1-T10
+**Bloqueia:** não esta tarefa; **sim** a S1-T9, que precisa saber disto antes de deduplicar por PID
+**Contexto:** a terceira estratégia de descoberta (D-023) identifica uma sessão só pelo PID
+confirmado vivo agora — não existe `<pid>.json` prévio para dar um `procStart` de referência, e
+por isso `SessionWithoutSessionId` (`src/core/types.ts`) não carrega esse campo. Toda outra forma
+com PID (`SessionWithPid`) desempata um PID reciclado comparando o `procStart` gravado no
+registro contra o observado agora (`core/classification.ts#pidRepresentsSameProcess`) — aqui não
+há registro prévio nenhum para comparar.
+
+A consequência: entre duas varreduras desta estratégia, não há como distinguir "o mesmo processo
+autônomo continua vivo" de "aquele PID morreu, o SO reciclou para um processo qualquer não
+relacionado, e o `.key` antigo ainda está no diretório". A segunda leitura confirmaria liveness e
+leria `cwd`/linha de comando do processo **errado**, sem nenhum sinal de que algo mudou.
+
+D-023 já decide que essa origem é deduplicada **por PID** (não por `sessionId`, que ela não tem).
+Quem implementar a S1-T9 precisa saber, antes de escrever essa deduplicação, que "mesmo PID em
+duas varreduras" não é garantia de "mesma sessão" para esta origem especificamente — ao contrário
+de `SessionWithPid`, que tem o `procStart` para provar isso.
+
+**Por que não resolvido agora:** a janela é estreita (o PID precisaria morrer e ser reciclado por
+um processo não relacionado dentro do intervalo entre duas varreduras do `seeya`) e D-023 não pede
+desempate para esta origem — só pede liveness, que já está coberta. Inventar um `procStart` sem
+fonte violaria D-025. Resolver de verdade provavelmente significa capturar *algum* sinal adicional
+do processo (horário de início, por exemplo, via as mesmas ferramentas de `adapters/process/proc-
+start.ts`) especificamente para esta estratégia — escopo novo, não pedido pela tarefa atual.
+
+**Opções que enxergo, para quem fechar a S1-T9 decidir:**
+A) aceitar a janela estreita como está, documentada — dedupe por PID simples, sem tie-break, e se
+   um caso real de colisão aparecer, ele vira dado para uma decisão melhor depois.
+B) `adapters/process/inspection.ts` ganha uma captura de horário de início (mesma técnica de
+   `proc-start.ts`, reaproveitando `runForStdout`), e `SessionWithoutSessionId` passa a carregar
+   algo equivalente a `procStart`, ainda sem fonte prévia para comparar na primeira varredura, mas
+   comparável entre a varredura N e N+1 do próprio `seeya` (que passaria a persistir o valor visto
+   por sessão, não só usá-lo dentro de uma única chamada).
+**Resposta:** (preenchida pelo PO)
+
+---
+
+## Q-011 — Linha de comando como fonte de handoff: redigir padrão de segredo antes de persistir, ou aceitar o risco documentado?
+**Tarefa:** S1-T10
+**Bloqueia:** não esta tarefa (o dado já nasce como `string | null` opaco, sem parsing); talvez
+bloqueie S2 quando a linha de comando vira conteúdo de handoff gravado em `~/.seeya/`
+**Contexto:** D-023 é explícito que a linha de comando de uma sessão desta origem é **fonte de
+handoff, não só de identificação** — `/<comando> --item 2990` diz o que a sessão está fazendo, e é
+a única informação de primeira ordem disponível para uma sessão sem transcript nenhum.
+
+Mas linha de comando é também um lugar clássico onde segredo aparece: chave passada por
+argumento, token, senha — nada incomum em scripts de automação, exatamente a classe de processo
+que esta estratégia descobre. E o valor lido aqui eventualmente vai **para disco**, num handoff
+que o usuário lê no dia seguinte (e que, por ser conteúdo de projeto, poderia até acabar versionado
+ou compartilhado sem que ninguém tenha pensado nisso como "dado sensível").
+
+**O que já mitiguei nesta tarefa, sem esperar resposta:** `adapters/process/inspection.ts` só lê a
+linha de comando dos PIDs **candidatos** (os que vieram de um `.key` sem `.json` e foram
+confirmados vivos) — nunca enumera nem loga a linha de comando de todo processo da máquina. Isso
+reduz a superfície de exposição em vez de só tratar o sintoma, mas não resolve o problema de fundo:
+o valor de um PID candidato genuíno ainda pode conter um segredo, e ele ainda vai para
+`SessionWithoutSessionId.commandLine` tal como veio do SO.
+
+**Opções que enxergo:**
+A) aceitar o risco na v1, documentado — `commandLine` é gravado como veio, sem transformação. Mais
+   simples, mais fiel ao dado real, mas expõe o usuário a gravar um segredo em disco sem saber.
+B) redigir padrões suspeitos antes de persistir (ex.: `--token`, `--password`, `--api-key`,
+   sequências que parecem `sk-...`/JWT) numa camada de saneamento antes do handoff. Reduz o risco,
+   mas é uma heurística — vai errar nos dois sentidos (redige texto legítimo que só *parece*
+   segredo; deixa passar um formato de segredo que a lista não previu), e cria uma falsa sensação
+   de segurança se alguém achar que ela "resolve" o problema.
+C) não persistir `commandLine` bruto no handoff — só um resumo derivado (ex.: primeiro token do
+   comando, sem os argumentos) — mais seguro, mas perde exatamente a informação que D-023
+   descreveu como o valor desta origem ("qual item de trabalho").
+**Resposta:** (preenchida pelo PO)

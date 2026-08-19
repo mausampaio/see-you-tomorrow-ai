@@ -6,7 +6,16 @@
  *
  * This module never touches `~/.claude/sessions/` and never reads a `.key` file's content — by
  * the time a PID reaches here, the discovery adapter has already decided it's a candidate from
- * the file *name* alone. Everything below only inspects the OS process itself.
+ * the file *name* alone. Everything below only inspects the OS process itself, and only for the
+ * specific candidate PIDs the discovery adapter passes in — never a broad enumeration of every
+ * process on the machine, which would read (and risk logging) far more than this strategy needs.
+ *
+ * **Privacy note, not fully resolved — see docs/QUESTOES.md Q-011.** The command line this module
+ * returns is exactly what the OS reports, unredacted: a classic place for a secret to leak
+ * (a token or password passed as an argument), and D-023 says explicitly that this value is meant
+ * to become handoff content written to disk. This module narrows the *exposure* (only candidate
+ * PIDs, never every process) but doesn't redact the *content* — that's a product decision Q-011
+ * asks the PO to make, not something to decide unilaterally here.
  *
  * Same per-platform split as `proc-start.ts`, and the same reason (docs/spikes/F-procstart-por-
  * so.md's finding generalizes: the three platforms don't expose this to an unrelated process the
