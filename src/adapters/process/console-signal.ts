@@ -171,6 +171,73 @@ function isCtrlBreakOutcome(value: string): value is CtrlBreakOutcome {
 }
 
 /**
+ * Runs `buildSendScript`'s helper and resolves the instant a recognized `CtrlBreakOutcome` word
+ * shows up on stdout — unlike `runPowerShellScript` above (still what `waitForExitWindows` uses,
+ * since its script has no equivalent early signal), this deliberately does **not** wait for the
+ * process to close first.
+ *
+ * **Why, measured building S1-T13 (docs/PLANO-DE-ENTREGA.md):** in the `'sent'` case, this
+ * helper's own `GenerateConsoleCtrlEvent` call broadcasts to the console it just attached to —
+ * which the helper itself is now also attached to, so it receives its own `CTRL_BREAK_EVENT`
+ * (see the module comment). The registered delegate returns `true` and `Write-Output 'sent'`
+ * already flushed to the pipe before this, but the OS then takes a consistently measured **~5.5s**
+ * (5.3s–5.6s across repeated runs, isolated from the rest of this script by timestamping each
+ * step) to actually tear the helper process down afterward — dead air that has nothing to do with
+ * whether the *target* died. `sendCtrlBreak`'s outcome is fully decided the moment the word lands
+ * on stdout (see below for why exit code is irrelevant to that decision); blocking on `close` on
+ * top of that was paying for a teardown nobody was waiting on. This was the actual cause of
+ * `tests/integration/process/termination.test.ts`'s intermittent timeout under full-suite
+ * load — not `Add-Type`, which measured at 200–350ms per call, nowhere near enough on its own to
+ * explain a multi-second overrun. Once the outcome is read, the helper is killed rather than left
+ * to the OS's own ~5.5s teardown: it's this module's own throwaway subprocess, never the session
+ * `pid` that `terminateGracefullyWindows` is trying to terminate gracefully, so D-002's
+ * forced-kill ban (which is about that session) doesn't reach it.
+ */
+function runSendScript(script: string): Promise<{
+  readonly outcome: CtrlBreakOutcome | undefined;
+  readonly stdout: string;
+  readonly stderr: string;
+  readonly exitCode: number | null;
+}> {
+  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  const args = ['-NoProfile', '-NonInteractive', '-NoLogo', '-EncodedCommand', encoded];
+  return new Promise((resolve, reject) => {
+    const child = spawn('powershell.exe', args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: false,
+      windowsHide: true,
+    });
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    const settle = (outcome: CtrlBreakOutcome | undefined, exitCode: number | null): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve({ outcome, stdout, stderr, exitCode });
+      // Best-effort: the process may already be tearing itself down on its own (see the doc
+      // comment above) — a failure here just means it beat us to it, not a real problem.
+      try {
+        child.kill();
+      } catch {
+        // Already gone — nothing to clean up.
+      }
+    };
+    child.stdout.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString('utf8');
+      const trimmed = stdout.trim();
+      if (isCtrlBreakOutcome(trimmed)) {
+        settle(trimmed, null);
+      }
+    });
+    child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString('utf8')));
+    child.on('error', reject);
+    child.on('close', (exitCode) => settle(undefined, exitCode));
+  });
+}
+
+/**
  * Attaches to `pid`'s console and broadcasts `CTRL_BREAK_EVENT`.
  *
  * `'no-console'` is the honest, expected outcome for a session with no console at all
@@ -183,18 +250,17 @@ function isCtrlBreakOutcome(value: string): value is CtrlBreakOutcome {
  * **Why a non-zero exit code from this particular script is not, by itself, a failure.** Measured
  * while building this task: once the helper attaches to the target's console, `powershell.exe`'s
  * own console host reacts to the very `CTRL_BREAK_EVENT` it just broadcast — independent of, and
- * in addition to, the handler this script registers — by stopping its pipeline and exiting with
- * code 2, *after* the script's own `Write-Output 'sent'` already ran to completion. Reproduced
- * against a target that survives the event too (so this isn't the target's death cascading back),
- * every time, exit 2 with `'sent'` already sitting in stdout. So: a recognized outcome word on
- * stdout is trusted regardless of the exit code (the work it describes already happened); an exit
- * code is only used to explain *why* stdout came back empty or garbled, never to override a
- * successfully parsed outcome.
+ * in addition to, the handler this script registers — by stopping its pipeline and (eventually)
+ * exiting with code 2, *after* the script's own `Write-Output 'sent'` already ran to completion.
+ * Reproduced against a target that survives the event too (so this isn't the target's death
+ * cascading back), every time, exit 2 with `'sent'` already sitting in stdout. So: a recognized
+ * outcome word on stdout is trusted regardless of the exit code (the work it describes already
+ * happened) — which `runSendScript` above now takes literally, resolving on that word without
+ * waiting for the close/exit-code at all.
  */
 export async function sendCtrlBreak(pid: number): Promise<CtrlBreakOutcome> {
-  const { stdout, stderr, exitCode } = await runPowerShellScript(buildSendScript(pid));
-  const outcome = stdout.trim();
-  if (isCtrlBreakOutcome(outcome)) {
+  const { outcome, stdout, stderr, exitCode } = await runSendScript(buildSendScript(pid));
+  if (outcome !== undefined) {
     return outcome;
   }
   throw new Error(
