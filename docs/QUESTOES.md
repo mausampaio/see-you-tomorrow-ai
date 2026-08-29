@@ -812,3 +812,50 @@ dois sentidos e, pior, **parece** resolver — quem confia nela para de tomar cu
 que a lista não cobre o formato é o dia em que ninguém está olhando. Proteção incompleta que
 passa por completa troca um risco conhecido por um invisível. Se um dia for preciso, o caminho
 é **não capturar**, não capturar-e-limpar.
+
+---
+
+## Q-012 — `SessionProvider.list()` mudou de forma; e uma regra de fusão que assumi sem fonte
+**Tarefa:** S1-T9
+**Bloqueia:** não esta tarefa (segui com a solução mínima, como `AGENTS.md` pede quando o efeito
+passa da própria tarefa); **pode bloquear** S1-T6, que é quem primeiro consome o retorno de
+`list()` para montar a saída de `seeya sessions`.
+**Contexto:** dois pontos, registrados juntos por serem da mesma tarefa.
+
+**1) `SessionProvider.list()` passou a devolver `{ sessions, rejected }`, não mais
+`Promise<DiscoveredSession[]>`.** O texto da tarefa exige que "as rejeições das duas [estratégias]
+aparecem somadas" no resultado da fusão, e D-022 é explícito que toda coleção de fonte externa
+declara os dois lados justamente para que `seeya sessions` possa dizer "3 sessões, 1 entrada
+ignorada" em vez de mentir por omissão. Só que a assinatura literal do método na porta (e no
+esboço de `docs/ARQUITETURA.md § "Portas"`) era `list(): Promise<DiscoveredSession[]>` — sem
+`rejected` nenhum. Não achei como cumprir os dois ao mesmo tempo: ou `rejected` se perde na
+fronteira do port (violando D-022 exatamente no ponto em que o usuário finalmente veria, como o
+próprio texto da tarefa nomeia), ou a assinatura muda.
+
+Mudei a assinatura — `list()` agora devolve `DiscoveryResult` (`{ sessions, rejected }`,
+declarado em `src/core/ports.ts`) — porque a alternativa era cumprir a letra do esboço e descumprir
+o `D-022`, que tem autoridade maior. Não alterei `docs/ARQUITETURA.md` (exige aprovação do PO,
+`AGENTS.md § "Ordem de autoridade"`); o comentário em `core/ports.ts` aponta para esta questão.
+**Opções que enxergo:** A) confirma a mudança de assinatura; `docs/ARQUITETURA.md § "Portas"` é
+atualizado pelo PO para refletir `DiscoveryResult`. B) `list()` volta a devolver só
+`DiscoveredSession[]`, e as rejeições ficam disponíveis por outro caminho (um segundo método na
+porta, ou um evento/registro fora do retorno) — não construí essa alternativa porque me pareceu
+mais invasiva que alargar o tipo de retorno, sem ter certeza de que é essa a preferência do PO.
+**Resposta:** (a preencher pelo PO)
+
+**2) Quando `cwd` ou `name` divergem entre as duas origens para o mesmo `sessionId`, escolhi
+sempre o valor do registro — mas não tenho fonte para isso, é minha melhor suposição.** O
+`cwd` do registro vem direto do `.json` que o Claude Code escreve; o `cwd` da varredura de
+transcript é reconstruído lendo o conteúdo do próprio transcript (D-016, S1-T8) — não é o mesmo
+tipo de evidência. Na prática as duas deveriam sempre concordar (é o mesmo diretório de trabalho,
+a mesma sessão), então esperava tratar isso como "nunca diverge de verdade" — mas se um dia
+divergir (dado corrompido, bug num dos dois lados), meu código silenciosamente escolhe o
+registro e segue, sem avisar que havia uma divergência para investigar. `name` recebe o mesmo
+tratamento pelo mesmo motivo (o nome da varredura é sempre derivado do `cwd`, nunca mais rico que
+o do registro).
+**Opções que enxergo:** A) confirma a preferência pelo registro nos dois campos, calada — a
+divergência é considerada anomalia rara demais para valer código extra. B) uma divergência real
+de `cwd` entre as duas origens deveria virar uma rejeição visível (ou um aviso) em vez de ser
+resolvida em silêncio, porque uma sessão com `cwd` inconsistente entre fontes é sinal de que algo
+está errado em uma delas.
+**Resposta:** (a preencher pelo PO)
