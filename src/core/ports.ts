@@ -4,25 +4,26 @@
  * implements it; `cli/` is the only composition root that names the concrete implementation and
  * injects it (D-020).
  *
- * **Only the four ports declared so far.** docs/ARQUITETURA.md already sketches seven ports (the
- * whole architecture design), but the three missing here all share the same concrete problem: the
- * signature of each references a type that doesn't exist in this project yet. Declaring them now
- * would mean inventing those types too early, just to fill in a signature, or declaring the port
- * with `unknown` — worse than not declaring it. The three, and the type missing from each:
+ * **Ports are declared as their types come to exist, not all seven from
+ * docs/ARQUITETURA.md's sketch up front.** A port whose signature references a type that doesn't
+ * exist yet in this project would mean inventing that type too early just to fill in a signature,
+ * or declaring the port with `unknown` — worse than not declaring it. `HandoffGenerator` (S2-T2)
+ * and `Storage` (S1-T5, grown further in S1-T7 and S2-T2) are both filled in below now that
+ * `GeneratedUnderstanding`/`EarlyWarningState` exist. Still missing:
  *
- * - `HandoffGenerator` — returns `GeneratedUnderstanding`, also a handoff type. Implemented in
- *   S2-T2.
  * - `Notifier` — implemented in S4-T1. S1-T7's pure rule (notify once per `sessionId`,
  *   never repeating) doesn't need the whole port to be pure; whoever implements S1-T7 decides
  *   the minimal shape that rule needs.
- * - `Storage` — the signature in docs/ARQUITETURA.md uses `Handoff`, `Briefing`,
- *   `DayState`, none of which exist yet. S1-T5 declares here whatever it needs, at whatever
- *   size it has at that point (likely `readConfig`/`saveState` first, growing in S2 for the
- *   handoff/briefing methods).
  *
  * Open question about this scope cut: docs/QUESTOES.md Q-004.
  */
-import type { Config, DiscoveredSession, EarlyWarningState, SessionFacts } from './types.js';
+import type {
+  Config,
+  DiscoveredSession,
+  EarlyWarningState,
+  GeneratedUnderstanding,
+  SessionFacts,
+} from './types.js';
 
 /**
  * The project's single source of "now" (D-019). Implemented in `adapters/clock/`. No other
@@ -193,4 +194,37 @@ export interface TranscriptReadResult {
  */
 export interface TranscriptReader {
   readFacts(session: DiscoveredSession): Promise<TranscriptReadResult>;
+}
+
+/**
+ * Generates the "understanding" layer of a handoff (D-003's layer 2) by calling headless `claude`
+ * (D-001, D-011). Implemented in `adapters/generation/` (S2-T2) as two classes behind this one
+ * port — `LeanHandoffGenerator` (default: fresh disposable session built from `facts`) and
+ * `DeepHandoffGenerator` (`--resume`s `session.sessionId` with `--fork-session`, registers the
+ * fork per D-012) — chosen by `deepCapture` config, never by an `if` inside a shared
+ * implementation (D-011: "duas implementações atrás da mesma porta; a escolha é config"). `cli/`,
+ * the only composition root (D-020), is what picks which implementation a given project's policy
+ * gets.
+ *
+ * **Takes the whole `DiscoveredSession`, not just `SessionFacts` — a departure from
+ * docs/ARQUITETURA.md § "Portas"'s sketch (`generate(facts: SessionFacts)`).** The deep variant
+ * needs `session.sessionId` to resume; `SessionFacts` (S1-T4, transcript-only extraction) carries
+ * no session identity at all. Same shape of divergence already recorded for `SessionProvider.list()`
+ * (`DiscoveryResult`, Q-012) and `TranscriptReader.readFacts()` (`TranscriptReadResult`, Q-014):
+ * the sketch predates a constraint the implementing task found, and in both those cases the
+ * resolution was "the port is right, the sketch was outdated". Not edited into
+ * `docs/ARQUITETURA.md` directly — that requires PO approval (AGENTS.md § "Ordem de
+ * autoridade") — flagged instead in docs/QUESTOES.md Q-017, and the minimal signature change
+ * applied in the meantime per AGENTS.md's "abra a questão e siga com a solução mínima".
+ *
+ * **Rejects with a typed error on any failure** (spawn error, hard timeout, non-zero exit,
+ * invalid JSON, output failing its own schema, or the model itself reporting `is_error`) — see
+ * `adapters/generation/errors.ts#GenerationError`. Per docs/ARQUITETURA.md § `generation/`: "Erro
+ * tipado. Quem decide o fallback é application/, não o adapter" — this port never manufactures a
+ * `source: "deterministic"` result itself. `application/endDay` (S2-T3) is what catches the
+ * rejection and builds the deterministic handoff (D-003); this port only ever resolves with a
+ * real model result.
+ */
+export interface HandoffGenerator {
+  generate(session: DiscoveredSession, facts: SessionFacts): Promise<GeneratedUnderstanding>;
 }

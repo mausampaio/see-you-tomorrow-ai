@@ -248,3 +248,30 @@ export interface SessionFacts {
    */
   readonly touchedFiles: readonly string[];
 }
+
+/**
+ * D-003's "layer 2" (the model's understanding) — `HandoffGenerator.generate()`'s success value
+ * (`core/ports.ts`, S2-T2). Field names match the handoff's own disk keys exactly (AGENTS.md §
+ * "Idioma", "Identificadores que vão para disco": `understanding`, `pendingItems`,
+ * `tomorrowPlan`), so whoever assembles the final `Handoff` document (S2-T3) copies these
+ * straight across instead of renaming through a second set of names.
+ *
+ * **No `source` or `generationError` field here, on purpose.** docs/ARQUITETURA.md § `generation/`
+ * is explicit: "Erro tipado. Quem decide o fallback é application/, não o adapter" — this type
+ * only ever represents a successful generation. A failure is a rejection with a typed error
+ * (`adapters/generation/errors.ts#GenerationError`), never a `GeneratedUnderstanding` shaped to
+ * look like "the model said nothing" (D-025's spirit applied here: a failed call isn't a
+ * degenerate success, it's a different outcome, and the type shouldn't blur the two by making
+ * every field optional). `application/endDay` (S2-T3) is what catches that rejection and builds
+ * the `source: "deterministic"` handoff (D-003) — this type has no say in that decision.
+ */
+export interface GeneratedUnderstanding {
+  /** Free-text account of what the session was doing, written by the model from the facts (and,
+   * in deep capture, the resumed transcript) — never fabricated from an empty transcript (D-025). */
+  readonly understanding: string;
+  /** What's left unfinished, oldest/most-important first — empty when the model found nothing
+   * pending, never a placeholder claiming there was nothing to do. */
+  readonly pendingItems: readonly string[];
+  /** Suggested plan for the next session, same "empty means empty" rule as `pendingItems`. */
+  readonly tomorrowPlan: readonly string[];
+}
