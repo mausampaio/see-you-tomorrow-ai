@@ -21,6 +21,7 @@ import { FakeClock } from '../discovery/_fake-clock.js';
 import {
   addWorktree,
   commitAt,
+  createAlias,
   createGitFixture,
   removeGitFixture,
   writeAndStage,
@@ -160,6 +161,43 @@ describe('GitAdapter.readFacts — one dirty main worktree, one clean linked wor
     expect(main.branch).toBe('main');
     expect(main.dirty).toBe(true);
     expect(main.commitsTodayCount).toBe(1);
+  });
+});
+
+/**
+ * Regression for the real production bug the CI matrix caught (not a test-environment quirk):
+ * `git worktree list` reports the *resolved* path of the worktree it's run from, while a caller
+ * reaching that same directory through an alias (a symlink, a Windows junction, a short 8.3-form
+ * path, macOS's symlinked `os.tmpdir()`) has an unresolved `cwd` that never string-matches it —
+ * `cwd`'s own worktree then shows up a second time in `worktrees[]` instead of being excluded.
+ *
+ * Built with a symlink/junction so this reproduces on **every** OS this suite runs on, Linux
+ * included — CI had only caught it on windows-latest/macos-latest, exactly because neither `/tmp`
+ * on a Linux runner nor this project's own Windows dev machine happened to hit either alias shape.
+ * `src/adapters/git/canonical-path.ts` has the full account and the fix (`fs.realpath`).
+ */
+describe('GitAdapter.readFacts — cwd reached through an alias (symlink/junction), not the raw path', () => {
+  it("does not duplicate cwd's own worktree in worktrees[] when cwd is aliased", async () => {
+    fixture = await createGitFixture();
+    await writeAndStage(fixture.mainDir, 'a.txt', 'hello\n');
+    await commitAt(fixture.mainDir, YESTERDAY_10PM, 'chore: initial commit');
+    await addWorktree(fixture, 'issue-42');
+
+    const aliasedMainDir = await createAlias(fixture.mainDir, fixture.root, 'main-alias');
+    const adapter = new GitAdapter({ clock: new FakeClock(NOW) });
+
+    const result = await adapter.readFacts(aliasedMainDir);
+
+    if (!result.hasGit) {
+      throw new Error('expected hasGit: true for a real repository');
+    }
+    // Before the fix: `worktrees` comes back with *two* entries here -- `issue-42` and cwd's own
+    // main worktree, wrongly un-excluded because `path.resolve(aliasedMainDir)` never equals the
+    // resolved path git itself reports for that same directory.
+    expect(result.facts.worktrees).toHaveLength(1);
+    const paths = result.facts.worktrees.map((w) => toPosix(w.path));
+    expect(paths.some((p) => p.endsWith('/issue-42'))).toBe(true);
+    expect(paths.some((p) => p.endsWith('/main'))).toBe(false);
   });
 });
 

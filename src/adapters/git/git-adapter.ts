@@ -6,7 +6,6 @@
  * beside `cwd`, with no transcript at all, still gets a useful handoff only if this adapter looks
  * there too.
  */
-import path from 'node:path';
 import type { Clock, GitReader, GitReadResult, RejectedDiscoveryRecord } from '../../core/ports.js';
 import type { WorktreeFacts } from '../../core/types.js';
 import { isInsideWorkTree } from './repo.js';
@@ -15,13 +14,7 @@ import { readModifiedFiles, parseStatusPorcelain } from './status.js';
 import { readCommitsToday } from './commits.js';
 import { runGit } from './run-git.js';
 import { parseWorktreeListPorcelain, type WorktreeListEntry } from './worktree-list.js';
-
-/** Absolute, comparable form of a git-reported or caller-given path — case-insensitive on
- * Windows, where the same worktree can be spelled with different casing across the two sources. */
-function normalize(rawPath: string): string {
-  const resolved = path.resolve(rawPath);
-  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
-}
+import { canonicalPath, sameCanonicalPath } from './canonical-path.js';
 
 /**
  * Unlike the main `cwd` path (which uses `readModifiedFiles`, graceful on any failure, D-025),
@@ -71,15 +64,27 @@ async function readWorktreeOrRejection(
   }
 }
 
+/**
+ * Excludes `cwd`'s own entry from `git worktree list`'s output by *canonical* path
+ * (`canonical-path.ts`), not by the raw strings the two sources happen to spell it with — see
+ * that module for the production bug (symlinked tmpdir on macOS, short-path form on Windows) this
+ * exists to fix. An entry whose path can't be canonicalized (most commonly: deleted from disk) is
+ * never excluded here — it's kept, and flows to `readWorktreeOrRejection` below, which is where
+ * that failure becomes a visible D-022 rejection instead of silently vanishing from the list.
+ */
 async function listOtherWorktrees(cwd: string): Promise<WorktreeListEntry[]> {
   const result = await runGit(cwd, ['worktree', 'list', '--porcelain']);
   if (!result.ran || result.exitCode !== 0) {
     return [];
   }
-  const ownPath = normalize(cwd);
-  return parseWorktreeListPorcelain(result.stdout).filter(
-    (entry) => normalize(entry.path) !== ownPath,
+  const entries = parseWorktreeListPorcelain(result.stdout);
+  const ownPath = await canonicalPath(cwd);
+  const withCanonicalPaths = await Promise.all(
+    entries.map(async (entry) => ({ entry, canonical: await canonicalPath(entry.path) })),
   );
+  return withCanonicalPaths
+    .filter((item) => !sameCanonicalPath(item.canonical, ownPath))
+    .map((item) => item.entry);
 }
 
 async function readWorktrees(
