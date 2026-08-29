@@ -347,16 +347,45 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
         conserto. Ou cobre, ou registra a exceção com motivo — não afrouxe o piso para caber
       *Aceite:* baixar a cobertura de um diretório abaixo do piso **reprova** o portão. Provado
       por execução, não por leitura.
-- [ ] **S1-T9 — Fusão das três estratégias.** União deduplicada: por `sessionId` quando existe,
-      por **PID** quando a origem não fornece `sessionId` (D-023). Sessão vista só pela varredura
-      de transcripts entra com `pid: null`; a vinda só do processo entra com `sessionId: null`.
-      Nenhuma das duas é candidata a encerramento de processo.
-      *Aceite:* sessão presente em duas ou três origens aparece **uma** vez, com os campos
-      fundidos, e o teste cobre as três combinações de par.
-      **Q-010:** para a origem de S1-T10 (`SessionWithoutSessionId`), **PID não é identidade
-      estável**. Ela não tem `procStart`, então "mesmo PID em duas varreduras" não prova "mesma
-      sessão" — ao contrário de `SessionWithPid`. A janela é estreita e aceita na v1; o que não se
-      aceita é deduplicar por PID sem saber disso.
+- [ ] **S1-T13 — O teste de terminação graciosa no Windows é intermitente.** Achado ao rodar o
+      portão depois da S1-T12. **Não é regressão dela** — medido isolado, o arquivo passa em
+      11,17s; o que muda é a concorrência da suíte completa.
+      - o teste "the child runs its own shutdown handler to completion before dying" tem
+        orçamento de 15s e consome ~10,5s sozinho. Sob paralelismo, estoura
+      - a causa do custo está documentada no próprio teste: o `Add-Type` compila C# a cada
+        chamada, sem cache entre processos. É caro por natureza, não por desleixo
+      **Subir o tempo limite é uma resposta legítima aqui, mas só se for por medição.** Um número
+      escolhido por chute vira a próxima intermitência. Meça quanto o teste leva sob carga real e
+      dimensione a margem a partir disso, registrando o número medido no comentário.
+      Considere também se dá para pagar o `Add-Type` **uma vez** por arquivo de teste em vez de
+      por chamada — se der, o problema some em vez de ser acomodado, que é melhor.
+      **Não serialize a faixa para esconder isto.** O `vitest.config.ts` tem um comentário longo
+      explicando por que serializar escondeu uma corrida real no S0-T6 e custou seis rodadas no
+      S1-T0. Aqui não há corrida — há um teste caro — e a resposta certa é tempo ou custo, nunca
+      remover a concorrência que expõe o problema.
+      *Aceite:* o portão completo passa em execuções repetidas (rode ao menos 5 vezes seguidas e
+      cole a contagem), e o número do tempo limite tem uma medição escrita ao lado.
+- [ ] **S1-T9 — Fusão das estratégias de descoberta.** Implementa a porta `SessionProvider`:
+      `list()` devolve a união **já deduplicada**, nunca a concatenação crua. Quem chama não
+      precisa saber quantas estratégias existem embaixo nem deduplicar por conta própria.
+      **Reescrita em 2026-08-29 por causa do D-029.** O texto anterior falava em três
+      estratégias e deduplicação por PID — os dois saíram com a revogação do D-023. Sobraram
+      **duas** origens, e ambas fornecem `sessionId`:
+      - **registro** (S1-T3): dá `pid`, `procStart`, liveness, `kind`, `name`
+      - **varredura de transcript** (S1-T8): enxerga headless, dá `lastActivity` por mtime,
+        entra com `pid: null` e nunca é candidata a encerramento de processo (D-002)
+      - deduplicação **por `sessionId`**, só. Não há mais origem sem ele
+      **A regra de fusão precisa ser decidida, não improvisada.** Quando a mesma sessão aparece
+      nas duas origens, quem vence em cada campo? O registro é mais rico, mas o mtime do
+      transcript pode ser **mais recente** que a última atividade que o registro conhece. Perder
+      atividade recente é pior que perder um campo cosmético. Decida por campo, escreva o porquê,
+      e registre em `docs/QUESTOES.md` se ficar ambíguo.
+      **As rejeições também se somam.** As duas estratégias devolvem `{ sessions, rejected }`.
+      A união preserva as duas listas — "3 sessões, 2 entradas ignoradas" continua verdadeiro
+      depois da fusão, senão a visibilidade que S1-T3 e S1-T8 construíram morre aqui.
+      *Aceite:* sessão presente nas duas origens aparece **uma** vez, com os campos fundidos
+      segundo a regra escrita; sessão presente em uma só entra com a forma daquela origem; e as
+      rejeições das duas aparecem somadas.
 - [ ] **S1-T4 — `adapters/transcript`.** Parser streaming; últimos prompts, arquivos
       tocados, última atividade.
 - [ ] **S1-T7 — Detecção precoce de sessão sem transcript.** Notificação uma vez por
