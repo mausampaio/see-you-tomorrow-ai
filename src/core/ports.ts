@@ -26,6 +26,10 @@
  * Open question about this scope cut: docs/QUESTOES.md Q-004.
  */
 import type { DiscoveredSession } from './types.js';
+// Separate import statement (S1-T5), deliberately not merged into the line above: another task
+// is landing in this same shared file at the same time (S1-T4), and touching an existing import
+// line is exactly the kind of one-line collision that turns a clean merge into manual work.
+import type { Config } from './types.js';
 
 /**
  * The project's single source of "now" (D-019). Implemented in `adapters/clock/`. No other
@@ -100,4 +104,31 @@ export interface DiscoveryResult {
  */
 export interface SessionProvider {
   list(): Promise<DiscoveryResult>;
+}
+
+/**
+ * Persistence at `~/.seeya/` (D-027). Implemented by `adapters/storage/` (S1-T5). The root is
+ * always injected into the adapter's constructor, never read from `os.homedir()` inside it — same
+ * rule `adapters/discovery/` already follows for `~/.claude` — so no test touches the real
+ * `~/.seeya/`.
+ *
+ * **Only `readConfig` for now.** docs/ARQUITETURA.md's sketch of this port also lists
+ * `saveHandoff(day: Day, handoff: Handoff)`, `readBriefing(day: Day)` and
+ * `saveState(state: DayState)` — but `Day`, `Handoff`, `Briefing` and `DayState` don't exist as
+ * types yet (they arrive with S2-T2/S2-T3/S2-T4 and S4-T2). Declaring those methods now would
+ * mean typing them `unknown` or inventing four types this task doesn't need just to fill a
+ * signature — the same reasoning this file's top comment already applies to `TranscriptReader`,
+ * `HandoffGenerator` and `Notifier`. Whoever implements those later tasks grows this interface
+ * additively once the types it needs exist for real; docs/QUESTOES.md Q-013 has the note on this
+ * scope cut.
+ */
+export interface Storage {
+  /**
+   * Reads `~/.seeya/config.json`, resolved against defaults. A file that doesn't exist yet
+   * (nothing written on this machine so far) is not an error (D-025): every field comes back at
+   * its default. A file that exists but is malformed — invalid JSON, a field of the wrong shape,
+   * or a `schemaVersion` this build doesn't know how to read — rejects instead of silently
+   * falling back to defaults: only *absence* reads as "use the defaults", never *corruption*.
+   */
+  readConfig(): Promise<Config>;
 }

@@ -887,3 +887,44 @@ divergência real seria anomalia, não caso que a função resolve.
 Nada a fazer, então. Registro aqui porque a formulação importa: escrita como "o registro é mais
 confiável", a regra pareceria preferência arbitrária, e alguém tentaria "melhorar" com uma
 heurística mais esperta — que é como se estraga uma regra que estava certa.
+
+---
+
+## Q-013 — Duas lacunas de `config.json` encontradas fazendo S1-T5: `endOfDayTime` default e `forkCleanupDays` sem chave fixada
+**Tarefa:** S1-T5
+**Bloqueia:** não esta tarefa (segui com a solução mínima, como `AGENTS.md` pede quando o efeito
+passa da própria tarefa); **pode bloquear** S4-T4/S5-T2 (quem primeiro escreve `config.json`) e
+S2-T6 (limpeza de forks, que precisa ler `forkCleanupDays`).
+**Contexto:** duas lacunas da mesma natureza, registradas juntas por serem da mesma tarefa —
+"config com defaults" pedia uma resposta para cada chave, e a documentação não fixa uma para
+nenhuma das duas.
+
+**1) O bloco de `config.json` em `docs/ARQUITETURA.md § "Config"` é um exemplo ilustrativo, não
+uma tabela de defaults — e para `endOfDayTime` isso importa de verdade.** Conferi as chaves uma a
+uma: só `relevanceHours` (12h) tem seu default afirmado em prosa
+(`docs/ESPECIFICACAO.md § "Elegibilidade"`). As demais numéricas/estruturais
+(`leadTimesInMinutes`, `idleMinutes`, `captureModel`, `budgetPerSessionUsd`,
+`captureConcurrency`) eu tomei os valores do exemplo como default — são plausíveis e não mudam o
+comportamento do produto na ausência de config (o `endOfDayTime` do exemplo,
+`"19:30"`, dispararia o encerramento automático do dia todo dia às 19:30 **sem o usuário nunca ter
+escolhido esse horário** — numa máquina sem `config.json`, antes de existir `seeya init` (S5-T2).
+Implementei `null` (só manual) como default, seguindo o espírito opt-in que já aparece em D-002 e
+D-011 (terminação e captura profunda são opt-in por padrão) — mas é uma leitura minha do
+princípio, não uma decisão escrita em lugar nenhum para `endOfDayTime` especificamente.
+**Opções que enxergo:** A) confirma `null` como default de `endOfDayTime` — sem config, o
+agendador nunca dispara sozinho, só via comando manual, até o usuário rodar `seeya init` ou editar
+o arquivo. B) o exemplo de `docs/ARQUITETURA.md` já **é** a decisão de default, e `"19:30"` deveria
+valer também na ausência de arquivo — meu código está errado. C) outro valor.
+**Resposta:** _(em aberto)_
+
+**2) `forkCleanupDays` (D-012: "Forks com mais de `forkCleanupDays` (default 7) são apagados") não
+está na tabela de "Identificadores que vão para disco" do `AGENTS.md § "Idioma"`, nem no exemplo de
+`docs/ARQUITETURA.md § "Config"`.** É exatamente o caso que `AGENTS.md` pede para não inventar: "se
+faltar alguma [chave], pergunte; não invente". Como o exemplo de config desta tarefa também não a
+lista, e nenhum leitor de `forkCleanupDays` existe ainda (chega só em S2-T6), **não acrescentei a
+chave ao tipo `Config`** — ficaria sem uso, e inventar o nome antes do glossário fixá-lo é
+exatamente o risco de deriva que a tabela existe para evitar.
+**Opções que enxergo:** A) fixar `forkCleanupDays: number` (default 7, conforme D-012) na tabela do
+glossário agora, para a S2-T6 já encontrar o nome certo. B) esperar a S2-T6 abrir a própria questão
+quando chegar lá.
+**Resposta:** _(em aberto)_

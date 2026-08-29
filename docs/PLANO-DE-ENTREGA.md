@@ -422,8 +422,35 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
         **fica**: ela não depende desta estratégia e custou caro para ser achada
       *Aceite:* núcleo de volta a duas formas, `verificar` e `verificar:linux` verdes, e nenhuma
       leitura de linha de comando em lugar nenhum do código.
-- [ ] **S1-T5 — `adapters/storage`.** Raiz injetável, escrita atômica, config com
+- [~] **S1-T5 — `adapters/storage`.** Raiz injetável, escrita atômica, config com
       defaults, `schemaVersion`.
+      **Implementado:** porta `Storage` em `src/core/ports.ts`, aditiva (só `readConfig` por
+      enquanto — `saveHandoff`/`readBriefing`/`saveState` esperam `Day`/`Handoff`/`Briefing`/
+      `DayState`, que ainda não existem). `StorageAdapter` (`src/adapters/storage/index.ts`) com
+      raiz `seeyaHome` injetada no construtor, nunca `os.homedir()`.
+      **Atomicidade provada por execução, não por confiar no padrão** (`atomic-write.ts` +
+      `tests/integration/storage/atomic-write.test.ts`): um processo real
+      (`tests/fixtures/storage/slow-atomic-write.mjs`) é morto com `SIGKILL` em vários pontos
+      diferentes no meio da escrita, e o arquivo em disco é conferido depois — sempre íntegro,
+      antigo ou novo, nunca pela metade. Medido também que `rename` sobre destino existente e
+      **desocupado** se comporta igual em Windows e POSIX (Node/libuv já usa
+      `MOVEFILE_REPLACE_EXISTING`), mas que Windows **recusa** o `rename` (`EPERM`) se outro
+      processo tiver o destino aberto para leitura no instante exato — POSIX não recusa. Sem
+      retry (exigiria `setTimeout`, proibido fora de `adapters/clock/` por D-019, e não há hoje
+      um segundo escritor/leitor concorrente de `config.json`); documentado como limite conhecido
+      no comentário do módulo.
+      **Mecanismo de `schemaVersion`** (`schema-version.ts`): detecta a versão do documento e
+      decide — já na versão esperada, migra pela tabela registrada, ou recusa (versão
+      desconhecida/mais nova nunca é lida como compatível). Só existe a versão 1 hoje, então a
+      tabela de migrações em produção fica vazia de propósito; o teste unitário do mecanismo
+      injeta uma migração sintética só no teste, para não inventar uma migração falsa em
+      produção.
+      **Duas lacunas encontradas e registradas em Q-013** (não bloquearam a tarefa, solução
+      mínima seguida): `endOfDayTime` não tem default afirmado em lugar nenhum — implementei
+      `null` (só manual), não o `"19:30"` do exemplo de `docs/ARQUITETURA.md`, pelo espírito
+      opt-in de D-002/D-011; e `forkCleanupDays` (D-012) não está na tabela de chaves do
+      `AGENTS.md`, então não entrou no tipo `Config`.
+      `npm run verificar` e `npm run verificar:linux` verdes.
 - [ ] **S1-T6 — `seeya sessions` e `seeya status`.**
       *Aceite do sprint:* `seeya sessions` lista corretamente as sessões reais desta máquina,
       incluindo as obsoletas, e o e2e nº1 passa.
