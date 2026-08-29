@@ -347,24 +347,33 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
         conserto. Ou cobre, ou registra a exceção com motivo — não afrouxe o piso para caber
       *Aceite:* baixar a cobertura de um diretório abaixo do piso **reprova** o portão. Provado
       por execução, não por leitura.
-- [ ] **S1-T13 — O teste de terminação graciosa no Windows é intermitente.** Achado ao rodar o
+- [x] **S1-T13 — O teste de terminação graciosa no Windows é intermitente.** Achado ao rodar o
       portão depois da S1-T12. **Não é regressão dela** — medido isolado, o arquivo passa em
-      11,17s; o que muda é a concorrência da suíte completa.
-      - o teste "the child runs its own shutdown handler to completion before dying" tem
-        orçamento de 15s e consome ~10,5s sozinho. Sob paralelismo, estoura
-      - a causa do custo está documentada no próprio teste: o `Add-Type` compila C# a cada
-        chamada, sem cache entre processos. É caro por natureza, não por desleixo
-      **Subir o tempo limite é uma resposta legítima aqui, mas só se for por medição.** Um número
-      escolhido por chute vira a próxima intermitência. Meça quanto o teste leva sob carga real e
-      dimensione a margem a partir disso, registrando o número medido no comentário.
-      Considere também se dá para pagar o `Add-Type` **uma vez** por arquivo de teste em vez de
-      por chamada — se der, o problema some em vez de ser acomodado, que é melhor.
-      **Não serialize a faixa para esconder isto.** O `vitest.config.ts` tem um comentário longo
-      explicando por que serializar escondeu uma corrida real no S0-T6 e custou seis rodadas no
-      S1-T0. Aqui não há corrida — há um teste caro — e a resposta certa é tempo ou custo, nunca
-      remover a concorrência que expõe o problema.
-      *Aceite:* o portão completo passa em execuções repetidas (rode ao menos 5 vezes seguidas e
-      cole a contagem), e o número do tempo limite tem uma medição escrita ao lado.
+      11,17s; o que mudava era a concorrência da suíte completa. Reproduzido de verdade uma vez
+      (`npm run cobertura`, timeout em 15114ms) antes do conserto abaixo.
+      **A causa original suspeitada — `Add-Type` recompilando C# a cada chamada — estava errada.**
+      Medido isoladamente (script `-EncodedCommand` equivalente, 5 execuções): `Add-Type` custa
+      200-350ms, muito longe de explicar um estouro de vários segundos. A causa real, encontrada
+      instrumentando `sendCtrlBreak` com timestamps: depois que o helper do PowerShell transmite
+      `CTRL_BREAK_EVENT` para o console em que ele mesmo está anexado, ele recebe o próprio evento
+      — e o Windows leva **~5,5s medidos consistentemente (5,3s-5,6s em 3 execuções)** para
+      encerrar de fato o processo do helper, mesmo com a resposta (`'sent'`) já escrita no stdout
+      bem antes disso. `runPowerShellScript` esperava esse `close` antes de resolver a promise,
+      então esse tempo morto entrava inteiro na duração do teste.
+      **Conserto pela família B (custo, não tempo limite).** `console-signal.ts` ganhou
+      `runSendScript`: resolve assim que a palavra de resultado aparece no stdout, sem esperar o
+      processo fechar, e mata o helper (não é a sessão do usuário — D-002 não se aplica a esta
+      plumbing interna). Isolado, o teste caiu de 7,29s para ~1,7s. Sob carga real
+      (`npm run cobertura`, suíte completa, 3 execuções): 3891ms, 3149ms, 4115ms — o orçamento do
+      teste desceu de 15s para **10s**, com margem real medida, não chutada (comentário ao lado do
+      `it(...)` em `tests/integration/process/termination.test.ts`).
+      **Não serializamos a faixa.** O `vitest.config.ts` já documenta por que isso escondeu uma
+      corrida real no S0-T6 e custou seis rodadas no S1-T0 — aqui a resposta certa era reduzir o
+      custo real da operação, e foi isso que resolveu o problema por completo, não só acomodá-lo.
+      *Aceite:* `npm run verificar` rodou **5 vezes seguidas, 5 verdes** (ver relatório da tarefa).
+      `npm run verificar:linux` verde. O teste continua verificando o marcador de shutdown do
+      processo filho (`markerExists(marker)` ainda é `true`) — a garantia de graciosidade não foi
+      enfraquecida, só o desperdício de tempo em volta dela.
 - [x] **S1-T9 — Fusão das estratégias de descoberta.** Implementa a porta `SessionProvider`:
       `list()` devolve a união **já deduplicada**, nunca a concatenação crua. Quem chama não
       precisa saber quantas estratégias existem embaixo nem deduplicar por conta própria.

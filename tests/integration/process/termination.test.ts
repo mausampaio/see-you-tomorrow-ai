@@ -141,9 +141,17 @@ describe.skipIf(process.platform === 'win32')('terminateGracefully (POSIX: real 
 describe.skipIf(process.platform !== 'win32')(
   'terminateGracefully (Windows: CTRL_BREAK_EVENT via console attach — S1-T2b)',
   () => {
-    // Generous budget, not a loose one: every step here is a fresh `powershell.exe` process, and
-    // `Add-Type` pays a real C#-compile cost each time (no cross-process cache) — measured during
-    // development to occasionally exceed vitest's 5s default on a cold run.
+    // Budget history (S1-T13, docs/PLANO-DE-ENTREGA.md): this test used to carry a 15s budget on
+    // the theory that `Add-Type`'s per-process C#-compile cost (no cross-process cache) was what
+    // occasionally pushed it past vitest's 5s default under full-suite load. That theory was
+    // measured and found wrong: `Add-Type` alone costs 200-350ms. The actual cost was
+    // `sendCtrlBreak` blocking on its own helper process's `close` event even after the helper's
+    // answer was already in hand — see `console-signal.ts`'s `runSendScript` doc comment for the
+    // ~5.5s of dead air that was actually going on and the fix (resolve on the stdout outcome
+    // word, don't wait for the OS to finish tearing the helper down). Post-fix, measured running
+    // the full `unit`+`integration`+`guards` suite with coverage (`npm run cobertura`) three times
+    // in a row on this machine: 3891ms, 3149ms, 4115ms for this test alone. 10s keeps real margin
+    // over that worst observed number without pretending a bigger one is still needed.
     it('the child runs its own shutdown handler to completion before dying', async () => {
       const marker = await markerPath();
       const ready = readyPath();
@@ -158,7 +166,7 @@ describe.skipIf(process.platform !== 'win32')(
       expect(died).toBe(true);
       expect(await markerExists(marker)).toBe(true);
       await expect(processControl.isAlive(pid)).resolves.toBe(false);
-    }, 15_000);
+    }, 10_000);
 
     it('a session with no console at all cannot be reached, and the answer is an honest false', async () => {
       const marker = await markerPath();
