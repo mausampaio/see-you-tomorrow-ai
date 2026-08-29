@@ -510,10 +510,31 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
 ## Sprint 2 — Encerrar o dia
 
-- [ ] **S2-T1 — `adapters/git`.** Branch, status, commits do dia e **enumeração de
+- [~] **S2-T1 — `adapters/git`.** Branch, status, commits do dia e **enumeração de
       worktrees** com o estado de cada um (D-013). Sem quebrar quando o `cwd` não é repo.
       *Aceite:* repo de teste com dois worktrees, um sujo e um limpo, produz o estado correto
       dos dois.
+      **Implementado:** porta `GitReader`/tipo `GitReadResult` em `core/ports.ts` (aditiva, ao
+      final do arquivo — outro agente mexe no mesmo arquivo em paralelo na S2-T2), tipos
+      `GitFacts`/`GitCommit`/`WorktreeFacts` em `core/types.ts` (mesma disciplina aditiva).
+      `src/adapters/git/{run-git,repo,branch,status,commits,local-day,worktree-list,
+      git-adapter}.ts`: `spawn('git', args, { cwd, shell: false })` sem shell, nunca comando por
+      string. `cwd` fora de repositório (`git rev-parse --is-inside-work-tree` falha) devolve
+      `{ hasGit: false }` — ausência de dado, nunca `branch`/`dirty` inventados (D-025). "Commits
+      do dia" filtrado em TypeScript contra `%cI` (data do committer) e os limites do dia local
+      calculados a partir do `Clock` injetado (`local-day.ts#localDayBounds`, usa
+      `getFullYear`/`getMonth`/`getDate` locais, não UTC) — `--since` do git só limita
+      grosseiramente o histórico, nunca decide sozinho o que é "hoje" (D-019). Worktrees
+      enumerados via `git worktree list --porcelain`, excluindo a entrada do próprio `cwd`; um
+      worktree cujo diretório sumiu do disco (`git worktree list` ainda o lembra, mas nenhum
+      comando roda nele) vira rejeição individual (`RejectedDiscoveryRecord`, D-022) sem derrubar
+      os demais — provado com um repo de teste real (`tmpdir`, dois worktrees, um sujo e um
+      limpo, mais um terceiro apagado do disco), commits datados de hoje e de ontem via
+      `GIT_AUTHOR_DATE`/`GIT_COMMITTER_DATE`, e um teste de snapshot (`HEAD`, reflog, status
+      antes/depois) provando que nenhum comando escreve no repositório. Quatro escolhas sem
+      resposta literal na spec registradas em Q-017 (nome da porta, assimetria de `commitsToday`
+      entre o nível superior e `worktrees[]`, data de committer vs. autor, `branch: string | null`
+      para HEAD destacada). `npm run verificar` e `npm run verificar:linux` verdes.
 - [ ] **S2-T2 — `adapters/generation`.** Duas implementações, enxuta e profunda (D-011).
       Contexto por stdin ou arquivo, nunca por argumento (D-015). `--tools ""`,
       `--system-prompt` curto, `--json-schema`, timeout, orçamento, `spawn` sem shell, erro
