@@ -1255,3 +1255,69 @@ barrava qualquer coisa com forma de e-mail, sem exceção. Isso cobrava atrito r
 git precisa de `user.email` — sem proteger nada, porque agora ele libera os domínios que a
 IETF **reserva** para documentação e teste (RFC 2606 e RFC 6761). Endereço nesses domínios é de
 ninguém por definição. O que continua barrado é o que sempre esteve: endereço em domínio real.
+
+---
+
+## Q-019 — `HandoffGenerator.generate()` precisou do `DiscoveredSession` inteiro, não só de `SessionFacts`
+**Tarefa:** S2-T2
+**Bloqueia:** não esta tarefa (segui com a solução mínima, como `AGENTS.md` pede quando o efeito
+passa da própria tarefa); pode importar para S2-T3, que é quem primeiro chama `generate()` de
+dentro do caso de uso `endDay`.
+**Contexto:** `docs/ARQUITETURA.md § "Portas"` esboça `generate(facts: SessionFacts):
+Promise<GeneratedUnderstanding>`. A implementação profunda (D-011) precisa de
+`claude -p --resume <sessionId> --fork-session` — e `sessionId` não existe em `SessionFacts`
+(S1-T4: só o que o transcript sozinho responde). Não achei como cumprir a letra do esboço sem
+inventar um segundo parâmetro fora da porta (o que quebraria D-020: só `cli/`/`application/`
+saberiam montar a chamada) ou sem alargar a assinatura.
+
+Alarguei: `generate(session: DiscoveredSession, facts: SessionFacts)`. Mesmo formato de divergência
+já registrado e fechado em Q-012 (`SessionProvider.list()` → `DiscoveryResult`) e Q-014
+(`TranscriptReader.readFacts()` → `TranscriptReadResult`) — o esboço do `ARQUITETURA.md` é anterior
+à restrição que a tarefa encontrou. Não editei `docs/ARQUITETURA.md` diretamente (exige aprovação do
+PO); o comentário em `core/ports.ts` aponta para esta questão.
+**Opções que enxergo:** A) confirma a assinatura alargada — `docs/ARQUITETURA.md § "Portas"` é
+atualizado pelo PO para refletir `generate(session, facts)`, mesmo padrão de resolução de Q-012/Q-014.
+B) a porta deveria continuar recebendo só `facts`, e o `sessionId` chega por outro caminho (um
+terceiro parâmetro em `SessionFacts` mesmo não vindo do transcript, ou o adapter profundo recebe o
+`sessionId` por outro mecanismo que não a chamada de `generate()`) — não construí essa alternativa
+por parecer mais invasiva sem necessidade clara.
+**Resposta:** _(em aberto)_
+
+---
+
+## Q-020 — Medição real: `--json-schema` não reduz o piso de tokens, aumenta — junto de `--tools ""`
+**Tarefa:** S2-T2
+**Bloqueia:** não esta tarefa; pode importar para o `budgetPerSessionUsd` default (D-011,
+atualmente US$ 0,25) e para uma futura revisão de custo do modo enxuto.
+**Contexto:** D-011 e o Spike C listam `--tools ""`, `--system-prompt` curto e `--json-schema`
+juntos como a forma de "derrubar o piso de tokens e domar a saída". Medi os três separadamente
+numa chamada real (`claude -p`, modelo haiku, 2026-08-29, claude 2.1.235 — sem tocar a suíte de
+testes, que nunca chama a API de verdade), mesmo contexto e `--system-prompt` fixos entre as três:
+
+| Flags | `cache_creation_input_tokens` | custo |
+|---|---|---|
+| nenhuma (`--tools` padrão) | 23.607 | US$ 0,0488 |
+| `--tools ""` | 7.136 | US$ 0,0159 |
+| `--tools ""` + `--json-schema` | 40.076 | US$ 0,0831 |
+
+`--tools ""` sozinho cumpre a promessa (~70% de redução). Mas somar `--json-schema` **não** reduz
+mais — ele **mais que quintuplica** o piso em relação a só `--tools ""`, e fica **acima** até da
+chamada sem otimização nenhuma. A saída confirma o motivo: com `--json-schema`, `stop_reason` vira
+`"tool_use"` e `num_turns` vira `2` — a saída estruturada parece ser implementada como uma chamada
+de ferramenta forçada internamente, que `--tools ""` não consegue desligar. Em compensação,
+`--json-schema` entrega `structured_output` (o objeto já parseado, confirmado real) — saída mais
+confiável de extrair do que torcer para o modelo devolver JSON válido em prosa livre.
+
+Seguido com a solução mínima: `adapters/generation` usa os três mesmo assim (`--tools ""` +
+`--system-prompt` + `--json-schema`), porque D-011 pede e a confiabilidade da extração pesa mais
+que o custo marginal — e o `--max-budget-usd` já limita o estouro. Mas o **piso real do modo
+enxuto com captura estruturada está mais perto de US$ 0,08–0,09 (haiku) que dos US$ 0,15 do Spike
+C** (que não usava `--json-schema`), e a comparação de custo enxuto-vs-profundo de D-011 foi feita
+sem essa flag. Com sonnet (o `captureModel` default), a proporção deve ser pior em dólares
+absolutos.
+**Opções que enxergo:** A) confirma manter os três flags como estão; o `budgetPerSessionUsd`
+default é revisto à parte, com medição em sonnet. B) `--json-schema` sai do modo enxuto (fica só
+`--tools ""` + `--system-prompt`, parseando o JSON da prosa por conta própria, com o risco de saída
+malformada que o Spike C já mostrou); `--json-schema` continua só no modo profundo, onde o custo
+marginal pesa menos sobre o total. C) outra combinação.
+**Resposta:** _(em aberto)_

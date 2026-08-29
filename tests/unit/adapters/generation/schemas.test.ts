@@ -81,4 +81,73 @@ describe('claudePrintOutputSchema', () => {
 
     expect(result.success).toBe(false);
   });
+
+  it('accepts output without structured_output — a call made without --json-schema', () => {
+    const result = claudePrintOutputSchema.parse(validOutput);
+    expect(result.structured_output).toBeUndefined();
+  });
+
+  it('accepts structured_output when present, whatever shape it carries', () => {
+    const withStructuredOutput = {
+      ...validOutput,
+      structured_output: { understanding: 'x', pendingItems: [], tomorrowPlan: [] },
+    };
+    const result = claudePrintOutputSchema.parse(withStructuredOutput);
+    expect(result.structured_output).toStrictEqual({
+      understanding: 'x',
+      pendingItems: [],
+      tomorrowPlan: [],
+    });
+  });
+
+  /**
+   * A real `claude -p --json-schema ... --tools ""` call this task made locally (S2-T2, claude
+   * 2.1.235, no network access from this test — the raw JSON was captured once outside the suite
+   * and pasted here as a fixture, with the two real `session_id`/`uuid` values swapped for
+   * obviously synthetic ones per AGENTS.md — every other field, including the numbers that matter
+   * for this test, is exactly what was observed). Confirms `structured_output` is real, not a
+   * guess: it's the already-parsed object, alongside `result` carrying the same content
+   * JSON-stringified.
+   */
+  it('accepts a real captured claude -p --json-schema output verbatim', () => {
+    const real = {
+      is_error: false,
+      duration_api_ms: 6246,
+      num_turns: 2,
+      stop_reason: 'tool_use',
+      session_id: '11111111-1111-4111-8111-111111111111',
+      total_cost_usd: 0.08306,
+      usage: {
+        input_tokens: 9,
+        cache_creation_input_tokens: 40076,
+        cache_read_input_tokens: 0,
+        output_tokens: 387,
+      },
+      modelUsage: {
+        'claude-haiku-4-5-20251001': { inputTokens: 928, outputTokens: 396 },
+      },
+      permission_denials: [],
+      terminal_reason: 'completed',
+      subtype: 'success',
+      api_error_status: null,
+      result:
+        '{"understanding":"No work session context provided.","pendingItems":[],"tomorrowPlan":[]}',
+      structured_output: {
+        understanding: 'No work session context provided.',
+        pendingItems: [],
+        tomorrowPlan: [],
+      },
+      type: 'result',
+      duration_ms: 5419,
+      uuid: '22222222-2222-4222-8222-222222222222',
+    };
+
+    const result = claudePrintOutputSchema.parse(real);
+
+    expect(result.structured_output).toStrictEqual({
+      understanding: 'No work session context provided.',
+      pendingItems: [],
+      tomorrowPlan: [],
+    });
+  });
 });

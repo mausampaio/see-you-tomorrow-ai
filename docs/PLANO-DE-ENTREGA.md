@@ -536,6 +536,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       entre o nível superior e `worktrees[]`, data de committer vs. autor, `branch: string | null`
       para HEAD destacada). `npm run verificar` e `npm run verificar:linux` verdes.
 - [ ] **S2-T2 — `adapters/generation`.** Duas implementações, enxuta e profunda (D-011).
+- [~] **S2-T2 — `adapters/generation`.** Duas implementações, enxuta e profunda (D-011).
       Contexto por stdin ou arquivo, nunca por argumento (D-015). `--tools ""`,
       `--system-prompt` curto, `--json-schema`, timeout, orçamento, `spawn` sem shell, erro
       tipado. Registro do fork em `forks.json` no modo profundo.
@@ -544,6 +545,13 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       **Q-008:** o formato de `~/.seeya/forks.json` está fixado — `{ schemaVersion: 1,
       forks: [{ sessionId, createdAt }] }`. O `createdAt` é escrito desde já: S2-T6 precisa dele
       para `forkCleanupDays`, e acrescentá-lo depois vira migração de arquivo já existente.
+      Implementado em 2026-08-29: `LeanHandoffGenerator`/`DeepHandoffGenerator`
+      (`src/adapters/generation/`), fork registrado via `registerFork` (reaproveita o leitor de
+      `adapters/discovery/fork-registry.ts`, agora com `readForkRegistryEntries` preservando
+      `createdAt`). Medição real registrada em `docs/QUESTOES.md` Q-020 (achado: `--json-schema`
+      não reduz o piso, aumenta — ver a questão). `HandoffGenerator.generate()` precisou do
+      `DiscoveredSession` inteiro, não só `SessionFacts` — ver Q-019. `npm run verificar` e
+      `npm run verificar:linux` verdes.
 - [ ] **S2-T3 — Caso de uso `endDay`.** Coleta multi-fonte com `sources[]` (D-013),
       concorrência limitada, isolamento de falha por sessão, fallback determinístico,
       anti-duplicidade, guarda de turno ativo. Handoff válido com qualquer fonte respondendo.
