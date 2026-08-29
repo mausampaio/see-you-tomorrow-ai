@@ -205,13 +205,13 @@ Uma sessão entra no encerramento se, e somente se:
     "lastPrompts": ["...", "..."],
     "touchedFiles": ["src/a.ts"],
     "git": {
-      "branch": "main",
+      "branch": "main",              // null com HEAD destacado (D-025)
       "dirty": true,
       "modifiedFiles": ["src/a.ts"],
       "commitsToday": [{ "sha": "1b7fd99", "title": "docs: especificação inicial" }],
       "worktrees": [
         { "path": "c:\\code\\projeto\\.wt\\issue-42", "branch": "issue-42",
-          "dirty": false, "commitsToday": 3 }
+          "dirty": false, "commitsTodayCount": 3 }
       ]
     }
   },

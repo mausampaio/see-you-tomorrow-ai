@@ -106,6 +106,33 @@ const PADROES_SUSPEITOS = [
 ];
 
 /**
+ * Domínios que a própria IETF reserva para documentação e teste, e que portanto **não podem** ser
+ * endereço de ninguém: RFC 2606 (`example.com`, `example.net`, `example.org`) e RFC 6761 (os
+ * sufixos `.test`, `.example`, `.invalid`, `.localhost`).
+ *
+ * Isto não afrouxa o guard. Ele existe para impedir que endereço real seja publicado, e um
+ * endereço nestes domínios é real de ninguém por definição — barrá-lo não protegia nada e cobrava
+ * atrito: fixture de git precisa de `user.email`, e sem esta exceção toda tarefa que mexer com
+ * repositório de teste esbarra aqui (aconteceu na S2-T1).
+ *
+ * O que continua barrado é o que sempre esteve: endereço em domínio que existe de verdade.
+ */
+const DOMINIOS_RESERVADOS = ['example.com', 'example.net', 'example.org'];
+const SUFIXOS_RESERVADOS = ['.test', '.example', '.invalid', '.localhost'];
+
+/**
+ * @param {string} email
+ * @returns {boolean}
+ */
+function ehDominioReservado(email) {
+  const dominio = email.slice(email.lastIndexOf('@') + 1).toLowerCase();
+  return (
+    DOMINIOS_RESERVADOS.includes(dominio) ||
+    SUFIXOS_RESERVADOS.some((sufixo) => dominio.endsWith(sufixo))
+  );
+}
+
+/**
  * UUIDs que são constantes públicas conhecidas, não identificadores de ninguém. Cada entrada
  * precisa de um comentário dizendo de onde vem — sem isso, esta lista vira um lugar para
  * silenciar avisos.
@@ -136,6 +163,9 @@ function acharPadroesSuspeitos(conteudo) {
   for (const { nome, regex } of PADROES_SUSPEITOS) {
     for (const ocorrencia of conteudo.matchAll(regex)) {
       const valor = ocorrencia[0];
+      if (nome === 'endereço de e-mail' && ehDominioReservado(valor)) {
+        continue;
+      }
       if (nome === 'UUID de aparência real') {
         if (UUIDS_PUBLICOS.has(valor.toLowerCase()) || pareceSintetico(valor)) {
           continue;

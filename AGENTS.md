@@ -299,6 +299,8 @@ justamente para que quem os implementar não invente nome:
 | Documento (pt) | Código (en) | Chega em |
 |---|---|---|
 | leitor de transcrição | `TranscriptReader` | S1-T4 |
+| leitor de git | `GitReader` | S2-T1 |
+| fatos de git | `GitFacts` | S2-T1 |
 | ler fatos (método) | `readFacts` | S1-T4 |
 | fatos da sessão | `SessionFacts` | S1-T4 |
 | gerador de handoff | `HandoffGenerator` | S2-T2 |
@@ -346,6 +348,7 @@ usa. Fixados em S1-T0g, antes de qualquer um deles existir em código.
 | sujo | `dirty` | handoff (git) |
 | arquivos modificados | `modifiedFiles` | handoff (git) |
 | commits do dia | `commitsToday` | handoff (git) |
+| commits do dia, por worktree | `commitsTodayCount` | handoff (git) — **número**, não lista |
 | pendências | `pendingItems` | handoff |
 | plano de amanhã | `tomorrowPlan` | handoff |
 | erro na geração | `generationError` | handoff |

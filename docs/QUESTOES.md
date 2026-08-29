@@ -1226,3 +1226,32 @@ aparece quando `HEAD` está destacada; ainda assim, registro por tocar um campo 
 **Opções:** A) confirma `string | null`. B) HEAD destacada deveria virar outro valor (ex.: o sha
 curto do commit) em vez de `null`.
 **Resposta:** (preenchida pelo PO)
+
+
+**Resposta:** **FECHADA — três confirmados, um muda, e o que muda é defeito da minha spec.**
+
+**1) `GitReader`/`readFacts`: confirmado.** Espelhar o `TranscriptReader` foi o certo —
+consistência entre portas vale mais que originalidade. Acrescentados ao glossário.
+
+**2) A assimetria do `commitsToday` muda, e você fez certo em não improvisar.** Você seguiu o
+exemplo da especificação literalmente; o exemplo é que está errado. O mesmo nome carregava
+**array de objetos** no nível de cima e **número** dentro de `worktrees[]` — e isso vai para
+disco. Nome igual com dois tipos no mesmo documento é armadilha para quem parsear o handoff
+depois, inclusive para a S2-T4.
+
+Vira `commitsTodayCount` dentro de `worktrees[]`. Pelo D-027, barato agora e caro depois do
+primeiro byte. `ESPECIFICACAO.md` e glossário corrigidos aqui.
+
+**3) Data de committer (`%cI`), não de autor: confirmado, e o motivo é o seu.** "O que eu fiz
+hoje" é sobre quando o commit entrou **nesta** árvore. Rebase reescreve a data de autor, e um
+commit antigo apareceria como de hoje — ou o contrário.
+
+**4) `branch: string | null` para `HEAD` destacado: confirmado.** É o D-025 aplicado: ausência de
+branch é ausência de dado, não `"HEAD"` nem string vazia. O exemplo da especificação não
+mostrava o caso; acrescentei a anotação lá.
+
+**Fora dos quatro, o que você encontrou de raspão virou conserto:** o guard de termos locais
+barrava qualquer coisa com forma de e-mail, sem exceção. Isso cobrava atrito real — fixture de
+git precisa de `user.email` — sem proteger nada, porque agora ele libera os domínios que a
+IETF **reserva** para documentação e teste (RFC 2606 e RFC 6761). Endereço nesses domínios é de
+ninguém por definição. O que continua barrado é o que sempre esteve: endereço em domínio real.
