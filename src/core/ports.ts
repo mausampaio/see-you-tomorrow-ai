@@ -22,7 +22,7 @@
  *
  * Open question about this scope cut: docs/QUESTOES.md Q-004.
  */
-import type { Config, DiscoveredSession, SessionFacts } from './types.js';
+import type { Config, DiscoveredSession, EarlyWarningState, SessionFacts } from './types.js';
 
 /**
  * The project's single source of "now" (D-019). Implemented in `adapters/clock/`. No other
@@ -124,6 +124,27 @@ export interface Storage {
    * falling back to defaults: only *absence* reads as "use the defaults", never *corruption*.
    */
   readConfig(): Promise<Config>;
+
+  /**
+   * Reads the "already warned" bookkeeping S1-T7's early-warning detection needs to keep a
+   * warning from firing more than once (docs/DECISOES.md D-018, D-029;
+   * `core/early-warnings.ts#detectEarlyWarnings`). A file that doesn't exist yet (nothing warned
+   * about on this machine so far) is not an error (D-025): both sets in `EarlyWarningState` come
+   * back empty. A file that exists but is malformed rejects — same policy as `readConfig`,
+   * corruption is never silently read as "nothing warned yet".
+   *
+   * **Grown additively in S1-T7**, same as this port's docstring above already anticipated for
+   * `saveHandoff`/`readBriefing`/`saveState` — this method and `saveEarlyWarningState` below
+   * exist because `EarlyWarningState` (`core/types.ts`) now exists to type them.
+   */
+  readEarlyWarningState(): Promise<EarlyWarningState>;
+
+  /**
+   * Persists the state `detectEarlyWarnings` returned as `nextState`. This port doesn't diff for
+   * the caller — `adapters/discovery/early-warnings.ts` only calls this when at least one new
+   * warning fired, to avoid a write on every idle discovery pass.
+   */
+  saveEarlyWarningState(state: EarlyWarningState): Promise<void>;
 }
 
 /**

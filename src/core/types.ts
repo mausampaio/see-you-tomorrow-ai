@@ -197,6 +197,23 @@ export interface Config {
 }
 
 /**
+ * "Already warned" bookkeeping for S1-T7's early-warning detection (`core/early-warnings.ts`) —
+ * the memory that keeps a warning from repeating on every discovery pass
+ * (docs/PLANO-DE-ENTREGA.md S1-T7's acceptance: "a segunda passagem não repete"). Persisted by
+ * `Storage.readEarlyWarningState()`/`saveEarlyWarningState()` (S1-T5's port, grown additively
+ * here), same as `Config` above.
+ *
+ * Two independent sets because the two triggers don't share an identifier: a session missing its
+ * transcript has a `sessionId` (D-018); a `.key` file with no matching `.json` doesn't (D-029) —
+ * see `core/early-warnings.ts`'s docstring for why the second set is keyed by the bare file name,
+ * not by PID.
+ */
+export interface EarlyWarningState {
+  readonly notifiedMissingTranscriptSessionIds: ReadonlySet<string>;
+  readonly notifiedUninspectableSessionKeys: ReadonlySet<string>;
+}
+
+/**
  * Facts extracted straight from a session's transcript (D-003's "layer 1", the deterministic
  * half of the handoff) — produced by `TranscriptReader.readFacts()` (`core/ports.ts`,
  * `adapters/transcript/`, S1-T4). This is **not** the merged `facts` object

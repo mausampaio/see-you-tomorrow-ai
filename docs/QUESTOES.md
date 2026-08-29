@@ -1089,4 +1089,87 @@ duplicar lógica de agendamento em `cli/` antes da hora. B) `seeya status` dever
 "quanto falta" com uma versão simplificada (sem DST) só para não sair vazio, aceitando que S4-T2
 a substitua depois. C) `seeya status` não deveria existir ainda nesta tarefa — só `seeya sessions`
 — e o comando entraria completo quando todas as peças estivessem prontas.
-**Resposta:** (preenchida pelo PO)
+
+
+**Resposta:** **FECHADA — opção A. O recorte confirmado, e a linha do daemon é o acerto principal.**
+
+Você implementou o que dá para responder com honestidade e escreveu **"Daemon: not implemented
+yet"** em vez de fabricar um estado. Isso é a doutrina inteira do projeto numa linha: um
+"parado" inventado seria indistinguível de um daemon realmente parado, e o usuário confiaria.
+
+A opção B — calcular "quanto falta" numa versão simplificada, só para não sair vazio — é a
+tentadora e a errada. Lógica de agendamento duplicada em `cli/` antes da S4-T2 vira a peça que
+ninguém lembra de remover, e o campo preenchido faz o próximo achar que funciona.
+
+A C (adiar o comando inteiro) custaria mais do que rende: o `seeya status` já responde coisa útil
+hoje, e o texto atual é o registro honesto de que ele está incompleto de propósito.
+---
+
+## Q-016 — Três escolhas feitas fazendo S1-T7, registradas para confirmação
+**Tarefa:** S1-T7
+**Bloqueia:** não — as três seguiram a solução mínima com o porquê escrito, conforme AGENTS.md
+("decida, escreva o porquê, registre se ficar ambíguo"); registro para o review confirmar ou
+corrigir, no mesmo espírito de Q-004/Q-005/Q-013.
+**Contexto:** implementando a detecção precoce (D-018, estendida por D-029) encontrei três pontos
+sem resposta literal em nenhum documento.
+
+**1) `~/.seeya/early-warnings.json` é um documento novo, com duas chaves novas
+(`notifiedMissingTranscriptSessionIds`, `notifiedUninspectableSessionKeys`), e nenhuma das duas
+está na tabela de "Identificadores que vão para disco" do `AGENTS.md` § Idioma** (fixada em
+S1-T0g, antes desta tarefa existir). Segui o mesmo padrão de Q-005/Q-013 para `deepCapture`/
+`forkCleanupDays`: nomeei com o raciocínio escrito no comentário de
+`src/adapters/storage/early-warning-schema.ts` em vez de inventar em silêncio, e registro aqui em
+vez de alterar a tabela do `AGENTS.md` sozinho.
+**Opções:** A) os dois nomes ficam, e o PO os acrescenta à tabela do `AGENTS.md`. B) outro nome
+para o arquivo ou para uma das chaves.
+**Resposta:** **CONFIRMADO — e melhor do que eu teria pedido.**
+
+Eu listei "nome, PID ou dia" sem resolver. Sua análise resolve: com o PID, um `.key` órfão de
+sessão morta há muito **suprimiria para sempre** o aviso de uma sessão nova que reusasse aquele
+PID — o aviso silenciaria exatamente quando passasse a ser verdadeiro. O hash distinto por
+sessão é o que faz o nome completo não colidir nem com PID reciclado.
+
+Registre esse raciocínio no comentário se ainda não estiver: é escolha que parece arbitrária
+depois e convida alguém a "simplificar" para o PID.
+
+**2) Chave de deduplicação do segundo gatilho (`.key` sem `.json`): o nome do arquivo inteiro
+(`<pid>.<hash>.key`), não o PID.** O PID sozinho tem um problema mensurável: o SO recicla PID, e
+um `.key` obsoleto deixado para trás (sessão morta há muito tempo, arquivo nunca limpo — nada
+neste projeto apaga `.key`) suprimiria para sempre o aviso de uma sessão **genuinamente nova** que
+mais tarde reutilizasse aquele mesmo PID. O nome completo do arquivo não tem esse problema: o
+Claude Code gera um hash novo por sessão (confirmado pelo `process-key.ts` histórico, commit
+`e45b348`), então uma sessão nova nunca colide com o nome de um arquivo antigo mesmo com PID
+reciclado. O custo aceito: um `.key` que nunca é limpo continua "já avisado" para sempre — mas é
+a mesma troca que `notifiedMissingTranscriptSessionIds` já faz para `sessionId` (uma vez por
+artefato, para sempre, não uma vez por dia). Raciocínio completo em
+`src/core/early-warnings.ts`, no comentário de topo.
+**Opções:** A) confirma o nome do arquivo como chave. B) o PID seria melhor apesar do risco de
+reciclagem (ex.: se `.key` órfão for raro o bastante na prática para não importar). C) outra
+chave (ex.: dia da descoberta) — decidi contra esta porque perderia visibilidade de um segundo
+`.key` diferente aparecendo no mesmo dia.
+**Resposta:** **CONFIRMADO — e a decisão se pagou na prática.**
+
+Você manteve a orquestração fora do `DiscoverySessionProvider` para não tocar num construtor
+que a S1-T6 podia estar compondo em paralelo. O merge das duas teve **zero conflito em código**
+— só a numeração das questões colidiu. Respeitar a fronteira valeu mais que a elegância de
+juntar tudo num objeto.
+
+**3) A orquestração (ler o `Storage`, listar os `.key`, chamar a regra pura, salvar o estado) foi
+para `adapters/discovery/early-warnings.ts`, como função nova e separada — não dentro de
+`DiscoverySessionProvider` (S1-T9, `session-provider.ts`).** O `docs/ARQUITETURA.md` § `discovery/`
+já dizia, antes desta tarefa, que é a descoberta quem "dispara a notificação de detecção precoce,
+uma vez por `sessionId`" — o que sugere colocar isso dentro da mesma classe que já compõe as duas
+estratégias de D-016. Não fiz isso porque `DiscoverySessionProvider` já tem uma assinatura de
+construtor fixa (`claudeHome`, `seeyaHome`, `processControl`, `clock`, `relevanceHours`) que a
+S1-T6 (rodando em paralelo, dona de `cli/`) pode já estar instanciando; acrescentar `storage` a
+esse construtor mudaria um contrato que outra tarefa em voo depende, e a fronteira que me foi dada
+explicitamente pede para eu não mexer em nada que toque `cli/` nem force a S1-T6 a se adaptar a
+mim. A função nova recebe as sessões já descobertas por parâmetro em vez de rodar a descoberta de
+novo, e quem compor depois (o PO, "eu faço a ligação") chama as duas em sequência.
+**Opções:** A) confirma a função separada — mais seguro para a integração em paralelo, ainda que
+o `ARQUITETURA.md` sugerisse outro lugar. B) `DiscoverySessionProvider` deveria mesmo crescer um
+parâmetro `storage` opcional, e a S1-T6 se ajusta na integração.
+**Resposta:** **CONFIRMADO — as duas chaves entram no glossário, e a lacuna era minha.**
+
+Chave que vai para disco é barata agora e cara depois (D-027), e você fez certo em não inventar
+sozinho. Acrescentadas ao `AGENTS.md` junto desta resposta.

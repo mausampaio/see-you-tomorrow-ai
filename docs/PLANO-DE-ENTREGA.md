@@ -410,7 +410,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       (nenhum dado real) em `tests/fixtures/transcripts/`, moldadas pelas formas de
       `adapters/transcript/schemas.ts`. Cinco pontos não ancorados em texto registrados em Q-014.
       `npm run verificar` e `npm run verificar:linux` verdes.
-- [ ] **S1-T7 — Detecção precoce de sessão sem transcript.** Notificação uma vez por
+- [x] **S1-T7 — Detecção precoce de sessão sem transcript.** Notificação uma vez por
       `sessionId`, disparada quando a sessão é vista, não no encerramento (D-013).
       *Aceite:* sessão registrada sem `.jsonl` gera exatamente uma notificação, e a segunda
       passagem da descoberta não repete.
@@ -421,6 +421,23 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       A listagem de `.key` sem `.json` foi removida pela S1-T11 em vez de ficar parada sem uso.
       Recupere de `src/adapters/discovery/process-key.ts` no commit `e45b348` — ela já era testada,
       e reescrever do zero seria desperdício.
+      **Implementado.** Regra pura em `src/core/early-warnings.ts#detectEarlyWarnings`: dado o
+      lote de `DiscoveredSession` já fundido (S1-T9), os nomes de `.key` sem `.json`
+      (`src/adapters/discovery/uninspectable-keys.ts`, lógica recuperada do commit `e45b348`) e o
+      estado "já avisado" anterior, devolve só os avisos **novos** e o próximo estado. Persistência
+      aditiva na porta `Storage` (`core/ports.ts`): `readEarlyWarningState`/`saveEarlyWarningState`,
+      implementadas em `StorageAdapter` contra `~/.seeya/early-warnings.json` (novo documento, com
+      `schemaVersion` via o mecanismo de `schema-version.ts` já existente). Orquestração em
+      `src/adapters/discovery/early-warnings.ts#discoverEarlyWarnings` — função nova e separada de
+      `DiscoverySessionProvider` de propósito, para não mexer no construtor que a S1-T6 (em
+      paralelo) já compõe; só grava o arquivo quando há aviso novo. O segundo gatilho dedupe pelo
+      **nome completo do arquivo `.key`** (não o PID: o SO recicla PID, e um hash novo por sessão
+      não colide mesmo com PID reciclado — raciocínio completo no topo de `early-warnings.ts`). O
+      aviso do primeiro gatilho afirma causa e correção (D-018); o do segundo nomeia só o que se
+      observa e um lead conhecido, sem afirmar causa (D-029). Nenhum código/teste lê conteúdo de
+      `.key`. Três pontos registrados em Q-016 para confirmação (nomes de disco novos fora da
+      tabela do `AGENTS.md`, a escolha da chave de dedup, e a função separada em vez de crescer
+      `DiscoverySessionProvider`). `npm run verificar` e `npm run verificar:linux` verdes.
 - [x] **S1-T11 — Reverter a terceira estratégia (D-029).** Remove o que a S1-T10 acrescentou.
       - sai: `adapters/discovery/process-key.ts`, `adapters/process/inspection.ts`, os métodos
         `readCwd`/`readCommandLine` de `ProcessControl`, e a terceira forma da união de tipos
