@@ -39,25 +39,20 @@ export interface DeclaredProject {
  * The 5 projects from vitest.config.ts. As of S1-T0e, `integration` and `e2e` both legitimately
  * resolved to zero files — not just `e2e` as originally written in the S1-T0e plan entry before
  * anyone counted (corrected there in the same change that added this guard). S1-T2
- * (tests/integration/process/) filled `integration` in first, as planned; `e2e` still waits on
- * S1-T6. When a project here goes from `empty-by-design` to `has-tests` for real,
- * `test-projects.test.ts` starts failing for that entry until this file is updated to match —
- * that's requirement (b), the direction nobody tests by hand.
+ * (tests/integration/process/) filled `integration` in first, as planned; S1-T6
+ * (tests/e2e/sessions.test.ts) fills `e2e` in. When a project here goes from `empty-by-design` to
+ * `has-tests` for real, `test-projects.test.ts` starts failing for that entry until this file is
+ * updated to match — that's requirement (b), the direction nobody tests by hand. Every project is
+ * now `has-tests`; the `empty-by-design` branch stays declared (unused today) because a future
+ * layer/command could legitimately need it again the same way `e2e` did here.
  */
 export const DECLARED_PROJECTS: readonly DeclaredProject[] = [
   { name: 'unit', expectation: { kind: 'has-tests' } },
   // S1-T2 filled this in (tests/integration/process/): the exemption below no longer applies.
   { name: 'integration', expectation: { kind: 'has-tests' } },
   { name: 'guards', expectation: { kind: 'has-tests' } },
-  {
-    name: 'e2e',
-    expectation: {
-      kind: 'empty-by-design',
-      reason:
-        'tests/e2e/ runs the compiled seeya binary against real CLI commands; none of those ' +
-        'commands exist yet.',
-      filledBy: 'S1-T6',
-    },
-  },
+  // S1-T6 filled this in (tests/e2e/sessions.test.ts, the compiled binary against `seeya
+  // sessions`): the exemption that used to live here no longer applies.
+  { name: 'e2e', expectation: { kind: 'has-tests' } },
   { name: 'contract', expectation: { kind: 'has-tests' } },
 ];

@@ -37,12 +37,12 @@ export interface DeclaredCoverageDirectory {
  * Every directory directly under `src/` that holds at least one production `.ts` file, as of
  * S1-T12. `core/` keeps the stricter 95% (docs/TESTES.md); every other covered directory is 80%.
  *
- * `cli/` is declared `excluded`, not `covered` at some threshold: its only file, `index.ts`, is
- * the composition root (D-020) and is already dropped from `coverage.include`/`exclude` entirely
- * in vitest.config.ts, so no threshold key targets it. Declaring it here — instead of just
- * omitting it — is what lets the "does the real `src/` tree match this list" check below tell
- * "known and deliberately uncovered" apart from "forgotten"; an omitted `cli/` would fail that
- * check for the wrong reason.
+ * `cli/` is `covered` at 80% since S1-T6, not `excluded` — the directory grew past its single
+ * wiring file the moment `sessions`/`status` needed a composition root, view-model assembly and
+ * text formatting of their own. Only `index.ts` itself stays out of `coverage.include` in
+ * vitest.config.ts (thin `commander` wiring, exercised for real only by the compiled e2e journey,
+ * docs/TESTES.md nº1) — every other file under `cli/` is real branching logic and carries the
+ * same floor every other adapter directory does.
  */
 export const DECLARED_COVERAGE_DIRECTORIES: readonly DeclaredCoverageDirectory[] = [
   { path: 'core', expectation: { kind: 'covered', threshold: 95 } },
@@ -56,14 +56,5 @@ export const DECLARED_COVERAGE_DIRECTORIES: readonly DeclaredCoverageDirectory[]
   { path: 'adapters/process', expectation: { kind: 'covered', threshold: 80 } },
   { path: 'adapters/storage', expectation: { kind: 'covered', threshold: 80 } },
   { path: 'adapters/transcript', expectation: { kind: 'covered', threshold: 80 } },
-  {
-    path: 'cli',
-    expectation: {
-      kind: 'excluded',
-      reason:
-        'cli/ is the composition root (D-020); its only file, index.ts, is wiring with no ' +
-        "branching logic of its own, and is already dropped from coverage's include set " +
-        'entirely (vitest.config.ts, coverage.exclude) rather than measured and forgiven.',
-    },
-  },
+  { path: 'cli', expectation: { kind: 'covered', threshold: 80 } },
 ];

@@ -73,6 +73,13 @@ const PRODUCTION_DIRECTORY_THRESHOLDS = {
   'src/core/**': { statements: 95, branches: 95, functions: 95, lines: 95 },
   'src/application/**': { statements: 80, branches: 80, functions: 80, lines: 80 },
   'src/scheduler/**': { statements: 80, branches: 80, functions: 80, lines: 80 },
+  // cli/index.ts alone stays out of coverage.exclude below (thin commander wiring, exercised for
+  // real only by the compiled e2e journey, docs/TESTES.md nº1) — but S1-T6 gave cli/ several
+  // other files with real branching (composition.ts, session-view.ts, format-sessions.ts,
+  // eligibility-view.ts, format-status.ts, the two *-command.ts orchestrators), so the directory
+  // now carries the same 80% floor every other adapter does instead of staying uncovered by
+  // default. See tests/integration/guards/_coverage-directories.ts.
+  'src/cli/**': { statements: 80, branches: 80, functions: 80, lines: 80 },
   'src/adapters/clock/**': { statements: 80, branches: 80, functions: 80, lines: 80 },
   'src/adapters/discovery/**': { statements: 80, branches: 80, functions: 80, lines: 80 },
   'src/adapters/generation/**': { statements: 80, branches: 80, functions: 80, lines: 80 },
