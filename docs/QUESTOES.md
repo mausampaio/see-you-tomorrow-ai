@@ -841,7 +841,15 @@ atualizado pelo PO para refletir `DiscoveryResult`. B) `list()` volta a devolver
 `DiscoveredSession[]`, e as rejeições ficam disponíveis por outro caminho (um segundo método na
 porta, ou um evento/registro fora do retorno) — não construí essa alternativa porque me pareceu
 mais invasiva que alargar o tipo de retorno, sem ter certeza de que é essa a preferência do PO.
-**Resposta:** (a preencher pelo PO)
+**Resposta:** **FECHADA — a porta alargada está certa; o documento é que estava atrasado.**
+
+Devolver só `DiscoveredSession[]` obrigaria a fusão a jogar fora as rejeições, e aí a
+visibilidade que a S1-T3 e a S1-T8 construíram morreria exatamente no ponto em que o usuário
+finalmente a veria. O contrato do D-022 não é só "valide por item" — é "a rejeição é contável
+**e chega a quem lê**". Uma porta que devolve apenas o que deu certo quebra a segunda metade.
+
+`docs/ARQUITETURA.md` § Portas atualizado para `Promise<DiscoveryResult>`. Aquele bloco é
+esboço; quando ele e o código divergem sem motivo, quem está errado é o esboço.
 
 **2) Quando `cwd` ou `name` divergem entre as duas origens para o mesmo `sessionId`, escolhi
 sempre o valor do registro — mas não tenho fonte para isso, é minha melhor suposição.** O
@@ -858,4 +866,24 @@ divergência é considerada anomalia rara demais para valer código extra. B) um
 de `cwd` entre as duas origens deveria virar uma rejeição visível (ou um aviso) em vez de ser
 resolvida em silêncio, porque uma sessão com `cwd` inconsistente entre fontes é sinal de que algo
 está errado em uma delas.
-**Resposta:** (a preencher pelo PO)
+**Resposta:** **FECHADA — preferir o registro não é silenciar conflito, é usar a evidência melhor.**
+
+A dúvida seria legítima se as duas origens fossem pares. Não são: o `cwd` do registro é o que o
+Claude Code **escreveu**; o da varredura é **reconstruído** do conteúdo do transcript, porque
+aquela estratégia não tem nada melhor — o slug do diretório não é reversível com segurança.
+Derivado perdendo para original não é resolver disputa em silêncio: é hierarquia de evidência, e
+ela deve valer sempre, não caso a caso.
+
+Não vale um terceiro canal de saída para isso. Se as duas leituras divergirem de verdade, o sinal
+útil não é "as origens discordam" — é que **uma das duas está com defeito**, e um aviso de
+divergência não ajudaria a achar qual.
+
+Eu ia pedir que o comentário do `merge.ts` registrasse isso nesses termos — e fui conferir antes
+de pedir: **já registra**. Ele diz que o `cwd` da varredura é reconstruído "precisely because it
+has no better source", que o do registro vem "straight from the record Claude Code itself wrote",
+e conclui que "the direct declaration wins over the reconstruction". Ainda acrescenta que uma
+divergência real seria anomalia, não caso que a função resolve.
+
+Nada a fazer, então. Registro aqui porque a formulação importa: escrita como "o registro é mais
+confiável", a regra pareceria preferência arbitrária, e alguém tentaria "melhorar" com uma
+heurística mais esperta — que é como se estraga uma regra que estava certa.

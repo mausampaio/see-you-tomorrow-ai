@@ -63,7 +63,7 @@ composição sem ninguém notar.
 
 ```ts
 interface SessionProvider {
-  list(): Promise<DiscoveredSession[]>;
+  list(): Promise<DiscoveryResult>;   // { sessions, rejected } — ver Q-012
 }
 
 interface TranscriptReader {
