@@ -1054,3 +1054,58 @@ e `TranscriptReader.readFacts` deixaria de precisar localizar o arquivo de novo 
 de domínio, fora do escopo desta tarefa. C) `findTranscript` deveria ganhar o campo `path` mesmo
 assim, e `session-mapping.ts` ajustado para não espalhar o objeto inteiro.
 **Resposta:** (preenchida pelo PO)
+
+---
+
+## Q-015 — Três escolhas feitas fazendo S1-T7, registradas para confirmação
+**Tarefa:** S1-T7
+**Bloqueia:** não — as três seguiram a solução mínima com o porquê escrito, conforme AGENTS.md
+("decida, escreva o porquê, registre se ficar ambíguo"); registro para o review confirmar ou
+corrigir, no mesmo espírito de Q-004/Q-005/Q-013.
+**Contexto:** implementando a detecção precoce (D-018, estendida por D-029) encontrei três pontos
+sem resposta literal em nenhum documento.
+
+**1) `~/.seeya/early-warnings.json` é um documento novo, com duas chaves novas
+(`notifiedMissingTranscriptSessionIds`, `notifiedUninspectableSessionKeys`), e nenhuma das duas
+está na tabela de "Identificadores que vão para disco" do `AGENTS.md` § Idioma** (fixada em
+S1-T0g, antes desta tarefa existir). Segui o mesmo padrão de Q-005/Q-013 para `deepCapture`/
+`forkCleanupDays`: nomeei com o raciocínio escrito no comentário de
+`src/adapters/storage/early-warning-schema.ts` em vez de inventar em silêncio, e registro aqui em
+vez de alterar a tabela do `AGENTS.md` sozinho.
+**Opções:** A) os dois nomes ficam, e o PO os acrescenta à tabela do `AGENTS.md`. B) outro nome
+para o arquivo ou para uma das chaves.
+**Resposta:** (preenchida pelo PO)
+
+**2) Chave de deduplicação do segundo gatilho (`.key` sem `.json`): o nome do arquivo inteiro
+(`<pid>.<hash>.key`), não o PID.** O PID sozinho tem um problema mensurável: o SO recicla PID, e
+um `.key` obsoleto deixado para trás (sessão morta há muito tempo, arquivo nunca limpo — nada
+neste projeto apaga `.key`) suprimiria para sempre o aviso de uma sessão **genuinamente nova** que
+mais tarde reutilizasse aquele mesmo PID. O nome completo do arquivo não tem esse problema: o
+Claude Code gera um hash novo por sessão (confirmado pelo `process-key.ts` histórico, commit
+`e45b348`), então uma sessão nova nunca colide com o nome de um arquivo antigo mesmo com PID
+reciclado. O custo aceito: um `.key` que nunca é limpo continua "já avisado" para sempre — mas é
+a mesma troca que `notifiedMissingTranscriptSessionIds` já faz para `sessionId` (uma vez por
+artefato, para sempre, não uma vez por dia). Raciocínio completo em
+`src/core/early-warnings.ts`, no comentário de topo.
+**Opções:** A) confirma o nome do arquivo como chave. B) o PID seria melhor apesar do risco de
+reciclagem (ex.: se `.key` órfão for raro o bastante na prática para não importar). C) outra
+chave (ex.: dia da descoberta) — decidi contra esta porque perderia visibilidade de um segundo
+`.key` diferente aparecendo no mesmo dia.
+**Resposta:** (preenchida pelo PO)
+
+**3) A orquestração (ler o `Storage`, listar os `.key`, chamar a regra pura, salvar o estado) foi
+para `adapters/discovery/early-warnings.ts`, como função nova e separada — não dentro de
+`DiscoverySessionProvider` (S1-T9, `session-provider.ts`).** O `docs/ARQUITETURA.md` § `discovery/`
+já dizia, antes desta tarefa, que é a descoberta quem "dispara a notificação de detecção precoce,
+uma vez por `sessionId`" — o que sugere colocar isso dentro da mesma classe que já compõe as duas
+estratégias de D-016. Não fiz isso porque `DiscoverySessionProvider` já tem uma assinatura de
+construtor fixa (`claudeHome`, `seeyaHome`, `processControl`, `clock`, `relevanceHours`) que a
+S1-T6 (rodando em paralelo, dona de `cli/`) pode já estar instanciando; acrescentar `storage` a
+esse construtor mudaria um contrato que outra tarefa em voo depende, e a fronteira que me foi dada
+explicitamente pede para eu não mexer em nada que toque `cli/` nem force a S1-T6 a se adaptar a
+mim. A função nova recebe as sessões já descobertas por parâmetro em vez de rodar a descoberta de
+novo, e quem compor depois (o PO, "eu faço a ligação") chama as duas em sequência.
+**Opções:** A) confirma a função separada — mais seguro para a integração em paralelo, ainda que
+o `ARQUITETURA.md` sugerisse outro lugar. B) `DiscoverySessionProvider` deveria mesmo crescer um
+parâmetro `storage` opcional, e a S1-T6 se ajusta na integração.
+**Resposta:** (preenchida pelo PO)

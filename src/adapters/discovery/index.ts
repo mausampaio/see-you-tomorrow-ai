@@ -13,6 +13,12 @@
  * removed in S1-T11 (D-029).** The cause D-023 attributed to the sessions it targeted didn't hold
  * up under measurement, and the cost was disproportionate to what was actually observed. See
  * docs/DECISOES.md D-029.
+ *
+ * **S1-T7 (D-018, D-029) adds early-warning detection** — `uninspectable-keys.ts` (the cheap
+ * `.key`-without-`.json` listing D-029 kept from the revoked strategy above) and
+ * `early-warnings.ts` (wires that listing plus already-discovered sessions through
+ * `core/early-warnings.ts`'s pure rule and the `Storage` port). Neither builds a session; both
+ * only feed a warning.
  */
 export {
   discoverSessionsFromRegistry,
@@ -31,3 +37,13 @@ export {
   DiscoverySessionProvider,
   type DiscoverySessionProviderOptions,
 } from './session-provider.js';
+export {
+  listUninspectableSessionKeys,
+  type UninspectableKeysResult,
+  type RejectedUninspectableKeyRecord,
+} from './uninspectable-keys.js';
+export {
+  discoverEarlyWarnings,
+  type EarlyWarningDiscoveryOptions,
+  type EarlyWarningDiscoveryResult,
+} from './early-warnings.js';

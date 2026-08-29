@@ -12,4 +12,5 @@ export * from './evidence.js';
 export * from './classification.js';
 export * from './eligibility.js';
 export * from './termination.js';
+export * from './early-warnings.js';
 export * from './ports.js';
