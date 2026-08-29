@@ -1054,3 +1054,39 @@ e `TranscriptReader.readFacts` deixaria de precisar localizar o arquivo de novo 
 de domínio, fora do escopo desta tarefa. C) `findTranscript` deveria ganhar o campo `path` mesmo
 assim, e `session-mapping.ts` ajustado para não espalhar o objeto inteiro.
 **Resposta:** (preenchida pelo PO)
+
+---
+
+## Q-015 — `seeya status` implementado com escopo reduzido: falta horário de verão/adiamentos, daemon e histórico de captura
+**Tarefa:** S1-T6
+**Bloqueia:** não — a solução mínima seguida já está implementada e testada; registro para o
+review confirmar o recorte, no mesmo espírito de Q-004/Q-009/Q-014.
+**Contexto:** `docs/ESPECIFICACAO.md` § "seeya status" pede: horário de encerramento configurado,
+**quanto falta**, adiamentos aplicados, se o dia foi pulado, se o **daemon** está rodando, e
+quantas sessões estão elegíveis. Nenhuma dessas peças, além do próprio `config.json` e da
+descoberta, existe ainda nesta sprint:
+
+- "quanto falta" e adiamentos dependem de `core/schedule` (S4-T2) — que é explicitamente onde
+  moram os casos de horário de verão e máquina suspensa. Calcular isso agora em `cli/` seria
+  duplicar essa lógica sensível a fuso fora do lugar que o próprio plano reserva para ela.
+- "dia pulado"/adiamentos persistidos dependem de `seeya snooze`/`skip-today` (S4-T4), que ainda
+  não gravam estado nenhum.
+- "daemon rodando" depende do daemon (S4-T3), que não existe.
+- a contagem de sessões elegíveis usa `evaluateEligibility` (`core/eligibility.ts`) com escopo
+  reduzido: `knownForks` sempre vazio (D-012 já exclui forks na descoberta, antes de qualquer
+  `DiscoveredSession` chegar aqui — não sobra nada para excluir de novo) e
+  `previousCaptureToday` sempre `null` (nenhum handoff jamais foi gravado por este build —
+  `endDay`/S2-T3 não existe — então "nenhuma captura hoje" é literalmente verdade, não um atalho).
+
+**O que implementei:** `seeya status` mostra só o que é responderível honestamente hoje —
+`endOfDayTime` configurado (ou "not configured"), a contagem de sessões elegíveis/descobertas
+(com o escopo acima), e uma linha fixa "Daemon: not implemented yet" em vez de inventar
+rodando/parado. Nada de `--dry-run` fictício, nada de adiamento calculado sem estado persistido.
+
+**Opções que enxergo:** A) o recorte fica como está até S4-T2/S4-T3/S4-T4 existirem, e cada uma
+delas estende `formatStatusReport`/`eligibility-view.ts` quando sua peça ficar disponível — sem
+duplicar lógica de agendamento em `cli/` antes da hora. B) `seeya status` deveria já calcular
+"quanto falta" com uma versão simplificada (sem DST) só para não sair vazio, aceitando que S4-T2
+a substitua depois. C) `seeya status` não deveria existir ainda nesta tarefa — só `seeya sessions`
+— e o comando entraria completo quando todas as peças estivessem prontas.
+**Resposta:** (preenchida pelo PO)
