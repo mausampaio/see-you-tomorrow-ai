@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   assistantEntrySchema,
   userEntrySchema,
+  userEntryTextSchema,
+  assistantEntryToolUseSchema,
+  entryTypeSchema,
   KNOWN_ENTRY_TYPES,
+  KNOWN_ENTRY_TYPE_SET,
 } from '../../../../src/adapters/transcript/schemas.js';
 
 /**
@@ -132,5 +136,114 @@ describe('KNOWN_ENTRY_TYPES', () => {
     expect(KNOWN_ENTRY_TYPES).toHaveLength(12);
     expect(KNOWN_ENTRY_TYPES).toContain('user');
     expect(KNOWN_ENTRY_TYPES).toContain('assistant');
+  });
+});
+
+describe('KNOWN_ENTRY_TYPE_SET (S1-T4)', () => {
+  it('has the exact same membership as the KNOWN_ENTRY_TYPES tuple', () => {
+    expect(KNOWN_ENTRY_TYPE_SET.size).toBe(KNOWN_ENTRY_TYPES.length);
+    for (const type of KNOWN_ENTRY_TYPES) {
+      expect(KNOWN_ENTRY_TYPE_SET.has(type)).toBe(true);
+    }
+  });
+
+  it('does not contain a type that was never observed', () => {
+    expect(KNOWN_ENTRY_TYPE_SET.has('some-future-type')).toBe(false);
+  });
+});
+
+describe('entryTypeSchema (S1-T4)', () => {
+  it('accepts any object with a non-empty string type, ignoring the rest', () => {
+    const result = entryTypeSchema.safeParse({ type: 'anything-at-all', extra: 123 });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a value with no type field', () => {
+    expect(entryTypeSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('rejects a non-object line (e.g. a bare number or null)', () => {
+    expect(entryTypeSchema.safeParse(42).success).toBe(false);
+    expect(entryTypeSchema.safeParse(null).success).toBe(false);
+  });
+});
+
+describe('userEntryTextSchema (S1-T4)', () => {
+  const validEntry = {
+    parentUuid: null,
+    isSidechain: false,
+    type: 'user' as const,
+    message: { role: 'user', content: [{ type: 'text', text: 'Do X' }] },
+    uuid: '11111111-1111-4111-8111-111111111111',
+    timestamp: '2026-08-16T20:41:11.000Z',
+    sessionId: '66666666-6666-4666-8666-666666666666',
+    cwd: '/code/example-project',
+  };
+
+  it('keeps the text field a plain contentBlockSchema parse would have stripped', () => {
+    const result = userEntryTextSchema.parse(validEntry);
+
+    expect(result.message.content).toEqual([{ type: 'text', text: 'Do X' }]);
+  });
+
+  it('still accepts a non-text block, generically, alongside a text block', () => {
+    const result = userEntryTextSchema.parse({
+      ...validEntry,
+      message: {
+        role: 'user',
+        content: [
+          { type: 'tool_result', tool_use_id: 'x' },
+          { type: 'text', text: 'Do X' },
+        ],
+      },
+    });
+
+    expect(result.message.content).toEqual([
+      { type: 'tool_result' },
+      { type: 'text', text: 'Do X' },
+    ]);
+  });
+
+  it('still rejects what userEntrySchema already rejected (malformed uuid)', () => {
+    const result = userEntryTextSchema.safeParse({ ...validEntry, uuid: 'not-a-uuid' });
+
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('assistantEntryToolUseSchema (S1-T4)', () => {
+  const validEntry = {
+    parentUuid: '11111111-1111-4111-8111-111111111111',
+    isSidechain: false,
+    type: 'assistant' as const,
+    message: {
+      role: 'assistant',
+      content: [{ type: 'tool_use', name: 'Edit', input: { file_path: '/code/example/a.ts' } }],
+    },
+    uuid: '22222222-2222-4222-8222-222222222222',
+    timestamp: '2026-08-16T20:41:12.000Z',
+    sessionId: '66666666-6666-4666-8666-666666666666',
+    cwd: '/code/example-project',
+  };
+
+  it('keeps name and input.file_path for a write-tool tool_use block', () => {
+    const result = assistantEntryToolUseSchema.parse(validEntry);
+
+    expect(result.message.content).toEqual([
+      { type: 'tool_use', name: 'Edit', input: { file_path: '/code/example/a.ts' } },
+    ]);
+  });
+
+  it('falls back to the generic {type} shape for a tool_use whose name is not a write tool', () => {
+    const result = assistantEntryToolUseSchema.parse({
+      ...validEntry,
+      message: {
+        role: 'assistant',
+        content: [{ type: 'tool_use', name: 'Read', input: { file_path: '/code/example/a.ts' } }],
+      },
+    });
+
+    expect(result.message.content).toEqual([{ type: 'tool_use' }]);
   });
 });

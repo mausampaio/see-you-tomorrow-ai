@@ -887,3 +887,80 @@ divergência real seria anomalia, não caso que a função resolve.
 Nada a fazer, então. Registro aqui porque a formulação importa: escrita como "o registro é mais
 confiável", a regra pareceria preferência arbitrária, e alguém tentaria "melhorar" com uma
 heurística mais esperta — que é como se estraga uma regra que estava certa.
+
+---
+
+## Q-013 — Cinco pontos não-bloqueantes encontrados implementando S1-T4
+**Tarefa:** S1-T4
+**Bloqueia:** não — nenhum dos cinco impediu a entrega; registro para o review confirmar ou
+corrigir, no mesmo espírito de Q-004 e Q-009.
+**Contexto:** implementando `adapters/transcript/{schemas,facts,reader,index}.ts` e a porta
+`TranscriptReader`/tipo `SessionFacts` em `core/`, encontrei cinco pontos onde a spec é silenciosa
+o suficiente para exigir uma escolha explícita, sem ancoragem em texto. Documento a decisão que
+tomei e por quê, para o review confirmar.
+
+**1) `TranscriptReader.readFacts()` devolve `TranscriptReadResult` (`{ facts, rejected,
+unknownEntryTypeCount }`), não `SessionFacts` puro.** `docs/ARQUITETURA.md` § "Portas" esboça
+`readFacts(session): Promise<SessionFacts>`. D-022 exige "as entradas do `.jsonl` de transcript"
+validadas item a item, com aceitos **e** rejeitados visíveis — um `SessionFacts` puro não tem onde
+carregar o lado rejeitado. Segui o mesmo precedente que `DiscoveryResult` já abriu para
+`SessionProvider.list()` (S1-T9, Q-012): o esboço do `ARQUITETURA.md` é anterior a essa decisão da
+mesma forma que é anterior a esta.
+**Opções:** A) confirma o padrão — o esboço de `ARQUITETURA.md` para `readFacts` também está
+desatualizado, mesmo caso do Q-012. B) `SessionFacts` deveria carregar `rejected` internamente, e
+`TranscriptReadResult` é indireção desnecessária.
+**Resposta:** (preenchida pelo PO)
+
+**2) `MAX_LAST_PROMPTS = 10` é um número escolhido, não medido nem especificado.**
+`docs/ESPECIFICACAO.md` e `docs/TESTES.md` dizem "últimos prompts", sem quantidade. Escolhi 10 em
+`adapters/transcript/facts.ts` como uma janela que parece razoável para o handoff de amanhã, sem
+nenhuma medição por trás.
+**Opções:** A) 10 fica, é só um valor inicial e pode virar config (`config.json`) mais adiante se
+algum dia importar. B) o número deveria vir de `config.json` desde já, na mesma família de
+`relevanceHours`/`idleMinutes`.
+**Resposta:** (preenchida pelo PO)
+
+**3) "Arquivos tocados" = `file_path` de chamadas `tool_use` para `Edit`, `Write` e
+`NotebookEdit`, excluindo ferramentas de leitura (`Read`, `Grep`, `Glob`, ...).** Nenhum documento
+diz que "tocado" significa "escrito" em vez de "lido" — decidi por analogia com `git diff
+--name-only` (o que mudou, não o que foi consultado), porque é isso que ajuda a retomar o dia
+seguinte. Esse conjunto de três ferramentas também não vem de nenhuma fixture real — este projeto
+não tem, hoje, uma amostra confirmada do conjunto completo de ferramentas do Claude Code (ao
+contrário de `KNOWN_ENTRY_TYPES`, que foi confirmado contra 2808 entradas reais em S0-T5). Um
+nome de ferramenta de escrita que exista na realidade e não esteja nesta lista (ou um nome que eu
+supus errado) faria um arquivo realmente editado desaparecer de `touchedFiles` sem nenhum sinal —
+`writeToolUseBlockSchema` simplesmente cai no `contentBlockSchema` genérico, silenciosamente.
+**Opções:** A) o conjunto fica, é a leitura mais razoável de "tocado" sem dado melhor. B)
+"tocado" deveria incluir leitura também (mais fiel ao nome, mais ruidoso). C) o conjunto de
+ferramentas deveria ser confirmado contra uma amostra real antes de travar (mas isso reabriria a
+questão de anonimização que motivou fixtures sintéticas nesta tarefa).
+**Resposta:** (preenchida pelo PO)
+
+**4) Turnos de sub-agente (`isSidechain: true`) contam para `touchedFiles` mas não para
+`lastPrompts`.** A leitura que fiz: um `tool_use` dentro de um sub-agente é trabalho real da
+sessão (D-013 trata o trabalho de um agente autônomo como pertencendo à sessão que o lançou), mas
+o *prompt* de um sub-agente não foi digitado pelo usuário, então não é "o que você pediu" no
+sentido que `lastPrompts` existe para responder. Nenhum documento distingue os dois campos dessa
+forma — é inferência minha a partir do que cada campo serve para responder no handoff.
+**Opções:** A) a assimetria fica, cada campo segue a pergunta que responde. B) `isSidechain`
+deveria excluir a entrada de ambos os fatos, por simetria e simplicidade. C) deveria excluir de
+nenhum dos dois — todo conteúdo do transcript é "da sessão".
+**Resposta:** (preenchida pelo PO)
+
+**5) `adapters/transcript/index.ts` localiza o `.jsonl` chamando `locateTranscriptFile`, uma
+função nova em `adapters/discovery/transcript-lookup.ts`, em vez de reaproveitar `findTranscript`
+(já existente, mesma varredura de slugs).** Não dava para simplesmente ler o `path` de
+`findTranscript`: seu retorno (`TranscriptLookup`) é espalhado num objeto literal
+(`{ processIsAlive, ...transcript }` em `registry.ts`) passado como argumento tipado para
+`buildSessionWithPid`, e um campo `path` novo ali dispararia checagem de propriedade excedente do
+TypeScript no `session-mapping.ts` de S1-T3 — mudaria um módulo fora do escopo desta tarefa só
+para caber uma leitura nova. Optei por uma função irmã, reaproveitando o `statTranscriptCandidate`
+já existente para o teste por candidato, aceitando pequena duplicação (o laço de `readdir` mais o
+`for`) documentada no próprio comentário da função. É a mesma classe de escolha que Q-004 já
+tratou para `SessaoDescoberta`: preferir não adiantar mudança em módulo de tarefa já aprovada.
+**Opções:** A) fica — a duplicação é pequena e o comentário deixa a razão rastreável. B)
+`DiscoveredSession` deveria carregar o `transcriptPath` resolvido desde a descoberta (S1-T3/S1-T8),
+e `TranscriptReader.readFacts` deixaria de precisar localizar o arquivo de novo — mudança de tipo
+de domínio, fora do escopo desta tarefa. C) `findTranscript` deveria ganhar o campo `path` mesmo
+assim, e `session-mapping.ts` ajustado para não espalhar o objeto inteiro.
+**Resposta:** (preenchida pelo PO)

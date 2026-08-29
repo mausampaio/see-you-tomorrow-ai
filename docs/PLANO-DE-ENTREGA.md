@@ -386,8 +386,21 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* sessão presente nas duas origens aparece **uma** vez, com os campos fundidos
       segundo a regra escrita; sessão presente em uma só entra com a forma daquela origem; e as
       rejeições das duas aparecem somadas.
-- [ ] **S1-T4 — `adapters/transcript`.** Parser streaming; últimos prompts, arquivos
+- [~] **S1-T4 — `adapters/transcript`.** Parser streaming; últimos prompts, arquivos
       tocados, última atividade.
+      **Implementado:** porta `TranscriptReader`/tipo `SessionFacts` em `core/` (aditivo a
+      `core/ports.ts`, sem reorganizar o arquivo — a S1-T5 mexe no mesmo arquivo em paralelo).
+      `src/adapters/transcript/{schemas,facts,reader,index}.ts`: `reader.ts` lê o `.jsonl` linha a
+      linha (`node:fs` `createReadStream`, reaproveitando o `splitLines` de
+      `discovery/transcript-cwd.ts`), nunca carregando o arquivo inteiro em memória — provado por
+      medição: `maxLineBufferBytes` (o pico do buffer de linha pendente) fica em torno de um chunk
+      de stream (~65 KB) mesmo num fixture de >2 MB, e o teste compara os dois por execução, não
+      por afirmação (`tests/integration/transcript/reader.test.ts`). Tipo de entrada desconhecido é
+      contado (`unknownEntryTypeCount`) sem derrubar a leitura nem virar rejeição; linha truncada
+      no fim vira rejeição individual (D-022) sem abortar as demais. Fixtures **sintéticas**
+      (nenhum dado real) em `tests/fixtures/transcripts/`, moldadas pelas formas de
+      `adapters/transcript/schemas.ts`. Cinco pontos não ancorados em texto registrados em Q-013.
+      `npm run verificar` e `npm run verificar:linux` verdes.
 - [ ] **S1-T7 — Detecção precoce de sessão sem transcript.** Notificação uma vez por
       `sessionId`, disparada quando a sessão é vista, não no encerramento (D-013).
       *Aceite:* sessão registrada sem `.jsonl` gera exatamente uma notificação, e a segunda
