@@ -464,9 +464,30 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       opt-in de D-002/D-011; e `forkCleanupDays` (D-012) não está na tabela de chaves do
       `AGENTS.md`, então não entrou no tipo `Config`.
       `npm run verificar` e `npm run verificar:linux` verdes.
-- [ ] **S1-T6 — `seeya sessions` e `seeya status`.**
+- [~] **S1-T6 — `seeya sessions` e `seeya status`.**
       *Aceite do sprint:* `seeya sessions` lista corretamente as sessões reais desta máquina,
       incluindo as obsoletas, e o e2e nº1 passa.
+      **Implementado:** `src/cli/composition.ts` é a raiz de composição (D-020) — o único módulo
+      que nomeia `StorageAdapter`, `DiscoverySessionProvider`, `processControl` e `systemClock` e
+      os injeta via `buildCliContext`. `seeya sessions` (`session-view.ts` + `format-sessions.ts`
+      + `sessions-command.ts`) lista vivas/ociosas/encerradas/desconhecidas e **as rejeições**
+      ("N sessions, M entries ignored") — D-022/Q-012 finalmente chegando a quem lê. Campo
+      cosmético ausente (`name`) nunca esconde a sessão (D-021); `lastActivity: null` aparece como
+      "unknown", nunca inventado (D-025). `seeya status` (`eligibility-view.ts` +
+      `format-status.ts` + `status-command.ts`) saiu com escopo reduzido, registrado em Q-015:
+      mostra `endOfDayTime` e a contagem de elegíveis/descobertas, mas não "quanto falta"
+      (`core/schedule`, S4-T2), adiamentos/dia pulado (S4-T4) nem status do daemon (S4-T3) —
+      nenhum desses existe ainda, e inventar o valor seria o erro que `AGENTS.md` proíbe.
+      `adapters/clock/index.ts` ganhou sua primeira implementação real (`systemClock`), esperada
+      desde S1-T1 e ainda vazia até aqui. `_test-projects.ts`: faixa `e2e` deixou de ser vazia de
+      propósito (tests/e2e/sessions.test.ts). `_coverage-directories.ts`/`vitest.config.ts`:
+      `cli/` passou de `excluded` para `covered` a 80% (só `index.ts` continua fora do
+      `coverage.include`, por ser wiring fino do `commander` exercitado de verdade só pelo e2e).
+      E2e nº1 roda `node dist/cli/index.js` (o artefato compilado, nunca `src/` via `tsx`/vitest)
+      com `HOME`/`USERPROFILE` em `tmpdir` e um `claude` falso no PATH (`pretest:e2e` builda antes
+      de cada `npm run test:e2e`), contra processos reais spawnados (vivo sem transcript, vivo com
+      transcript antigo, morto) mais uma entrada de registro corrompida. `npm run verificar` e
+      `npm run verificar:linux` verdes.
 
 ---
 
