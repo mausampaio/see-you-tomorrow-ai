@@ -140,3 +140,58 @@ export interface SessionWithoutPid extends CommonSessionFields {
  *   fourth state not yet appearing in the handoff schema in docs/ESPECIFICACAO.md.
  */
 export type SessionState = 'alive' | 'idle' | 'ended' | 'unknown';
+
+/**
+ * Per-project override, keyed by `cwd` in `Config.projectPolicy` (S1-T5). Keyed by `cwd`, not
+ * `sessionId` — a project's policy has to survive across many sessions coming and going in that
+ * same directory, while `sessionId` changes every time (D-002).
+ *
+ * Both fields default to `false` when the user's `config.json` mentions the project at all but
+ * omits one of them — an opt-in policy that's silent about a flag means "don't opt in to that
+ * one", matching D-002 (termination is opt-in) and D-011 (deep capture is opt-in).
+ */
+export interface ProjectPolicy {
+  /** Whether `seeya` may terminate this project's live session after a successful handoff (D-002). */
+  readonly canTerminate: boolean;
+  /** Whether captures for this project use the deep (`--resume --fork-session`) generator instead of the lean default (D-011). */
+  readonly deepCapture: boolean;
+}
+
+/**
+ * User-facing settings, read from `~/.seeya/config.json` by `Storage.readConfig()` (S1-T5,
+ * `core/ports.ts`). Every field has a project-wide default, so a machine with no config file at
+ * all (first run, before `seeya init`/S5-T2 exists) still resolves a complete, usable `Config` —
+ * a missing config file is read as "use the defaults", never as an error (D-025).
+ *
+ * **Key names are fixed by AGENTS.md § "Idioma" ("Identificadores que vão para disco")** — once a
+ * key is written to a real `config.json` on someone's machine, renaming it is a breaking
+ * migration. This type matches that table exactly; it does not introduce a key the table doesn't
+ * already have.
+ */
+export interface Config {
+  /**
+   * Local end-of-day time, `"HH:MM"` 24h, or `null` to disable the scheduled trigger entirely
+   * (manual-only). Never an epoch/instant — the conversion to a concrete instant happens per day,
+   * in the local timezone, at the point of use (docs/ARQUITETURA.md § "Fusos e horários"), so
+   * daylight saving is handled for free instead of baked into a stored instant.
+   */
+  readonly endOfDayTime: string | null;
+  /** Minutes of advance warning before `endOfDayTime`, e.g. `[30, 15]` for a notice 30 minutes
+   * before and another 15 minutes before. */
+  readonly leadTimesInMinutes: readonly number[];
+  /** Hours of inactivity still considered "recent enough" for eligibility (docs/ESPECIFICACAO.md § "Elegibilidade"; default 12, spelled out there in prose). */
+  readonly relevanceHours: number;
+  /** Minutes without a transcript write before a live session is classified `idle` instead of `alive` (D-025). */
+  readonly idleMinutes: number;
+  /** Model passed to `claude -p --model` for the capture's understanding layer (D-003). */
+  readonly captureModel: string;
+  /** `--max-budget-usd` ceiling per session capture (D-011). */
+  readonly budgetPerSessionUsd: number;
+  /** How many session captures (headless `claude -p` calls) run at once. */
+  readonly captureConcurrency: number;
+  /** `cwd`s excluded from discovery/eligibility entirely, exact string match — normalized by
+   * whoever assembles the criteria outside `core/` (see `core/eligibility.ts`), not here. */
+  readonly ignore: readonly string[];
+  /** Per-project overrides, keyed by `cwd`. See `ProjectPolicy`. */
+  readonly projectPolicy: Readonly<Record<string, ProjectPolicy>>;
+}
