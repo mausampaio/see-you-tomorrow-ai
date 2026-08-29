@@ -42,15 +42,23 @@ function lerTermos() {
  * guard impedir a própria limpeza. Isso aconteceu de verdade na primeira versão deste script.
  */
 function conteudoEmStage() {
+  // `spawnSync` recusa por padrão qualquer saída acima de 1 MB (`ENOBUFS`, `status: null`) — e
+  // sem este limite maior, o próprio guard falhava fechado (a intenção correta) diante de um
+  // stage legítimo: uma fixture sintética de transcript >1 MB (S1-T4, docs/TESTES.md) já produz,
+  // sozinha, um diff de adição maior que 1 MB. 64 MB é folga generosa acima de qualquer fixture
+  // prevista neste projeto sem abrir mão do "falha fechada" para um stage realmente descontrolado.
+  const maxBuffer = 64 * 1024 * 1024;
   const diff = spawnSync('git', ['diff', '--cached', '--unified=0'], {
     cwd: raizDoRepo,
     encoding: 'utf8',
     shell: false,
+    maxBuffer,
   });
   const nomes = spawnSync('git', ['diff', '--cached', '--name-only'], {
     cwd: raizDoRepo,
     encoding: 'utf8',
     shell: false,
+    maxBuffer,
   });
   if (diff.status !== 0 || nomes.status !== 0) {
     // Não dá para verificar: falha fechada. Um guard que se rende em silêncio não é guard.

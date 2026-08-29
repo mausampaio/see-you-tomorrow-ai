@@ -195,3 +195,39 @@ export interface Config {
   /** Per-project overrides, keyed by `cwd`. See `ProjectPolicy`. */
   readonly projectPolicy: Readonly<Record<string, ProjectPolicy>>;
 }
+
+/**
+ * Facts extracted straight from a session's transcript (D-003's "layer 1", the deterministic
+ * half of the handoff) — produced by `TranscriptReader.readFacts()` (`core/ports.ts`,
+ * `adapters/transcript/`, S1-T4). This is **not** the merged `facts` object
+ * docs/ESPECIFICACAO.md § "Formato do handoff" persists: that one also folds in git's facts
+ * (S2-T1) when the handoff is assembled (S2-T3). This type only carries what the transcript, on
+ * its own, can answer.
+ *
+ * D-025 governs every field here: a transcript not answering a question is `null` or an empty
+ * list, never a value invented to look more informative than the evidence supports.
+ */
+export interface SessionFacts {
+  /**
+   * Timestamp of the transcript's most recent `user`/`assistant` entry — the only two entry
+   * types `adapters/transcript/schemas.ts` confirms carry a `timestamp` field at all. `null`
+   * when no such entry was readable (empty transcript, or every line rejected or of an unknown
+   * type) — not a claim that the session never had activity, only that none was found here.
+   */
+  readonly lastActivity: Date | null;
+  /**
+   * The most recent prompts actually typed by the human user, oldest first, bounded to a fixed
+   * window (`adapters/transcript/facts.ts`'s `MAX_LAST_PROMPTS`). Excludes sub-agent turns
+   * (`isSidechain: true`) and synthetic tool-result turns — a `user`-role entry whose content is
+   * entirely non-text — because neither is something the user wrote, and surfacing either as
+   * "what you asked" would misrepresent it. Empty when none were found; never a placeholder
+   * claiming the user asked nothing.
+   */
+  readonly lastPrompts: readonly string[];
+  /**
+   * File paths passed to a write-capable tool (`Edit`, `Write`, `NotebookEdit`) anywhere in the
+   * transcript, including inside sub-agent turns — a sub-agent's edit is still the session's own
+   * work (D-013). Deduplicated, first-seen order. Empty when none were found.
+   */
+  readonly touchedFiles: readonly string[];
+}

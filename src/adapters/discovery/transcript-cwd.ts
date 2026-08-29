@@ -47,8 +47,13 @@ export interface CwdLookupResult {
  * as `rest` instead of treating it as a complete line — a line can legitimately span two stream
  * chunks, and judging it broken before the rest of it has arrived would misreport a perfectly
  * fine entry as truncated.
+ *
+ * Exported: `adapters/transcript`'s streaming fact reader (S1-T4) needs the exact same
+ * chunk-to-lines split for the same reason — a `.jsonl` transcript, read as a stream, has no
+ * other place a line boundary could legitimately fall — so it reuses this instead of
+ * re-implementing it (AGENTS.md "Nada de duplicação").
  */
-function splitLines(buffer: string): { readonly complete: string[]; readonly rest: string } {
+export function splitLines(buffer: string): { readonly complete: string[]; readonly rest: string } {
   const parts = buffer.split('\n');
   const rest = parts.pop() ?? '';
   return { complete: parts, rest };

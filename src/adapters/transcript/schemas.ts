@@ -3,18 +3,20 @@
  * docs/ESPECIFICACAO.md § "Como as sessões são descobertas" and docs/ARQUITETURA.md § transcript/.
  *
  * The JSONL isn't public API: Claude Code adds new entry types over time. That's why the parser
- * (S1-T4, out of this task's scope) sniffs each line's `type` field and only tries to validate
- * against a known schema when it recognizes the type — an unknown type is ignored, not an error.
+ * (`reader.ts`, S1-T4) sniffs each line's `type` field and only tries to validate against a known
+ * schema when it recognizes the type — an unknown type is ignored, not an error.
  * `KNOWN_ENTRY_TYPES` here exhaustively documents every type observed so far on this machine, but
- * **it is not used to reject** a type outside the list: that list is a reference for whoever
- * writes the parser, not an allowlist the schema enforces.
+ * **it is not used to reject** a type outside the list: that list (and `KNOWN_ENTRY_TYPE_SET`,
+ * its `Set` view) is a reference for the parser, not an allowlist the schema enforces.
  *
  * Only `user` and `assistant` have a structural schema — they're the only two entries the spec
  * says the parser will read ("last prompts, files touched, last activity"), and the only two
  * docs/TESTES.md's contract requires validating against reality
  * (tests/contract/transcript.test.ts). Confirmed against 1048 real `user` entries and 1760
  * `assistant` entries, from every project on this machine, with no required field missing in any
- * of them.
+ * of them. `userEntryTextSchema`/`assistantEntryToolUseSchema` below extend these two with the
+ * one extra content-block field each (`text`, `input.file_path`) fact extraction reads — the two
+ * original schemas stay exactly as validated against reality, unchanged.
  */
 import { z } from 'zod';
 
@@ -84,3 +86,73 @@ export const assistantEntrySchema = baseEntrySchema.extend({
 });
 
 export type AssistantEntry = z.infer<typeof assistantEntrySchema>;
+
+/**
+ * `Set` view of `KNOWN_ENTRY_TYPES`, for the parser (S1-T4) to test a line's `type` field in
+ * O(1) without a widening cast: `KNOWN_ENTRY_TYPES.includes(someString)` doesn't type-check as-is
+ * (the tuple's element type is a literal union, not `string`), and casting the tuple itself would
+ * be exactly the kind of production `as` AGENTS.md asks to avoid. Assigning the inferred
+ * `Set<'user' | 'assistant' | ...>` to a `ReadonlySet<string>`-typed binding is enough for
+ * TypeScript to accept a plain `string` argument at every call to `.has()` afterward.
+ */
+export const KNOWN_ENTRY_TYPE_SET: ReadonlySet<string> = new Set(KNOWN_ENTRY_TYPES);
+
+/**
+ * Cheap sniff of a line's `type` field alone, before deciding which (if any) full schema to try
+ * next — the same "peek before you parse" shape `adapters/discovery/transcript-cwd.ts`'s
+ * `entryWithCwdSchema` uses for `cwd`.
+ */
+export const entryTypeSchema = z.object({ type: z.string().min(1) });
+
+/**
+ * A `text` content block, richer than `contentBlockSchema` above (which only keeps `type`, by
+ * design — most callers don't need the payload). Fact extraction (S1-T4) is the one caller that
+ * does: this is what a real user-typed prompt looks like when `message.content` is an array
+ * instead of a plain string.
+ */
+const textContentBlockSchema = z.object({
+  type: z.literal('text'),
+  text: z.string(),
+});
+
+/**
+ * A `tool_use` content block that names a file, restricted to the three write-capable tools
+ * observed in Claude Code's tool set (`Edit`, `Write`, `NotebookEdit`). Read-only tools
+ * (`Read`, `Grep`, `Glob`, ...) are deliberately excluded from what counts as a "touched" file —
+ * see docs/QUESTOES.md for why this is a judgment call, not something confirmed against a real
+ * transcript.
+ */
+const writeToolUseBlockSchema = z.object({
+  type: z.literal('tool_use'),
+  name: z.enum(['Edit', 'Write', 'NotebookEdit']),
+  input: z.object({ file_path: z.string().min(1) }),
+});
+
+/**
+ * `userEntrySchema`, extended with the richer content shape fact extraction needs
+ * (`textContentBlockSchema`) instead of `contentBlockSchema`'s bare `{ type }`. Any content block
+ * that isn't recognized text still falls through to the generic `{ type }` shape, exactly as
+ * tolerant of the unmodeled rest as the original schema — this only adds a payload to the one
+ * block type S1-T4 reads, it doesn't narrow what's accepted.
+ */
+export const userEntryTextSchema = userEntrySchema.extend({
+  message: z.object({
+    role: z.string().min(1),
+    content: z.union([z.string(), z.array(z.union([textContentBlockSchema, contentBlockSchema]))]),
+  }),
+});
+
+export type UserEntryWithText = z.infer<typeof userEntryTextSchema>;
+
+/**
+ * `assistantEntrySchema`, extended the same way `userEntryTextSchema` extends `userEntrySchema`,
+ * but for `writeToolUseBlockSchema` instead of text — same tolerance-preserving shape.
+ */
+export const assistantEntryToolUseSchema = assistantEntrySchema.extend({
+  message: z.object({
+    role: z.string().min(1),
+    content: z.union([z.string(), z.array(z.union([writeToolUseBlockSchema, contentBlockSchema]))]),
+  }),
+});
+
+export type AssistantEntryWithToolUse = z.infer<typeof assistantEntryToolUseSchema>;

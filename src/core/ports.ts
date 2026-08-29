@@ -4,15 +4,12 @@
  * implements it; `cli/` is the only composition root that names the concrete implementation and
  * injects it (D-020).
  *
- * **Only the three ports Sprint 1 needs.** docs/ARQUITETURA.md already sketches seven ports (the
- * whole architecture design), but the four missing here all share the same concrete problem: the
+ * **Only the four ports declared so far.** docs/ARQUITETURA.md already sketches seven ports (the
+ * whole architecture design), but the three missing here all share the same concrete problem: the
  * signature of each references a type that doesn't exist in this project yet. Declaring them now
  * would mean inventing those types too early, just to fill in a signature, or declaring the port
- * with `unknown` — worse than not declaring it. The four, and the type missing from each:
+ * with `unknown` — worse than not declaring it. The three, and the type missing from each:
  *
- * - `TranscriptReader` — returns `SessionFacts`, a type that only appears in S2-T3/S2-T4
- *   (out of this task's scope). The cheap transcript reading that Sprint 1 uses (S1-T8, mtime
- *   scan) doesn't go through here: it's `stat`, not content parsing.
  * - `HandoffGenerator` — returns `GeneratedUnderstanding`, also a handoff type. Implemented in
  *   S2-T2.
  * - `Notifier` — implemented in S4-T1. S1-T7's pure rule (notify once per `sessionId`,
@@ -25,11 +22,7 @@
  *
  * Open question about this scope cut: docs/QUESTOES.md Q-004.
  */
-import type { DiscoveredSession } from './types.js';
-// Separate import statement (S1-T5), deliberately not merged into the line above: another task
-// is landing in this same shared file at the same time (S1-T4), and touching an existing import
-// line is exactly the kind of one-line collision that turns a clean merge into manual work.
-import type { Config } from './types.js';
+import type { Config, DiscoveredSession, SessionFacts } from './types.js';
 
 /**
  * The project's single source of "now" (D-019). Implemented in `adapters/clock/`. No other
@@ -131,4 +124,52 @@ export interface Storage {
    * falling back to defaults: only *absence* reads as "use the defaults", never *corruption*.
    */
   readConfig(): Promise<Config>;
+}
+
+/**
+ * `TranscriptReader.readFacts()`'s return shape (S1-T4) — the same "both sides" shape
+ * `DiscoveryResult` gives `SessionProvider.list()` (S1-T9) above. docs/ARQUITETURA.md § "Portas"
+ * sketches `readFacts` returning a bare `SessionFacts`; that sketch predates this decision the
+ * same way it predated `DiscoveryResult` (see the comment on that interface). D-022 names "as
+ * entradas do `.jsonl` de transcript" explicitly as a collection that must be validated per item,
+ * with both the accepted and the rejected side visible — a bare `SessionFacts` has nowhere to
+ * carry the rejected side, so returning one would silently drop exactly the visibility D-022
+ * exists to guarantee.
+ */
+export interface TranscriptReadResult {
+  readonly facts: SessionFacts;
+  /**
+   * A recognized entry type (`user`/`assistant`) whose content failed its schema — most often a
+   * truncated final line written mid-flush (docs/TESTES.md's mandatory fixture), but any other
+   * structural mismatch lands here too. Reuses `RejectedDiscoveryRecord`'s `file`/`raw`/`reason`
+   * shape: same D-022 contract, one external item that failed validation, with the raw value and
+   * why. `file` carries `<transcriptPath>:<lineNumber>` so one line stays traceable inside a
+   * single file.
+   */
+  readonly rejected: RejectedDiscoveryRecord[];
+  /**
+   * Count of lines whose `type` isn't one of `KNOWN_ENTRY_TYPES`
+   * (`adapters/transcript/schemas.ts`). Not a rejection — that module's docstring is explicit
+   * that a new entry type is normal version drift, "ignored, not an error" — but kept visible and
+   * counted (S1-T4's acceptance criteria) so "the format changed under us" doesn't look identical
+   * to "nothing happened".
+   */
+  readonly unknownEntryTypeCount: number;
+}
+
+/**
+ * Reads a session's transcript and extracts `SessionFacts` (D-003's fact layer). Implemented in
+ * `adapters/transcript/` (S1-T4): streaming, line by line — real transcripts pass 1 MB
+ * (docs/TESTES.md § transcript/), and holding one whole in memory just to find its last few
+ * prompts is exactly the design that fixture exists to catch.
+ *
+ * Rejects only on a real I/O failure reading the located file (permission denied, the file
+ * vanishing mid-read) — same contract as
+ * `adapters/discovery/transcript-cwd.ts#readCwdFromTranscript`. A session that simply has no
+ * transcript (`hasTranscript: false`, D-013) is the normal "no evidence" case, not a rejection:
+ * the implementation resolves that by never finding a file to open, not by throwing, and answers
+ * with every `SessionFacts` field at its least-specific value (D-025) instead.
+ */
+export interface TranscriptReader {
+  readFacts(session: DiscoveredSession): Promise<TranscriptReadResult>;
 }

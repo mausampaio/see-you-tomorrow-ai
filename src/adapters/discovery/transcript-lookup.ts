@@ -61,3 +61,41 @@ export async function findTranscript(
   }
   return NOT_FOUND;
 }
+
+/**
+ * Resolves `<sessionId>.jsonl`'s actual path under `projectsDir`, or `null` when no slug has it.
+ * Shares `findTranscript`'s reason for walking every slug (the directory derived from `cwd` is
+ * fragile, D-016) and its `statTranscriptCandidate` check — `findTranscript` only needs a yes/no
+ * plus an mtime for discovery; `adapters/transcript` (S1-T4) needs the path itself, to open and
+ * stream the file's content, which is why this is a separate export instead of a third field
+ * bolted onto `TranscriptLookup` (that would force every existing caller's object-literal call
+ * site to also carry a `path` it never asked for).
+ *
+ * The outer readdir-and-loop here duplicates `findTranscript`'s shape rather than being expressed
+ * in terms of it, or vice versa: reusing `statTranscriptCandidate` for the actual per-candidate
+ * check keeps that part shared, and the remaining duplication is a few lines of directory
+ * walking, judged cheaper here than either a second `stat` per lookup or a signature change to an
+ * already-shipped function (S1-T3, S1-T8, S1-T9 all depend on `findTranscript` as-is).
+ */
+export async function locateTranscriptFile(
+  projectsDir: string,
+  sessionId: string,
+): Promise<string | null> {
+  let slugs: string[];
+  try {
+    slugs = await readdir(projectsDir);
+  } catch (error) {
+    if (isEnoent(error)) {
+      return null;
+    }
+    throw error;
+  }
+
+  for (const slug of slugs) {
+    const candidate = path.join(projectsDir, slug, `${sessionId}.jsonl`);
+    if ((await statTranscriptCandidate(candidate)) !== null) {
+      return candidate;
+    }
+  }
+  return null;
+}
