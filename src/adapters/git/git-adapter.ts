@@ -43,7 +43,7 @@ async function readWorktreeFacts(entry: WorktreeListEntry, now: Date): Promise<W
     path: entry.path,
     branch: entry.branch,
     dirty: modifiedFiles.length > 0,
-    commitsToday: commitsToday.length,
+    commitsTodayCount: commitsToday.length,
   };
 }
 

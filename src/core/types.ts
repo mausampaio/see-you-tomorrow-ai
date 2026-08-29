@@ -261,13 +261,14 @@ export interface GitCommit {
 
 /**
  * One worktree's state, as `docs/ESPECIFICACAO.md`'s handoff example fixes
- * `facts.git.worktrees[]`: `path`, `branch`, `dirty`, `commitsToday`. Note `commitsToday` here is
- * a bare **count**, not the `GitCommit[]` the main `cwd` gets below — that asymmetry is in the
- * spec's own example (`"commitsToday": 3` inside `worktrees[]` vs. an array of `{ sha, title }`
- * at the top level) and is kept as-is rather than "fixed" into matching shapes: the other
- * worktrees are a secondary signal ("something happened over there"), not the handoff's main
- * subject. Flagged for confirmation in docs/QUESTOES.md, since nothing in prose spells the
- * difference out explicitly.
+ * `facts.git.worktrees[]`: `path`, `branch`, `dirty`, and a commit count. Named
+ * `commitsTodayCount` here — not `commitsToday`, which the main `cwd`'s `GitFacts` uses below for
+ * an array of `GitCommit` — on purpose: the spec's own first draft used the same field name for a
+ * bare number inside `worktrees[]` and an array of `{ sha, title }` at the top level, one name
+ * with two on-disk shapes in the same document. Q-017 flagged the asymmetry; the review's answer
+ * (docs/QUESTOES.md) was to keep the shapes (the other worktrees are a secondary signal, "something
+ * happened over there", not the handoff's main subject) but give the count its own name so a
+ * handoff reader (S2-T4) never has to branch on which `commitsToday` it got.
  *
  * `branch: null` is a detached `HEAD` — a real, ordinary git state (D-025), not represented by a
  * fake branch name.
@@ -276,7 +277,7 @@ export interface WorktreeFacts {
   readonly path: string;
   readonly branch: string | null;
   readonly dirty: boolean;
-  readonly commitsToday: number;
+  readonly commitsTodayCount: number;
 }
 
 /**

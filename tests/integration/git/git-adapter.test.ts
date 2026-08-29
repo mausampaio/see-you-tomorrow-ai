@@ -126,7 +126,7 @@ describe('GitAdapter.readFacts — one dirty main worktree, one clean linked wor
     expect(toPosix(other.path)).toMatch(/\/issue-42$/);
     expect(other.branch).toBe('issue-42');
     expect(other.dirty).toBe(false);
-    expect(other.commitsToday).toBe(0);
+    expect(other.commitsTodayCount).toBe(0);
   });
 
   it("does not list cwd's own worktree in worktrees[] (no self-duplication)", async () => {
@@ -159,7 +159,7 @@ describe('GitAdapter.readFacts — one dirty main worktree, one clean linked wor
     expect(toPosix(main.path)).toMatch(/\/main$/);
     expect(main.branch).toBe('main');
     expect(main.dirty).toBe(true);
-    expect(main.commitsToday).toBe(1);
+    expect(main.commitsTodayCount).toBe(1);
   });
 });
 
