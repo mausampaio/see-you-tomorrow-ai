@@ -248,3 +248,49 @@ export interface SessionFacts {
    */
   readonly touchedFiles: readonly string[];
 }
+
+/**
+ * One commit, as `docs/ESPECIFICACAO.md` § "Formato do handoff" fixes `facts.git.commitsToday[]`:
+ * `sha` (abbreviated — `git log`'s default width, matching that section's `"1b7fd99"` example)
+ * and `title` (the subject line). Produced by `adapters/git/` (S2-T1).
+ */
+export interface GitCommit {
+  readonly sha: string;
+  readonly title: string;
+}
+
+/**
+ * One worktree's state, as `docs/ESPECIFICACAO.md`'s handoff example fixes
+ * `facts.git.worktrees[]`: `path`, `branch`, `dirty`, `commitsToday`. Note `commitsToday` here is
+ * a bare **count**, not the `GitCommit[]` the main `cwd` gets below — that asymmetry is in the
+ * spec's own example (`"commitsToday": 3` inside `worktrees[]` vs. an array of `{ sha, title }`
+ * at the top level) and is kept as-is rather than "fixed" into matching shapes: the other
+ * worktrees are a secondary signal ("something happened over there"), not the handoff's main
+ * subject. Flagged for confirmation in docs/QUESTOES.md, since nothing in prose spells the
+ * difference out explicitly.
+ *
+ * `branch: null` is a detached `HEAD` — a real, ordinary git state (D-025), not represented by a
+ * fake branch name.
+ */
+export interface WorktreeFacts {
+  readonly path: string;
+  readonly branch: string | null;
+  readonly dirty: boolean;
+  readonly commitsToday: number;
+}
+
+/**
+ * `facts.git`'s shape (`docs/ESPECIFICACAO.md` § "Formato do handoff") once `cwd` is already
+ * confirmed to be inside a git working tree — see `GitReadResult` in `core/ports.ts` for the
+ * "not a repo at all" case this type deliberately doesn't represent (D-024/D-025: that's a
+ * different, less-specific state, not a `GitFacts` with everything empty).
+ */
+export interface GitFacts {
+  /** `null` is the main `cwd`'s own detached `HEAD` — same reasoning as `WorktreeFacts.branch`. */
+  readonly branch: string | null;
+  readonly dirty: boolean;
+  readonly modifiedFiles: readonly string[];
+  readonly commitsToday: readonly GitCommit[];
+  /** Every *other* worktree of this repository — never includes `cwd`'s own entry (S2-T1). */
+  readonly worktrees: readonly WorktreeFacts[];
+}

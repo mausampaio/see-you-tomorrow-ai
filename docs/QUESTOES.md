@@ -1173,3 +1173,56 @@ parâmetro `storage` opcional, e a S1-T6 se ajusta na integração.
 
 Chave que vai para disco é barata agora e cara depois (D-027), e você fez certo em não inventar
 sozinho. Acrescentadas ao `AGENTS.md` junto desta resposta.
+
+---
+
+## Q-017 — Quatro escolhas feitas fazendo S2-T1 (`adapters/git`), registradas para confirmação
+**Tarefa:** S2-T1
+**Bloqueia:** não — as quatro seguiram a solução mínima com o porquê escrito no comentário do
+código (mesmo espírito de Q-004/Q-005/Q-013/Q-016); registro para o review confirmar ou corrigir.
+**Contexto:** implementando branch/status/commits/worktrees do adapter de git encontrei quatro
+pontos sem resposta literal em nenhum documento.
+
+**1) Nome da porta e do método: `GitReader`/`readFacts`, sem entrada correspondente no glossário
+do `AGENTS.md`.** `docs/ESPECIFICACAO.md` fixa os nomes de campo que vão para disco
+(`branch`, `dirty`, `modifiedFiles`, `commitsToday`, `worktrees`), mas não fixa o nome da porta
+nem do tipo de retorno — diferente de `TranscriptReader`/`readFacts`/`SessionFacts`, que já
+estavam na tabela "ainda não existem no código" antes desta tarefa chegar. Escolhi espelhar
+exatamente esse par (`GitReader`/`readFacts`, retornando `GitReadResult`), porque as duas portas
+respondem a mesma pergunta (fatos de evidência da D-013) com o mesmo formato "dois lados"
+(`RejectedDiscoveryRecord` para o que falhou por item). Comentário em `src/core/ports.ts` cita
+esta questão.
+**Opções:** A) confirma `GitReader`/`readFacts`/`GitReadResult`/`GitFacts`/`GitCommit`/
+`WorktreeFacts` e entram no glossário. B) outro nome.
+**Resposta:** (preenchida pelo PO)
+
+**2) Assimetria de `commitsToday`: array de `{ sha, title }` no nível superior, contagem simples
+(`number`) dentro de `worktrees[]`.** O exemplo de `docs/ESPECIFICACAO.md` já mostra essa
+assimetria (`"commitsToday": [{ "sha": ..., "title": ... }]` no topo, `"commitsToday": 3` dentro de
+`worktrees[]`), mas nenhuma prosa explica se é intencional ou um descuido de quem escreveu o
+exemplo. Segui o exemplo ao pé da letra — os outros worktrees são um sinal secundário ("algo
+aconteceu lá"), o `cwd` principal é o assunto do handoff — mas é uma leitura, não uma citação.
+**Opções:** A) confirma a assimetria como está no exemplo (a que implementei). B) `worktrees[]`
+também deveria carregar `GitCommit[]` completo, e o exemplo do `ESPECIFICACAO.md` está incompleto.
+**Resposta:** (preenchida pelo PO)
+
+**3) "Commits do dia" comparado por data de committer (`%cI`), não de autor (`%aI`).** Nem
+`docs/ESPECIFICACAO.md` nem `docs/DECISOES.md` dizem qual data usar, e as duas divergem depois de
+um rebase/cherry-pick. Escolhi committer porque "o trabalho apareceu hoje" (o que um handoff de
+fim de dia precisa saber) é mais próximo de "quando foi registrado" do que de "quando foi
+originalmente escrito, possivelmente semanas atrás, possivelmente em outra máquina". Raciocínio
+completo no comentário de `src/adapters/git/commits.ts`.
+**Opções:** A) confirma data de committer. B) data de autor é mais correta para este caso de uso.
+**Resposta:** (preenchida pelo PO)
+
+**4) `branch: string | null` (em vez de sempre `string`) para representar `HEAD` destacada
+(detached).** Nem `docs/ESPECIFICACAO.md` nem `docs/DECISOES.md` mencionam o caso de um worktree
+ou do `cwd` principal estarem em HEAD destacada — o exemplo do handoff só mostra `"branch":
+"main"`. Segui D-025 (ausência de dado não vira afirmação: HEAD destacada não tem nome de branch
+de verdade, e inventar um seria pior que `null`) em vez de forçar sempre uma string. Isso é uma
+mudança de tipo sobre um campo cujo nome já está fixado para o disco — o *nome* do campo
+(`branch`) não muda, só o tipo TypeScript que o produz antes de virar JSON — em disco, `null` só
+aparece quando `HEAD` está destacada; ainda assim, registro por tocar um campo já fixado.
+**Opções:** A) confirma `string | null`. B) HEAD destacada deveria virar outro valor (ex.: o sha
+curto do commit) em vez de `null`.
+**Resposta:** (preenchida pelo PO)

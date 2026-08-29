@@ -194,3 +194,50 @@ export interface TranscriptReadResult {
 export interface TranscriptReader {
   readFacts(session: DiscoveredSession): Promise<TranscriptReadResult>;
 }
+
+// Own import line on purpose, not folded into the block above: a second in-flight task (S2-T2)
+// touches this same file's top import block, and D-022/D-025 already established the pattern of
+// keeping an addition self-contained to reduce merge collisions (see this file's own history).
+import type { GitFacts } from './types.js';
+
+/**
+ * `GitReader.readFacts()`'s return shape (S2-T1). A discriminated union, not `GitFacts | null` —
+ * same reasoning `core/types.ts#DiscoveredSession` already applies to `hasPid` (D-024): `cwd` not
+ * being a git repository at all is a real, ordinary case
+ * (docs/ARQUITETURA.md § `git/`: "não quebra quando o `cwd` não é repositório: devolve 'sem git'
+ * e segue"), and giving it its own shape — with no `facts` field to accidentally read as an empty
+ * `GitFacts` — is what makes "no git here" impossible to confuse with "a repo with nothing going
+ * on" (D-025).
+ *
+ * `rejectedWorktrees` only exists on the `hasGit: true` side, reusing `RejectedDiscoveryRecord`'s
+ * `file`/`raw`/`reason` shape (D-022, same reuse `TranscriptReadResult.rejected` above already
+ * does) for one worktree whose own state couldn't be read — most commonly, `git worktree list`
+ * still remembers a worktree whose directory is gone from disk — without that one failure taking
+ * down the enumeration of the others.
+ */
+export type GitReadResult =
+  | { readonly hasGit: false }
+  | {
+      readonly hasGit: true;
+      readonly facts: GitFacts;
+      readonly rejectedWorktrees: readonly RejectedDiscoveryRecord[];
+    };
+
+/**
+ * Reads git facts for a session's `cwd` — D-013's first and most reliable evidence source, and
+ * per that decision's own text, often the *only* substantive source for a session with no usable
+ * transcript. Implemented in `adapters/git/` (S2-T1).
+ *
+ * Never throws for the ordinary "no evidence" cases: `cwd` not being a git repository at all
+ * resolves to `{ hasGit: false }`, never a thrown error that would abort the whole capture over
+ * an input this port considers completely normal (docs/ARQUITETURA.md § `git/`).
+ *
+ * **This port's name and its method's name are new terms, not yet in AGENTS.md's glossary.**
+ * Chosen to mirror `TranscriptReader`/`readFacts` above, since both ports answer the same kind of
+ * question (D-013 evidence facts) with the same "both-sides" shape for their fallible part.
+ * Flagged in docs/QUESTOES.md for confirmation, per AGENTS.md § "Glossário de domínio": "termo
+ * novo entra aqui antes de entrar no código" — registering instead of deciding silently.
+ */
+export interface GitReader {
+  readFacts(cwd: string): Promise<GitReadResult>;
+}
