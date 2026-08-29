@@ -25,6 +25,16 @@
  * `time_to_request_ms`, `ttft_ms` and `ttft_stream_ms` also appear in the real output but are
  * left out of the schema for not having a defined use yet — dropped by the default `z.object()`,
  * not a problem.
+ *
+ * **`structured_output`, confirmed against a real local `claude -p` call (S2-T2, claude
+ * 2.1.235), is exactly the "future contract test" this comment used to call for** — the first
+ * time this schema ran against real output. `--json-schema` adds this field: the already-parsed
+ * object, not just the JSON-stringified copy `result` also carries. `adapters/generation` reads
+ * `structured_output` first and only falls back to `JSON.parse(result)` if it's missing — see
+ * `understanding-schema.ts`. Declared `.optional()` here (not required) because a call made
+ * without `--json-schema` — none in this codebase, but nothing in the schema itself should assume
+ * that — legitimately won't have it (D-021 spirit: a field only one call shape produces isn't
+ * "corruption" in the other shape).
  */
 import { z } from 'zod';
 
@@ -51,6 +61,7 @@ export const claudePrintOutputSchema = z.object({
   modelUsage: z.record(z.string(), z.unknown()),
   permission_denials: z.array(z.unknown()),
   uuid: z.uuid(),
+  structured_output: z.unknown().optional(),
 });
 
 export type ClaudePrintOutput = z.infer<typeof claudePrintOutputSchema>;
