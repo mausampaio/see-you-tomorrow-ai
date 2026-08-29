@@ -1,6 +1,6 @@
 /**
  * The transcript-scan discovery strategy (D-016's second source, S1-T8): walks
- * `~/.claude/projects/**\/*.jsonl`, keeps only files whose mtime falls inside `relevanceHours`,
+ * `~/.claude/projects/<slug>/*.jsonl` (one level, deliberately not recursive) ``, keeps only files whose mtime falls inside `relevanceHours`,
  * and reconstructs a session from each survivor's content — never from the directory slug, which
  * D-016 already established is derived from `cwd` but not safely reversible.
  *
@@ -35,6 +35,22 @@ import { readCwdFromTranscript } from './transcript-cwd.js';
 import { deriveNameFromCwd } from './session-mapping.js';
 import { isEnoent } from './fs-errors.js';
 
+/**
+ * **Why this walk stops at one level, even though D-016 used to write the glob with `**`.**
+ * Observed on 2026-08-29, running the first real `seeya sessions`: a session directory can
+ * itself hold a subdirectory named after a session id, containing that session's sub-agent
+ * transcripts. Those are not sessions — they belong to the parent, which is discovered
+ * normally and has a transcript of its own.
+ *
+ * Recursing would turn every sub-agent run into a phantom headless session: no registry entry,
+ * so it looks exactly like the case D-016 built this strategy for, and each would earn its own
+ * handoff. Measured at that moment: 7 recent transcripts on the machine — 1 a real session, 6
+ * belonging to sub-agents of it.
+ *
+ * The `**` in D-016 was loose writing, not a requirement, and is corrected there. If you came
+ * here to make this walk match a `**` glob you read somewhere, this comment is the reason not
+ * to.
+ */
 const TRANSCRIPT_EXTENSION = '.jsonl';
 const MS_PER_HOUR = 3_600_000;
 

@@ -464,7 +464,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       opt-in de D-002/D-011; e `forkCleanupDays` (D-012) não está na tabela de chaves do
       `AGENTS.md`, então não entrou no tipo `Config`.
       `npm run verificar` e `npm run verificar:linux` verdes.
-- [~] **S1-T6 — `seeya sessions` e `seeya status`.**
+- [x] **S1-T6 — `seeya sessions` e `seeya status`.**
       *Aceite do sprint:* `seeya sessions` lista corretamente as sessões reais desta máquina,
       incluindo as obsoletas, e o e2e nº1 passa.
       **Implementado:** `src/cli/composition.ts` é a raiz de composição (D-020) — o único módulo

@@ -284,7 +284,9 @@ agente de execução, que é justamente o caso que mais precisa de handoff.
 
 1. **Registro** — `~/.claude/sessions/*.json`. Dá `pid`, liveness, `kind`, `name`. Só enxerga
    interativas.
-2. **Varredura de transcripts** — `~/.claude/projects/**/*.jsonl` filtrado por mtime dentro de
+2. **Varredura de transcripts** — `~/.claude/projects/<slug>/*.jsonl` — **um nível, não recursivo**;
+   sub-agentes escrevem um nível abaixo e não são sessões (ver o comentário de
+   `adapters/discovery/transcript-scan.ts`) — filtrado por mtime dentro de
    `relevanceHours`. Enxerga headless também. Não dá `pid` nem liveness.
 
 Sessão vista pelas duas tem os dados fundidos; sessão vista só pela varredura entra com
