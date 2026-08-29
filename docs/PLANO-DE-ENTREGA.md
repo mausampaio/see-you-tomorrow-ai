@@ -365,7 +365,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       remover a concorrência que expõe o problema.
       *Aceite:* o portão completo passa em execuções repetidas (rode ao menos 5 vezes seguidas e
       cole a contagem), e o número do tempo limite tem uma medição escrita ao lado.
-- [ ] **S1-T9 — Fusão das estratégias de descoberta.** Implementa a porta `SessionProvider`:
+- [~] **S1-T9 — Fusão das estratégias de descoberta.** Implementa a porta `SessionProvider`:
       `list()` devolve a união **já deduplicada**, nunca a concatenação crua. Quem chama não
       precisa saber quantas estratégias existem embaixo nem deduplicar por conta própria.
       **Reescrita em 2026-08-29 por causa do D-029.** O texto anterior falava em três
