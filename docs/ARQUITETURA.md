@@ -71,7 +71,8 @@ interface TranscriptReader {
 }
 
 interface HandoffGenerator {
-  generate(facts: SessionFacts): Promise<GeneratedUnderstanding>;
+  generate(session: DiscoveredSession, facts: SessionFacts): Promise<GeneratedUnderstanding>;
+  // a sessão inteira, não só os fatos: o modo profundo precisa do `sessionId` (Q-019)
 }
 
 interface Notifier {

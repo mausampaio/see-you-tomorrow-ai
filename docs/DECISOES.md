@@ -186,6 +186,26 @@ completo.
   espalhado.
 - A geração usa `--tools ""`, `--system-prompt` curto e `--json-schema`, para derrubar o piso de
   tokens e domar a saída (Spike C, segundo achado).
+
+  > **CORREÇÃO (2026-08-29, medido na S2-T2).** Os três flags **não compõem**, ao contrário do
+  > que esta linha sugeria. Medido com o mesmo contexto, modelo haiku, claude 2.1.235:
+  >
+  > | flags | tokens de entrada | custo |
+  > |---|---|---|
+  > | nenhuma | 23.607 | US$ 0,0488 |
+  > | `--tools ""` | 7.136 | US$ 0,0159 |
+  > | `--tools ""` + `--json-schema` | **40.076** | US$ 0,0831 |
+  >
+  > O `--tools ""` cumpre a promessa (~70% de redução). O `--json-schema` **mais que quintuplica**
+  > o piso em relação a ele, ficando acima até da chamada sem otimização nenhuma. O motivo foi
+  > identificado, não só observado: com ele o `stop_reason` vira `tool_use` e o `num_turns` vira 2
+  > — a saída estruturada é uma chamada de ferramenta forçada internamente, que o `--tools ""`
+  > não desliga.
+  >
+  > **Os três continuam em uso**: extração confiável pesa mais que o custo marginal, e um
+  > handoff que falha ao parsear cai para determinístico, perdendo a camada de entendimento que
+  > é o único motivo de chamar o modelo. Mas o piso real do modo enxuto com saída estruturada
+  > está perto de **US$ 0,08–0,09** (haiku), não dos US$ 0,15 estimados no Spike C. Ver Q-020.
 - O custo estimado do encerramento é mostrado no `--dry-run`.
 
 ---

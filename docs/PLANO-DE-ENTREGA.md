@@ -510,7 +510,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
 ## Sprint 2 — Encerrar o dia
 
-- [~] **S2-T1 — `adapters/git`.** Branch, status, commits do dia e **enumeração de
+- [x] **S2-T1 — `adapters/git`.** Branch, status, commits do dia e **enumeração de
       worktrees** com o estado de cada um (D-013). Sem quebrar quando o `cwd` não é repo.
       *Aceite:* repo de teste com dois worktrees, um sujo e um limpo, produz o estado correto
       dos dois.
@@ -536,7 +536,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       entre o nível superior e `worktrees[]`, data de committer vs. autor, `branch: string | null`
       para HEAD destacada). `npm run verificar` e `npm run verificar:linux` verdes.
 - [ ] **S2-T2 — `adapters/generation`.** Duas implementações, enxuta e profunda (D-011).
-- [~] **S2-T2 — `adapters/generation`.** Duas implementações, enxuta e profunda (D-011).
+- [x] **S2-T2 — `adapters/generation`.** Duas implementações, enxuta e profunda (D-011).
       Contexto por stdin ou arquivo, nunca por argumento (D-015). `--tools ""`,
       `--system-prompt` curto, `--json-schema`, timeout, orçamento, `spawn` sem shell, erro
       tipado. Registro do fork em `forks.json` no modo profundo.

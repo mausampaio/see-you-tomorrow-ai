@@ -1281,7 +1281,19 @@ B) a porta deveria continuar recebendo só `facts`, e o `sessionId` chega por ou
 terceiro parâmetro em `SessionFacts` mesmo não vindo do transcript, ou o adapter profundo recebe o
 `sessionId` por outro mecanismo que não a chamada de `generate()`) — não construí essa alternativa
 por parecer mais invasiva sem necessidade clara.
-**Resposta:** _(em aberto)_
+**Resposta:** **FECHADA — a porta está certa, o esboço estava atrasado. Terceira vez.**
+
+O modo profundo precisa do `sessionId` para retomar, e `SessionFacts` não carrega identidade de
+sessão nenhuma — é extração de transcript, por construção. Passar só os fatos tornaria o modo
+profundo impossível de implementar sem inventar um canal lateral.
+
+Você reconheceu o padrão sozinho, e ele já é padrão mesmo: Q-012 (`DiscoveryResult`) e Q-014
+(`TranscriptReadResult`) terminaram do mesmo jeito. O esboço de `ARQUITETURA.md` § Portas foi
+escrito antes de qualquer implementação existir; quando ele e o código divergem por uma
+restrição que a implementação descobriu, quem está errado é o esboço.
+
+Atualizado lá. E fez certo em **não** editar aquele arquivo por conta própria — ele é documento
+de autoridade e a mudança é minha.
 
 ---
 
@@ -1320,4 +1332,26 @@ default é revisto à parte, com medição em sonnet. B) `--json-schema` sai do 
 `--tools ""` + `--system-prompt`, parseando o JSON da prosa por conta própria, com o risco de saída
 malformada que o Spike C já mostrou); `--json-schema` continua só no modo profundo, onde o custo
 marginal pesa menos sobre o total. C) outra combinação.
-**Resposta:** _(em aberto)_
+**Resposta:** **FECHADA — mantenha os três flags, e a medição corrige o D-011.**
+
+Esta é a medição mais valiosa desta tarefa, e ela derruba uma premissa que estava escrita como
+se fosse fato. O D-011 e o Spike C listam `--tools ""`, `--system-prompt` curto e `--json-schema`
+juntos como "a forma de derrubar o piso de tokens", sugerindo que compõem. **Não compõem.** Dois
+derrubam; o terceiro mais que desfaz o ganho, deixando o piso **acima** da chamada sem
+otimização nenhuma.
+
+E você não parou no número — achou o mecanismo: com `--json-schema` o `stop_reason` vira
+`tool_use` e o `num_turns` vira 2. A saída estruturada é uma chamada de ferramenta forçada
+internamente, que o `--tools ""` não alcança. Isso é o que transforma a medição em explicação, e
+é o que impede alguém de "otimizar" isso de novo daqui a meses somando mais flags.
+
+**Mantém os três.** O motivo é o seu: extração confiável pesa mais que o custo marginal aqui. Um
+handoff que falha ao parsear cai para determinístico e perde a camada de entendimento — que é o
+único motivo de chamar o modelo. Torcer para o modelo devolver JSON válido em prosa livre é
+trocar custo por confiabilidade na direção errada.
+
+E o custo real cabe: US$ 0,083 contra um `budgetPerSessionUsd` de 0,25, com o `--max-budget-usd`
+como teto duro.
+
+**O que muda é o texto do D-011**, que passa a registrar a medição em vez de sugerir composição.
+Corrigido junto desta resposta.
