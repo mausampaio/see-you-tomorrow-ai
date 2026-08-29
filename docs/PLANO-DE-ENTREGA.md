@@ -395,7 +395,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* sessão presente nas duas origens aparece **uma** vez, com os campos fundidos
       segundo a regra escrita; sessão presente em uma só entra com a forma daquela origem; e as
       rejeições das duas aparecem somadas.
-- [~] **S1-T4 — `adapters/transcript`.** Parser streaming; últimos prompts, arquivos
+- [x] **S1-T4 — `adapters/transcript`.** Parser streaming; últimos prompts, arquivos
       tocados, última atividade.
       **Implementado:** porta `TranscriptReader`/tipo `SessionFacts` em `core/` (aditivo a
       `core/ports.ts`, sem reorganizar o arquivo — a S1-T5 mexe no mesmo arquivo em paralelo).
@@ -435,7 +435,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
         **fica**: ela não depende desta estratégia e custou caro para ser achada
       *Aceite:* núcleo de volta a duas formas, `verificar` e `verificar:linux` verdes, e nenhuma
       leitura de linha de comando em lugar nenhum do código.
-- [~] **S1-T5 — `adapters/storage`.** Raiz injetável, escrita atômica, config com
+- [x] **S1-T5 — `adapters/storage`.** Raiz injetável, escrita atômica, config com
       defaults, `schemaVersion`.
       **Implementado:** porta `Storage` em `src/core/ports.ts`, aditiva (só `readConfig` por
       enquanto — `saveHandoff`/`readBriefing`/`saveState` esperam `Day`/`Handoff`/`Briefing`/

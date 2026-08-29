@@ -182,7 +182,7 @@ graça. Nada de guardar epoch para "o horário de encerramento".
 ```jsonc
 {
   "schemaVersion": 1,
-  "endOfDayTime": "19:30",     // null = só manual
+  "endOfDayTime": "19:30",     // ILUSTRAÇÃO de formato; o default é `null` (Q-013)
   "leadTimesInMinutes": [30, 15],
   "relevanceHours": 12,
   "idleMinutes": 45,

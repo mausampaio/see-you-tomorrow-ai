@@ -915,7 +915,21 @@ princípio, não uma decisão escrita em lugar nenhum para `endOfDayTime` especi
 agendador nunca dispara sozinho, só via comando manual, até o usuário rodar `seeya init` ou editar
 o arquivo. B) o exemplo de `docs/ARQUITETURA.md` já **é** a decisão de default, e `"19:30"` deveria
 valer também na ausência de arquivo — meu código está errado. C) outro valor.
-**Resposta:** _(em aberto)_
+**Resposta:** **FECHADA — as duas escolhas confirmadas.**
+
+**1) `endOfDayTime: null` por padrão está certo, e o seu argumento é o argumento.** Uma máquina
+sem config não deve disparar encerramento num horário que ninguém escolheu. O `"19:30"` do
+`ARQUITETURA.md` é ilustração de formato, não default — vou deixar isso explícito lá, porque
+exemplo sem rótulo vira especificação por acidente.
+
+Isso segue a mesma linha do D-002 e do D-011: o que age sozinho é opt-in.
+
+**2) `forkCleanupDays` faltava mesmo no glossário — lacuna minha.** O D-012 cita o termo e o
+default 7, e eu não o levei para a tabela dos identificadores que vão para disco quando a
+escrevi. Acrescentado agora, para a S2-T6 não precisar inventar.
+
+Você fez certo em **não** acrescentá-lo ao `Config` sem chave fixada: inventar nome de chave que
+vai para disco é exatamente o que o D-027 diz ser barato agora e caro depois.
 
 **2) `forkCleanupDays` (D-012: "Forks com mais de `forkCleanupDays` (default 7) são apagados") não
 está na tabela de "Identificadores que vão para disco" do `AGENTS.md § "Idioma"`, nem no exemplo de
@@ -950,7 +964,42 @@ mesma forma que é anterior a esta.
 **Opções:** A) confirma o padrão — o esboço de `ARQUITETURA.md` para `readFacts` também está
 desatualizado, mesmo caso do Q-012. B) `SessionFacts` deveria carregar `rejected` internamente, e
 `TranscriptReadResult` é indireção desnecessária.
-**Resposta:** (preenchida pelo PO)
+**Resposta:** **FECHADA — os cinco confirmados, com uma ressalva no ponto 3.**
+
+**1) `TranscriptReadResult` está certo**, pelo mesmo motivo do `DiscoveryResult` na Q-012: uma
+forma que só devolve o que deu certo não tem onde carregar o lado rejeitado, e aí a visibilidade
+que o D-022 exige morre na assinatura. O esboço do `ARQUITETURA.md` é anterior à decisão, como
+já era no caso da descoberta.
+
+**2) `MAX_LAST_PROMPTS = 10` fica.** É limite de resumo, não de correção — errar para mais ou
+para menos deixa o handoff mais gordo ou mais magro, nunca errado. Quando houver handoff real
+para julgar, o número vira evidência; até lá, escolher e registrar é melhor que discutir sem
+dado. Se um dia virar config, entra pelo glossário como qualquer chave que vai para disco.
+
+**3) O conjunto de ferramentas de escrita fica — mas você mesmo disse o que me preocupa: não foi
+confirmado contra transcript real.** Isso é dedução, não medição, e a diferença importa aqui
+porque o nome de ferramenta é **dado externo** que muda entre versões do Claude Code.
+
+O risco tem forma ruim: se aparecer uma ferramenta de escrita nova, `touchedFiles` passa a
+sub-relatar **em silêncio** — a lista continua parecendo completa. É a família de falha que o
+D-021 e o D-025 combatem, e não dá para detectar de dentro, porque ignorar ferramenta que não
+escreve é o comportamento correto na maioria dos casos.
+
+Não vou pedir maquinaria para isso agora. O que eu quero é que **o comentário no código diga que
+a lista é deduzida e não verificada**, e nomeie o sintoma — se `touchedFiles` um dia parecer
+incompleto, esta lista é a primeira suspeita. A faixa de contrato (`tests/contract/`), que roda
+contra o binário de verdade, é o lugar natural para pegar essa deriva quando alguém estiver ali.
+
+**4) Sub-agente conta para arquivo tocado e não para prompt: certo, e a distinção é boa.** O
+prompt de um sub-agente não é o que **o usuário** pediu — poluiria "últimos prompts" com texto
+que a pessoa nunca escreveu. Mas o arquivo que ele mexeu **está mexido**, e omitir isso faria o
+handoff mentir sobre o estado da árvore. Registre esse raciocínio no comentário; é o tipo de
+assimetria que parece inconsistência para quem chega depois.
+
+**5) `locateTranscriptFile` como função irmã, sem alargar a `findTranscript`: certo.** Alargar
+tocaria um ponto de chamada fora do seu escopo, e escopo que vaza é como uma tarefa vira três.
+As duas devem ser reconciliadas quando alguém estiver naquele arquivo por outro motivo — não
+vale uma tarefa própria.
 
 **2) `MAX_LAST_PROMPTS = 10` é um número escolhido, não medido nem especificado.**
 `docs/ESPECIFICACAO.md` e `docs/TESTES.md` dizem "últimos prompts", sem quantidade. Escolhi 10 em
