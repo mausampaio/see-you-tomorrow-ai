@@ -12,3 +12,7 @@ docs/
 # table, turning a one-line content change into dozens of noise lines in the diff of the
 # project's most closely-reviewed document. Churn without gain (S1-T0f).
 AGENTS.md
+
+# Worktrees de agentes vivem dentro do repo; sem isto o prettier confere o checkout dos
+# outros agentes junto com o nosso (ver o comentario equivalente em eslint.config.js).
+.claude/

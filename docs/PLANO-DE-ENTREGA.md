@@ -347,7 +347,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
         conserto. Ou cobre, ou registra a exceção com motivo — não afrouxe o piso para caber
       *Aceite:* baixar a cobertura de um diretório abaixo do piso **reprova** o portão. Provado
       por execução, não por leitura.
-- [~] **S1-T13 — O teste de terminação graciosa no Windows é intermitente.** Achado ao rodar o
+- [x] **S1-T13 — O teste de terminação graciosa no Windows é intermitente.** Achado ao rodar o
       portão depois da S1-T12. **Não é regressão dela** — medido isolado, o arquivo passa em
       11,17s; o que mudava era a concorrência da suíte completa. Reproduzido de verdade uma vez
       (`npm run cobertura`, timeout em 15114ms) antes do conserto abaixo.

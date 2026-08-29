@@ -31,6 +31,13 @@ export default tseslint.config(
       'node_modules/**',
       '.dependency-cruiser.cjs',
       'tests/fixtures/**/*.mjs',
+      // `.claude/worktrees/**`: agents run in git worktrees created INSIDE the repo, so
+      // `eslint .` from the root would lint every sibling agent's checkout as if it were ours.
+      // Measured while three agents ran in parallel: 1077 .ts files under worktrees against 38
+      // in src/. Worse than slow — those files are being written and deleted right now, so a
+      // lint can hit ENOENT on a fixture another agent's test just cleaned up. That is exactly
+      // the failure that made a gate run red here, and it looked like host contention.
+      '.claude/**',
     ],
   },
   ...tseslint.configs.recommendedTypeChecked,

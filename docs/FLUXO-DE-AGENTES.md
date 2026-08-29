@@ -33,6 +33,20 @@ aprovada. É o único que altera os documentos de autoridade.
 > por causa do código incompleto e foi publicado assim. O `main` escapou por acaso — o commit tinha
 > ido para o branch do agente —, não por cuidado.
 >
+> **Armadilha da worktree, a pior: ela vive DENTRO do repositório.** As worktrees ficam em
+> `.claude/worktrees/`, então qualquer ferramenta que varra a partir da raiz enxerga o checkout
+> dos outros agentes como se fosse o nosso. Medido com três agentes em paralelo: **1077 arquivos
+> `.ts` dentro das worktrees contra 38 em `src/`**.
+>
+> Não é só lentidão. Aqueles arquivos estão sendo criados e apagados **agora**, então o lint bate
+> em `ENOENT` num fixture que o teste de outro agente acabou de limpar — e o portão fica
+> vermelho por motivo que não existe no seu trabalho. Isso aconteceu, e passou por "contenção de
+> máquina" até alguém ler o caminho do erro.
+>
+> `eslint.config.js` e `.prettierignore` agora excluem `.claude/`. **Qualquer ferramenta nova que
+> varra a partir da raiz precisa da mesma exclusão** — é invisível com um agente só, porque a
+> worktree é removida ao final.
+
 > **Armadilha da worktree: o `node_modules` dela nasce vazio.** Encontrada na S1-T3, a primeira
 > tarefa a rodar isolada. O `npm` sobe a árvore de diretórios procurando pacote, acha o do
 > checkout pai e "funciona" — com a árvore errada. Só apareceu porque os testes de guard
