@@ -11,7 +11,7 @@
  * whatever "now" the host happens to be at.
  */
 import { spawn } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -91,4 +91,28 @@ export async function addWorktree(fixture: GitFixture, name: string): Promise<st
   const worktreeDir = path.join(fixture.root, name);
   await run(fixture.mainDir, ['worktree', 'add', '-b', name, worktreeDir]);
   return worktreeDir;
+}
+
+/**
+ * Creates an alias path at `<root>/<name>` that resolves to `targetDir` but is spelled
+ * differently — reproducing, on every platform this suite runs on, the exact mismatch that broke
+ * S2-T1's own CI: git reports the *resolved* path when reading a worktree from an aliased `cwd`,
+ * while a naive `path.resolve` on the caller's original, unresolved `cwd` never matches it
+ * (macOS's `os.tmpdir()` being a symlink, Windows' short-path form arriving from GitHub Actions'
+ * runner — see `src/adapters/git/canonical-path.ts`). A symlink is exactly that kind of alias, and
+ * unlike the platform-specific bugs above, one can be built anywhere, including this suite's own
+ * `tmpdir()`-based fixtures — which is the point: this test must fail on Linux too, not only on
+ * the two OSes that happened to expose the defect in CI.
+ *
+ * `'junction'` on Windows, not `'dir'`: **directory symlinks require a privilege this project
+ * cannot assume a CI runner or a contributor's machine has** (`EPERM`, confirmed empirically on
+ * this machine without Developer Mode) — a junction is a different NTFS reparse-point mechanism
+ * that any user can create, and `fs.realpath` resolves through it exactly the same way it resolves
+ * a POSIX symlink (confirmed empirically: aliasing a directory through a junction and reading it
+ * back with `realpath` returns the original, unaliased path).
+ */
+export async function createAlias(targetDir: string, root: string, name: string): Promise<string> {
+  const aliasPath = path.join(root, name);
+  await symlink(targetDir, aliasPath, process.platform === 'win32' ? 'junction' : 'dir');
+  return aliasPath;
 }

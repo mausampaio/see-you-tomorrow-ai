@@ -12,7 +12,7 @@
  * cherry-pick can carry an old author date on a commit that was actually recorded today, and
  * "did work land today" is closer to what a handoff needs than "when was this change first
  * authored, possibly on another machine, possibly weeks ago". Not spelled out in
- * docs/ESPECIFICACAO.md — flagged in docs/QUESTOES.md for confirmation.
+ * docs/ESPECIFICACAO.md — raised in docs/QUESTOES.md Q-017 and confirmed there for this reason.
  */
 import type { GitCommit } from '../../core/types.js';
 import { runGit } from './run-git.js';
