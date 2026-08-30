@@ -22,6 +22,11 @@ import {
   parseHandoffDocument,
   serializeHandoff,
 } from './handoff-schema.js';
+import {
+  RESUMED_SESSIONS_SCHEMA_VERSION,
+  parseResumedSessionsDocument,
+  serializeResumedSessionIds,
+} from './resumed-sessions-schema.js';
 import { resolveSchemaVersion } from './schema-version.js';
 import { writeFileAtomic } from './atomic-write.js';
 
@@ -227,5 +232,28 @@ export class StorageAdapter implements Storage {
       return null;
     }
     return { day, handoffs, rejected };
+  }
+
+  /** `~/.seeya/days/<day>/resumed.json` (S3-T3, `core/ports.ts#Storage.readResumedSessionIds`'s
+   * own docstring has the on-disk format and why it's per session, not per day). */
+  private resumedSessionsPath(day: Day): string {
+    return path.join(this.seeyaHome, 'days', day, 'resumed.json');
+  }
+
+  async readResumedSessionIds(day: Day): Promise<ReadonlySet<string>> {
+    const filePath = this.resumedSessionsPath(day);
+    const resolved = await readVersionedDocument(filePath, RESUMED_SESSIONS_SCHEMA_VERSION);
+    if (resolved === null) {
+      // Nothing resumed yet for this day (D-025): empty set, not an error.
+      return new Set();
+    }
+    return parseResumedSessionsDocument(resolved);
+  }
+
+  async saveResumedSessionIds(day: Day, sessionIds: ReadonlySet<string>): Promise<void> {
+    await writeFileAtomic(
+      this.resumedSessionsPath(day),
+      JSON.stringify(serializeResumedSessionIds(sessionIds)),
+    );
   }
 }
