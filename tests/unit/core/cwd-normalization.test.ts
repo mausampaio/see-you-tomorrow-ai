@@ -59,15 +59,15 @@ describe('normalizeCwdForComparison', () => {
   });
 
   /**
-   * The exact real-world case that motivated S3-T5: a `C:\Users\<user>` argument arrives in
-   * `process.argv` as `C:Usersmausa` once a Git Bash shell eats the backslashes. This is NOT a
+   * The exact real-world case that motivated S3-T5: a `C:\Users\<usuario>` argument arrives in
+   * `process.argv` as `C:Users<usuario>` once a Git Bash shell eats the backslashes. This is NOT a
    * spelling difference this function can bridge — there is no separator left to unify — and it
    * shouldn't be: the value that arrived genuinely isn't the same string as any real `cwd`. What
    * matters is that normalizing it doesn't ACCIDENTALLY make it collide with something real.
    */
   it('a shell-mangled value with no separators left does not spuriously match a real cwd', () => {
-    const mangled = 'C:Usersmausa';
-    const real = 'C:\\Users\\mausa';
+    const mangled = 'C:Users<usuario>';
+    const real = 'C:\\Users\\<usuario>';
     expect(normalizeCwdForComparison(mangled, 'win32')).not.toBe(
       normalizeCwdForComparison(real, 'win32'),
     );

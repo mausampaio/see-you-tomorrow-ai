@@ -9,8 +9,8 @@
  * symlinks and the Windows short (8.3) form via `fs.realpath`, which requires the path to exist on
  * disk and costs a filesystem round trip. Neither holds here: an `ignore` entry or a `--session`
  * value someone typed by hand may not exist at all — a typo, or (the case that motivated this
- * task) a value a shell mangled on the way in, e.g. `C:\Users\<user>` arriving in `process.argv` as
- * `C:Usersmausa` once a Git Bash shell ate the backslashes. Resolving a path that doesn't exist
+ * task) a value a shell mangled on the way in, e.g. `C:\Users\<usuario>` arriving in `process.argv` as
+ * `C:Users<usuario>` once a Git Bash shell ate the backslashes. Resolving a path that doesn't exist
  * would just throw and fall back to "no match" anyway (`canonicalPath` already treats that as
  * `null`); the point here is to still recognize the ordinary, existing-path spelling differences
  * without paying for a disk round trip nothing in this comparison needs.
