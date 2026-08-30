@@ -883,7 +883,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
 ---
 
-- [ ] **S3-T4 — Teste de contrato para `--append-system-prompt-file`.** Aprovado pelo mantenedor
+- [~] **S3-T4 — Teste de contrato para `--append-system-prompt-file`.** Aprovado pelo mantenedor
       em 2026-08-30 ao fechar a Q-027 item 3. O fallback da retomada (D-004) entrega o plano por
       `--append-system-prompt-file`, escolhido em vez de `--system-prompt-file` porque o primeiro
       **acrescenta** ao prompt de sistema e o segundo **substitui** o do Claude Code inteiro — o
@@ -897,6 +897,37 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       flag é usado, não só que o texto extra chega. Se a distinção não for observável de fora,
       esse próprio achado é o resultado: registrar em QUESTOES o que dá e o que não dá para
       provar, sem inventar uma garantia que o teste não sustenta (D-025).
+      **Implementado em 2026-08-30 (`tests/contract/append-system-prompt-file.test.ts`).** A
+      distinção **é** observável de fora: uma chamada `claude -p --model haiku
+      --append-system-prompt-file <arquivo>` pede, no mesmo turno, o nome do produto de CLI (só
+      respondível a partir do prompt padrão) e um marcador sintético só presente no arquivo
+      anexado — replace derrubaria o primeiro sem afetar o segundo, e não foi isso que a 2.1.251
+      mostrou (os dois vieram corretos). Uma chamada de controle sem o flag prova que a pergunta
+      do nome do produto resolve de verdade na ausência do flag, isolando "o flag mudou de
+      comportamento" de "a pergunta não é respondível de forma confiável" — distinção que existe
+      porque a primeira formulação tentada (booleano direto: "você sabe seu nome de produto?") deu
+      falso negativo mesmo no controle (recusa treinada a uma pergunta meta, não ausência do
+      fato); reformular para pedir o fato direto resolveu. Registrado com o achado bruto em
+      Q-029, sem apagar a formulação descartada (comentário no arquivo).
+      **Exatamente 2 chamadas reais por execução, nunca mais** (documentado em comentário no topo
+      do arquivo): `--model haiku`, `--no-session-persistence`, `--max-budget-usd 0.10`, `cwd`
+      descartável em `%TEMP%`, ambiente saneado reaproveitando
+      `adapters/generation/env.ts#buildGenerationEnv(..., 'lean')` em vez de duplicar a lista
+      D-017. Total de chamadas reais gastas durante o desenvolvimento (contando a formulação que
+      deu falso negativo): 4.
+      **Achado extra, sem afetar a conclusão:** `claude --help` na 2.1.251 (mais nova que a 2.1.235
+      do Spike H) já **menciona** as duas variantes `-file`, mas só de forma indireta, dentro da
+      descrição do flag `--bare` — sem entrada própria nem descrição do que fazem. Continua sem
+      ser "documentado" no sentido que importa para D-004.
+      **Limitação registrada, não escondida (Q-029):** a medição usa `-p` (headless); o fallback
+      real (`adapters/resumption/resumer.ts`) roda em modo interativo puro com `stdio: 'inherit'`,
+      que estruturalmente não deixa o `seeya` ler o stdout do processo filho para verificar o
+      mesmo fato nesse modo. Assumir que a construção do prompt de sistema é a mesma rotina nos
+      dois modos é engenharia razoável, não medição direta — fica marcado como suposição, não
+      como fato provado.
+      Sem tocar `src/` (escopo da tarefa): só `tests/contract/`, `docs/TESTES.md`,
+      `docs/QUESTOES.md` (Q-029) e este arquivo. `npm run verificar` e `npm run verificar:linux`
+      verdes.
       *Fora de escopo:* trocar o flag, ou construir fallback para o caso de ele sumir — só
       quando e se a medição mostrar que sumiu.
 

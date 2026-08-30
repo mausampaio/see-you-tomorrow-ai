@@ -133,6 +133,23 @@ Testes de contrato, marcados para **não** rodar no CI padrão (`vitest --projec
   `--model`, `--max-budget-usd`, `--no-session-persistence`.
 - `claude agents --json` ainda devolve array com `pid`, `sessionId`, `cwd`.
 - `CLAUDE_CODE_FORCE_SESSION_PERSISTENCE` ainda é reconhecido pela versão instalada.
+- `--append-system-prompt-file` ainda **acrescenta** ao prompt de sistema padrão do Claude Code,
+  em vez de substituí-lo (D-004 depende disto para o fallback da retomada escolher este flag em
+  vez de `--system-prompt-file`, Q-027 item 3). Prova por assimetria observável de fora: uma
+  chamada `claude -p --model haiku` com o flag pede, no mesmo turno, o nome do produto de CLI
+  (só respondível a partir do prompt padrão) e um marcador sintético só presente no arquivo
+  anexado — replace derrubaria o primeiro sem afetar o segundo. Uma chamada de controle, sem o
+  flag, prova que a pergunta do nome do produto resolve de verdade quando não há ambiguidade de
+  formulação (Q-029 registra uma primeira formulação, em booleano direto, que deu falso negativo
+  mesmo no controle — recusa treinada a uma pergunta meta sobre as próprias instruções, não
+  ausência do fato). **Exatamente 2 chamadas reais por execução**, `--model haiku` +
+  `--no-session-persistence` + `--max-budget-usd` baixo, `cwd` descartável em `%TEMP%`, ambiente
+  saneado (D-017, reaproveitando `adapters/generation/env.ts#buildGenerationEnv`) — nunca mais que
+  isso, comentário no topo de `tests/contract/append-system-prompt-file.test.ts` explica o porquê.
+  **Limitação registrada em Q-029, não escondida:** a medição usa `-p` (headless); o fallback real
+  de `adapters/resumption` roda em modo interativo puro com `stdio: 'inherit'`, que não deixa o
+  `seeya` ler o stdout do processo filho — supor que a construção do prompt de sistema é a mesma
+  rotina nos dois modos é engenharia razoável, não medição direta.
 
 **Registrar sempre a versão contra a qual o contrato rodou.** O Spike D mostrou que o
 comportamento muda entre versões (2.1.201 × 2.1.233) e que **duas versões coexistem na mesma

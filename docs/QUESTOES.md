@@ -2100,3 +2100,85 @@ ganhar leitor fora deste projeto algum dia, reconsiderar o par `save<Nome>`/`rea
 antes. C) para o item 5, se um retorno real de usuários mostrar que digitar errado é comum, um
 laço de nova tentativa vira tarefa própria.
 **Resposta:** (preenchida pelo PO)
+
+---
+
+## Q-029 — Resultado do teste de contrato de `--append-system-prompt-file` (S3-T4)
+**Tarefa:** S3-T4
+**Bloqueia:** não — a tarefa foi entregue; registro do que foi medido e das duas limitações que o
+teste não cobre, no mesmo padrão de Q-017/Q-021/Q-022/Q-023/Q-027/Q-028.
+
+**Resultado, em uma linha: a distinção "append, não replace" É observável de fora, e o teste
+`tests/contract/append-system-prompt-file.test.ts` prova exatamente isso contra o binário real —
+mas com um método diferente do que o texto da tarefa sugeriu como possível caminho, porque o
+primeiro método tentado deu falso negativo.**
+
+**O que foi medido (claude 2.1.251, mais nova que a 2.1.235 do Spike H — já é sinal de que a versão
+instalada muda sem aviso, exatamente o risco que a tarefa existe para cobrir).**
+
+1. `claude --help` nesta máquina: nenhum dos dois flags (`--append-system-prompt-file`,
+   `--system-prompt-file`) tem entrada própria — igual ao Spike H. **Achado novo:** agora existe
+   uma menção **indireta**, dentro da descrição do flag `--bare`: "Explicitly provide context via:
+   `--system-prompt[-file]`, `--append-system-prompt[-file]`, ...". Isso é mais fraco que
+   documentado — não há descrição do que a variante `-file` faz sozinha, só confirmação de que ela
+   existe como forma aceita. Não muda a conclusão da S3-T4 (a semântica continua não-documentada),
+   mas vale registrar para quem for reler o Spike H achando que "nenhum aparece" ainda é
+   literalmente verdade em toda leitura do `--help`.
+
+2. **Método usado:** duas chamadas reais de `claude -p --model haiku` por execução do teste (nunca
+   mais, ver comentário no topo do arquivo) — uma sem o flag (controle) e uma com
+   `--append-system-prompt-file <arquivo>` apontando para um arquivo com um marcador sintético
+   (`SEEYA-CONTRACT-K7QF2`). As duas pedem, no mesmo turno, duas coisas via `--json-schema`: (a) o
+   nome do produto de CLI em que o modelo está rodando, só respondível a partir do prompt de
+   sistema padrão; (b) o token secreto anexado, só respondível a partir do arquivo. Replace em vez
+   de append explicaria "token chega, nome do produto não chega" — é a assimetria que o teste
+   observa. `--no-session-persistence` + `--max-budget-usd 0.10` limitam custo e não deixam sessão
+   persistida; `cwd` é `mkdtemp` descartável em `%TEMP%`; ambiente saneado reaproveitando
+   `adapters/generation/env.ts#buildGenerationEnv(..., 'lean')` (mesma lista D-017, sem duplicar).
+
+3. **Resultado das duas chamadas: nome do produto (`Claude Code`) presente nas duas, marcador
+   presente só na chamada com o flag.** Confirma "append, não replace" para
+   `--append-system-prompt-file` na 2.1.251, `-p`, `--model haiku`.
+
+**Limitação 1 — a primeira formulação da pergunta deu falso negativo, e por que isso importa mais
+do que parece.** A primeira versão pedia um booleano direto ("você sabe seu próprio nome de
+produto? true/false") — na chamada de CONTROLE, sem flag nenhum, o modelo respondeu `false`. Não
+é evidência de que o prompt padrão não tem a informação: é forma de recusa a uma pergunta
+meta sobre as próprias instruções, o mesmo tipo de cautela treinada que faz um modelo hesitar em
+"confirmar" fatos sobre si mesmo mesmo quando os tem. Trocar a pergunta para pedir o fato
+diretamente ("qual é o nome do produto — responda UNKNOWN só se não souber mesmo") resolveu nas
+duas chamadas seguintes. **Isto é o motivo de o teste ter um terceiro `it()` de controle, não só
+o par controle/teste do flag**: sem ele, uma reformulação futura de pergunta que volte a dar falso
+negativo reprova o teste com uma mensagem que aponta exatamente para essa ambiguidade, em vez de
+alegar (errado) que o flag mudou de comportamento.
+
+**Limitação 2 — o modo medido é `-p` (headless), não o modo que `adapters/resumption` usa de
+verdade.** `resumer.ts` chama o fallback (`buildFallbackArgs`) em modo **interativo puro** (sem
+`-p`), com `stdio: 'inherit'`, porque é isso que dá ao usuário uma sessão retomável de verdade
+(Spike H). O teste de contrato não pode inspecionar esse caminho por dentro: com `stdio: 'inherit'`
+o `seeya` nunca vê o stdout do processo filho (vai direto para a tela), e reproduzir o `stdio:
+'pipe'` sem TTY reintroduziria a degradação "responde uma vez e sai" que o próprio Spike H mediu —
+que é exatamente o comportamento usado aqui, só que via `-p` (mecanismo suportado e determinístico
+por design, em vez de uma degradação por ausência de TTY). **Suposição não verificada
+diretamente:** que a construção do prompt de sistema (onde `--append-system-prompt-file` entra) é
+a mesma rotina para os dois modos, e que o flag não muda de semântica entre `-p` e interativo. É
+uma suposição de engenharia razoável — um único ponto de tratamento de flag, não dois — mas não é
+medição, e fica registrada como tal em vez de virar afirmação.
+
+**O que o teste NÃO tenta provar, para não inflar a garantia (D-025):** que o texto completo do
+prompt de sistema padrão do Claude Code é preservado byte a byte; só que pelo menos um fato que só
+ele contém (o nome do produto) continua respondível. Não prova nada sobre o modo interativo com
+TTY real. Não prova nada sobre outros modelos além do usado (`haiku`) — não há razão para supor que
+o flag trata modelos diferentemente, mas também não foi medido.
+
+**Invocações reais totais usadas para chegar a este resultado: 4** — duas na primeira tentativa
+(pergunta booleana, controle deu falso negativo) e duas na segunda (pergunta reformulada, as três
+asserções passaram). O arquivo final roda exatamente 2 por execução, para sempre depois disso.
+
+**Opções que enxergo:** A) aceitar o resultado como está — a distinção é observável via `-p`, com
+as duas limitações registradas, e não vale gastar mais chamadas reais tentando cobrir o modo
+interativo com TTY de verdade (exigiria automação de terminal, fora do que este projeto testa
+hoje). B) se algum dia `adapters/resumption` ganhar um modo de depuração que capture stdout do
+modo interativo por outro canal, revisitar se vale medir os dois modos separadamente — não antes,
+para não guardar escopo especulativo (mesmo raciocínio da Q-027 item 4/opção C).
+**Resposta:** (preenchida pelo PO)
