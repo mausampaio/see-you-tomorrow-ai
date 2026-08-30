@@ -49,6 +49,9 @@ const configFileSchema = z.object({
   captureConcurrency: z.number().int().positive().optional(),
   ignore: z.array(z.string()).optional(),
   projectPolicy: z.record(z.string(), projectPolicySchema).optional(),
+  // >0: D-012 always deletes eventually; 0 or negative would mean "delete on sight", which is
+  // not what "days to keep" can mean, and isn't a value forkCleanupDays's own definition allows.
+  forkCleanupDays: z.number().int().positive().optional(),
 });
 
 /**
@@ -62,6 +65,13 @@ const configFileSchema = z.object({
  * deliberately does NOT follow the example's `"19:30"` — see docs/QUESTOES.md Q-013 for why
  * `null` (manual-only) is the safer default until `seeya init` (S5-T2) lets someone actually
  * choose a time, and why this is flagged instead of assumed silently.
+ *
+ * `forkCleanupDays` defaults to 7 — not taken from `docs/ARQUITETURA.md`'s example (which doesn't
+ * list the key at all, Q-013), but straight from D-012's own text: "Forks com mais de
+ * `forkCleanupDays` (default 7) são apagados." Unlike `endOfDayTime`, this default carries no
+ * opt-in risk to soften: D-012's exception is scoped to `seeya`'s own forks (D-020, only ones the
+ * app itself created and registered), never something a fresh install could accidentally point at
+ * a file the user cares about.
  */
 const CONFIG_DEFAULTS: Config = {
   endOfDayTime: null,
@@ -73,6 +83,7 @@ const CONFIG_DEFAULTS: Config = {
   captureConcurrency: 3,
   ignore: [],
   projectPolicy: {},
+  forkCleanupDays: 7,
 };
 
 /** `parseConfigDocument({})` — every field at its default. Exported so callers (the adapter, on a
@@ -126,5 +137,6 @@ export function parseConfigDocument(raw: unknown): Config {
     captureConcurrency: fields.captureConcurrency ?? CONFIG_DEFAULTS.captureConcurrency,
     ignore: fields.ignore ?? CONFIG_DEFAULTS.ignore,
     projectPolicy: resolveProjectPolicy(fields.projectPolicy),
+    forkCleanupDays: fields.forkCleanupDays ?? CONFIG_DEFAULTS.forkCleanupDays,
   };
 }

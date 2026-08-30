@@ -31,6 +31,7 @@ function config(overrides: Partial<Config> = {}): Config {
     captureConcurrency: 3,
     ignore: [],
     projectPolicy: {},
+    forkCleanupDays: 7,
     ...overrides,
   };
 }

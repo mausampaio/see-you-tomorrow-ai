@@ -194,6 +194,13 @@ export interface Config {
   readonly ignore: readonly string[];
   /** Per-project overrides, keyed by `cwd`. See `ProjectPolicy`. */
   readonly projectPolicy: Readonly<Record<string, ProjectPolicy>>;
+  /**
+   * Days a fork `seeya` itself created (D-012) is kept before deletion — "forks com mais de
+   * `forkCleanupDays` (default 7) são apagados". Named and fixed in AGENTS.md § "Idioma"
+   * ("Identificadores que vão para disco") by Q-013 before this field existed; added here now
+   * that S2-T6 is its first real reader (docs/QUESTOES.md Q-013, item 2).
+   */
+  readonly forkCleanupDays: number;
 }
 
 /**
