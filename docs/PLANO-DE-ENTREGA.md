@@ -750,8 +750,36 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 ## Sprint 3 — Começar o dia
 
 - [ ] **S3-T1 — Leitura do briefing pendente** e montagem do prompt de retomada por sessão.
-- [ ] **S3-T2 — Retomada.** `claude --resume` no `cwd` original, com fallback para sessão nova
+- [~] **S3-T2 — Retomada.** `claude --resume` no `cwd` original, com fallback para sessão nova
       e aviso explícito ao usuário.
+      **Duas incógnitas medidas antes de implementar (pedido do PO), resultado em
+      `docs/spikes/H-retomada-interativa.md`:** (1) sem TTY real, "interativo" degrada sozinho
+      para uma resposta única e sai — nunca abre sessão continuável — então o primeiro prompt só
+      pode chegar por argumento posicional quando o processo herda o terminal do usuário; medido
+      que `spawn` com array e `shell:false` (a disciplina que este projeto já usa) entrega esse
+      argumento **byte a byte íntegro**, inclusive quebra de linha, aspas e acento — o que
+      mutilava no Spike C era o shell, não o argumento. Isso corrigiu **D-015** (o texto da
+      decisão registra a correção). (2) várias sessões interativas não cabem num terminal: a
+      resposta é sequencial, um TTY herdado por vez — decisão do PO, registrada em D-015 junto
+      com a primeira.
+      **Implementado em 2026-08-30:** porta `SessionResumer`/tipos `ResumeOutcome`/
+      `ResumeFallbackReason` (aditivo ao final de `core/ports.ts`/`core/types.ts` — S3-T1 mexe
+      nos mesmos arquivos em paralelo). `adapters/resumption/` (`args.ts`, `env.ts`,
+      `context-file.ts`, `spawn-interactive.ts`, `resumer.ts`): `ClaudeSessionResumer` spawna
+      `claude --resume <sessionId> "<prompt>"` com `stdio: 'inherit'` quando o prompt cabe no
+      teto medido (`RESUME_PROMPT_ARG_LIMIT_CHARS = 4096`, ~1/8 do limite de linha de comando do
+      Windows); acima do teto, ou quando o `--resume` fecha rápido (`FAST_FAILURE_GRACE_MS =
+      5000`) com código != 0, cai no **único** mecanismo de fallback (D-004): sessão nova no
+      mesmo `cwd`, plano inteiro entregue via `--append-system-prompt-file` apontando para um
+      arquivo escrito em `~/.seeya/tmp/` (nunca fora de `~/.seeya/`) e apagado depois de usado.
+      D-017 saneado nos dois caminhos (`env.ts` reaproveita a lista de
+      `adapters/generation/env.ts`, exportada para isso). Uma segunda falha rápida do próprio
+      fallback lança exceção em vez de mentir dizendo que uma sessão nova abriu (D-025 aplicado a
+      uma ação). Aviso ao usuário (`core/resume-notice.ts#formatResumeNotice`, puro) nomeia qual
+      dos dois motivos disparou o fallback, nunca inventa qual causa exata explica um `--resume`
+      que falhou (D-025 — `seeya` não lê o stderr real, que foi para a tela do usuário via
+      `stdio: 'inherit'`). Seis escolhas sem resposta literal em D-004/D-015 registradas em
+      Q-026. `npm run verificar` e `npm run verificar:linux` verdes.
 - [ ] **S3-T3 — `seeya start-day`** com seleção interativa e `--all`.
       *Aceite do sprint:* e2e 5 passa; retomada real de uma sessão de ontem funciona à mão.
 

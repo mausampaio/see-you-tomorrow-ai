@@ -1770,3 +1770,63 @@ lento. C) mover o aquecimento para fora do projeto `integration` (por exemplo, u
 raiz do `vitest.config.ts`, compartilhado por `unit`/`guards` também), caso apareça um quarto
 consumidor de `powershell.exe` fora de `tests/integration/`.
 **Resposta:** _(em aberto)_
+
+---
+
+## Q-026 — Seis escolhas feitas fazendo S3-T2 (retomada), registradas para confirmação
+**Tarefa:** S3-T2
+**Bloqueia:** não — a tarefa foi entregue com a solução mínima em cada ponto; registro no mesmo
+padrão de Q-017/Q-019/Q-021/Q-022/Q-023.
+**Contexto:** D-004 e D-015 (corrigida por docs/spikes/H-retomada-interativa.md) dão a forma geral
+do mecanismo de retomada, mas várias escolhas de nome e de comportamento não têm resposta literal
+em nenhum documento.
+
+**1) Nomes novos, ainda fora do glossário de `AGENTS.md`:** porta `SessionResumer`/método
+`resume`, tipos `ResumeOutcome`/`ResumeFallbackReason`, adapter `ClaudeSessionResumer`
+(`adapters/resumption/`). Escolhidos para ecoar o padrão já existente (`HandoffGenerator`/
+`generate`, `GitReader`/`readFacts`) em vez de inventar uma forma nova. `resumption` como nome de
+diretório (não `retomada` nem `resume`) segue a mesma tradução fixa que `discovery`/`generation`/
+`transcript` já usam para os outros substantivos de adapter.
+
+**2) O teto de tamanho do argumento (`RESUME_PROMPT_ARG_LIMIT_CHARS = 4096`) é uma constante de
+`adapters/resumption/args.ts`, não uma chave de `config.json`.** Alternativa descartada: torná-lo
+configurável. Motivo: é um limite técnico do SO (linha de comando do Windows), não uma preferência
+de produto — o mesmo raciocínio que mantém `FAST_FAILURE_GRACE_MS` como constante de código, não
+como config.
+
+**3) O fallback usa `--append-system-prompt-file`, nunca `--system-prompt-file`.** Os dois existem
+no binário (achados no Spike H, nenhum documentado em `--help`) mas têm semânticas diferentes:
+`--system-prompt-file` SUBSTITUI o prompt de sistema padrão do Claude Code inteiro;
+`--append-system-prompt-file` só adiciona. Substituir o padrão poderia remover comportamento que o
+usuário espera de qualquer sessão nova do `claude`; `seeya` não tem negócio nenhum decidindo isso.
+
+**4) O "resumeFailed" nunca tenta distinguir a causa (sessão expirada vs. projeto movido, as duas
+que D-004 cita por nome).** Com `stdio: 'inherit'`, `seeya` nunca lê o stderr real do `--resume`
+que falhou — ele foi para a tela do usuário, não para um pipe. D-025 aplicado: nomear uma causa
+específica sem ter como confirmá-la seria inventar precisão que a evidência (só o código de saída)
+não sustenta. O aviso (`core/resume-notice.ts`) diz "não foi possível retomar", com o código de
+saída, nunca "sessão expirada" nem "projeto movido".
+
+**5) Uma falha rápida (`failedFast && exitCode !== 0`) do PRÓPRIO fallback lança exceção, em vez de
+devolver um `ResumeOutcome` alegando que uma sessão nova abriu.** Não há terceiro mecanismo para
+tentar: se o mesmo binário falha das duas vezes com o mesmo `cwd`, o problema é de infraestrutura
+(binário ausente do PATH, `cwd` que sumiu de verdade) e mentir dizendo "sessão nova aberta" violaria
+D-025 aplicado a uma ação, não a um fato. Quem chama (`cli/`, na S3-T3) decide o que fazer com a
+exceção — provavelmente parar de tentar as sessões seguintes de `--all` e reportar, mas essa
+decisão pertence à S3-T3, não a esta tarefa.
+
+**6) O período de graça contra falha rápida (`FAST_FAILURE_GRACE_MS = 5000`) é o mesmo para a
+tentativa de `--resume` e para a tentativa de fallback**, mesmo as duas tendo perfis de risco
+diferentes (a primeira pode falhar por sessão inexistente; a segunda, teoricamente, só por
+problema de infraestrutura). Não hà medição que justifique dois números diferentes, e um só
+constante é mais simples de explicar e de testar.
+
+**Opções que enxergo:** A) confirmar as seis como estão. B) para o item 3, cogitar que
+`--append-system-prompt-file` é um flag não documentado e pode mudar de comportamento entre
+versões sem aviso — vale um teste de contrato (`npm run test:contrato`) que confirme a semântica
+"append, não replace" contra o `claude` real da máquina, não coberto ainda por nenhuma suíte. C)
+para o item 4, se algum dia `seeya` capturar stderr por outro canal (por exemplo, um modo
+`--dry-run` de retomada que não herda TTY), reconsiderar se um terceiro `ResumeFallbackReason` mais
+específico vale a pena então — não antes, para não guardar código especulativo.
+**Resposta:** _(em aberto)_
+**Resposta:** _(em aberto)_
