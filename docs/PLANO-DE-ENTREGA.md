@@ -725,7 +725,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       `npm run verificar:linux` verdes; `cli/` e `application/` em 100% de linhas nos dois.
 
 ---
-- [ ] **S2-T8 — Os orçamentos do Windows não têm folga para o CI.** O CI ficou **vermelho só no
+- [x] **S2-T8 — Os orçamentos do Windows não têm folga para o CI.** O CI ficou **vermelho só no
       Windows** ao fechar o Sprint 2, com Ubuntu e macOS verdes. Duas causas distintas, as duas
       medidas nesta máquina e nunca no runner:
       - `tests/integration/process/termination.test.ts` usa `10_000` explícito, número que a
