@@ -794,6 +794,34 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
 ---
 
+- [ ] **S5-T5 — Atualizar as ações do CI, que rodam num runtime obsoleto.** Não é a nossa versão
+      do Node: o `ci.yml` pede `node-version: 22` para o projeto e isso está certo (D-008). O que
+      está velho é o **runtime das ações**: `actions/checkout@v4` e `actions/setup-node@v4` são
+      construídas para Node 20, e o GitHub já as força a rodar em Node 24, avisando em toda
+      execução.
+      Isso é **relógio correndo, não preferência**: hoje é aviso, e vira falha quando o GitHub
+      parar de forçar. A troca é de duas linhas; o custo de deixar passar é o CI quebrar num dia
+      em que ninguém mexeu em nada — e aí alguém vai procurar a causa no código.
+      *Aceite:* CI verde nos três sistemas **sem o aviso de runtime obsoleto** na saída.
+- [ ] **S5-T6 — Portão de segurança antes de publicar: dependências e SAST.** Pedido do mantenedor
+      em 2026-08-30, com a ressalva de que não é para agora — entra antes da publicação, não
+      durante a construção.
+      O motivo de existir: este projeto vai para npm como código aberto, **executa processos**,
+      **lê arquivos do usuário** e tem uma exceção documentada para **apagar** dentro do
+      `~/.claude/`. É superfície suficiente para merecer análise automática antes de alguém
+      instalar isto na própria máquina.
+      - **dependências:** `npm audit` no portão. A árvore é pequena hoje, então é barato — e o
+        momento de estabelecer o hábito é enquanto é barato
+      - **SAST:** o CodeQL é o encaixe natural (nativo do GitHub, gratuito em repositório
+        público, entende TypeScript). Vale apontá-lo em especial para o que o projeto faz de
+        arriscado: montagem de argumento de `spawn`, caminho de arquivo vindo de fora, e a
+        exclusão do D-012
+      - **segredo:** já existe o `scripts/verificar-termos-locais.mjs` no pre-commit, mas ele só
+        protege quem commita **nesta** máquina. Varredura no CI cobre quem clonar e contribuir
+      **Uma decisão a tomar quando chegar:** o portão de segurança **reprova** o CI ou só reporta?
+      Reprovar por vulnerabilidade transitiva que não tem correção disponível trava o projeto por
+      algo fora do alcance dele. Reportar e ninguém olhar é o mesmo que não ter. Não decida isso
+      agora — decida com o primeiro achado real na mão.
 ## Definição de pronto (vale para toda tarefa)
 
 1. Código implementa exatamente a spec; divergência virou questão, não improviso.
