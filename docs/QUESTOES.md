@@ -1465,3 +1465,54 @@ em disco antes de terminar o processo** (D-002). Atualizo o esboço.
 que as duas estratégias já excluem forks antes do `list()` devolver. O risco é de segunda ordem:
 se um dia uma estratégia parar de excluir, a elegibilidade deixa de filtrar **sem nada falhar**.
 Deixe escrito onde o conjunto é montado, para quem mexer saber que o filtro vive rio acima.
+
+---
+
+## Q-022 — Duas escolhas feitas fazendo S2-T6 (limpeza de forks), sem resposta literal em D-012
+**Tarefa:** S2-T6
+**Bloqueia:** não — nenhuma bloqueou a entrega; registro para o PO confirmar ou corrigir, no mesmo
+padrão de Q-012/Q-017/Q-019/Q-020/Q-021.
+**Contexto:** D-012 fixa a regra de negócio ("forks com mais de `forkCleanupDays` são apagados") mas
+não diz o que acontece com a **entrada em `forks.json`** depois, nem como tratar um fork registrado
+cujo arquivo já não existe no disco. A tarefa pediu explicitamente para decidir as duas e escrever
+o porquê.
+
+**1) A entrada em `forks.json` é removida quando o arquivo é apagado com sucesso (ou já estava
+ausente); é mantida quando a exclusão falha de verdade.** Alternativa descartada: nunca remover
+entradas, só marcar como "processada" de algum jeito. Motivo da escolha: o registro existe
+unicamente para sustentar a exclusão de D-012 (impedir que um fork seja redescoberto e refeito em
+laço). Uma vez que o `.jsonl` não existe mais, não há mais nada em disco que a exclusão precise
+proteger — nem a estratégia de registro nem a de varredura de transcript conseguem redescobrir um
+arquivo que sumiu. Manter a entrada para sempre faria `forks.json` crescer sem limite e faria toda
+execução futura tentar apagar um arquivo que já não existe. Já uma entrada cuja exclusão **falhou**
+de verdade (erro real, não ausência) é mantida de propósito: é o único jeito de a próxima execução
+tentar de novo, e removê-la aqui esconderia um fork que ainda ocupa espaço em
+`~/.claude/projects/` sem ninguém saber. A reescrita do arquivo é atômica (`writeFileAtomic`,
+mesmo mecanismo do S1-T5) e só acontece quando pelo menos uma entrada foi de fato resolvida —
+uma passagem que não encontra nada para limpar nunca toca `forks.json`.
+
+**2) Fork registrado com arquivo ausente não é erro — é o mesmo desfecho de "apagado com
+sucesso" (`alreadyAbsent`), nunca interrompe a limpeza dos demais.** D-025 ("ausência de dado não
+vira afirmação") aplicado aqui: o usuário pode ter apagado o arquivo à mão, e isso não é corrupção
+nem falha do `seeya` — é exatamente o estado que a exclusão de D-012 gostaria de garantir de
+qualquer forma. Tratar como erro faria uma limpeza manual do usuário aparecer como falha do
+programa; tratar como "sucesso silencioso, sem remover a entrada" deixaria o registro crescendo
+para sempre pelo mesmo motivo do item 1. A implementação (`adapters/discovery/fork-cleanup.ts`)
+trata "`locateTranscriptFile` não encontrou nada" e "`unlink` falhou com `ENOENT`" como o mesmo
+caso, e cada fork é resolvido de forma independente (`Promise.all` com `try`/`catch` por item,
+D-022) — a falha real de um não impede a exclusão dos outros.
+
+**Terceira decisão, correlata, sem pedido explícito na tarefa mas necessária para não violar
+D-025:** uma entrada de `forks.json` sem `createdAt` (`ForkRegistryEntry.createdAt` é opcional,
+Q-008) é sempre mantida (`kept`), nunca tratada como "óbvia candidata por não ter idade
+comprovada". `core/fork-cleanup.ts#planForkCleanup` documenta o raciocínio: ausência de idade não é
+evidência de idade, e apagar de forma irreversível com base numa suposição seria exatamente o erro
+que D-025 nomeia.
+
+**Opções que enxergo:** A) confirmar as três decisões acima como estão. B) para o item 1, manter a
+entrada até o usuário rodar alguma limpeza manual de registro (não implementado hoje, não pedido
+pela tarefa). C) para o item 2, tratar `alreadyAbsent` como uma categoria própria e visível
+separada de `deleted` no retorno (já é — `ForkCleanupOutcome` é uma união discriminada com os dois
+rótulos — mas cabe confirmar que "mesmo efeito sobre o registro, rótulo diferente no retorno" é o
+nível certo de distinção).
+**Resposta:** _(em aberto)_
