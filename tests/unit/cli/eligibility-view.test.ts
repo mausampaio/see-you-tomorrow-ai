@@ -52,6 +52,17 @@ describe('countEligibleSessions', () => {
     );
   });
 
+  it('excludes a session whose cwd matches an ignore entry only after path normalization (S3-T5)', () => {
+    const session = createSessionWithPid({
+      cwd: 'c:/code/rascunhos/',
+      lastActivity: new Date(NOW.getTime() - 60_000),
+    });
+
+    expect(countEligibleSessions([session], config({ ignore: ['c:\\code\\rascunhos'] }), NOW)).toBe(
+      0,
+    );
+  });
+
   it('counts only the eligible ones out of a mixed batch', () => {
     const eligible = createSessionWithPid({
       sessionId: '11111111-1111-4111-8111-111111111111',

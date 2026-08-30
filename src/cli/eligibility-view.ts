@@ -16,6 +16,7 @@
  * `previousCaptureToday` per session — see Q-015 for why that isn't invented here instead.
  */
 import { evaluateEligibility } from '../core/eligibility.js';
+import { normalizedIgnoreSet, withComparableCwd } from '../application/eligibility-assembly.js';
 import type { DiscoveredSession, Config } from '../core/types.js';
 
 export function countEligibleSessions(
@@ -23,10 +24,10 @@ export function countEligibleSessions(
   config: Config,
   now: Date,
 ): number {
-  const ignoredCwds = new Set(config.ignore);
+  const ignoredCwds = normalizedIgnoreSet(config);
   let eligibleCount = 0;
   for (const session of sessions) {
-    const result = evaluateEligibility(session, {
+    const result = evaluateEligibility(withComparableCwd(session), {
       now,
       relevanceHours: config.relevanceHours,
       ignoredCwds,
