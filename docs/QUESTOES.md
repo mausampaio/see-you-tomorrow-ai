@@ -1805,14 +1805,12 @@ ausência de veredito não é veredito de "concluído". Consequência prática: 
 `seeya start-day` no mesmo dia, sem que nada tenha sido marcado como retomado ainda, encontra o
 mesmo briefing de novo — esse é o gap que o passo 5, fora desta tarefa, fecha depois.
 
-**Decisão 2 — a busca é limitada a `MAX_BRIEFING_LOOKBACK_DAYS = 7` dias**
-(`application/find-pending-briefing.ts`), o mesmo número já usado neste projeto para "até quando
-uma evidência velha ainda vale a pena agir em cima" (`Config.forkCleanupDays`, default 7, D-012)
-— em vez de inventar um segundo número não relacionado só para isto. Passado esse horizonte,
-"nenhum briefing pendente" é a resposta (aceite #5: caso normal, não erro), não esticar a busca
-para achar *algo*. `findPendingBriefing` devolve `{ found: false, daysSearched }` — nunca lança,
-e nunca inventa um `Briefing` vazio como sentinela (D-024: união discriminada, não
-`Briefing | null` solto no meio do código de aplicação).
+**Decisão 2 (texto original, revogado pelo PO — ver Resposta abaixo) — a busca era limitada a
+`MAX_BRIEFING_LOOKBACK_DAYS = 7` dias** (`application/find-pending-briefing.ts`), o mesmo número
+já usado neste projeto para "até quando uma evidência velha ainda vale a pena agir em cima"
+(`Config.forkCleanupDays`, default 7, D-012) — em vez de inventar um segundo número não
+relacionado só para isto. Passado esse horizonte, "nenhum briefing pendente" era a resposta
+(aceite #5: caso normal, não erro), não esticar a busca para achar *algo*.
 
 **O que ficou explicitamente ambíguo, sem solução minha:** não sei se 7 dias é o número certo do
 ponto de vista de produto — é uma analogia com `forkCleanupDays`, não uma medição ou uma regra da
@@ -1828,8 +1826,6 @@ S3-T1 para depois de S4-T2, fora da ordem do plano. 2) manter os 7 dias por anal
 rodar `seeya`") — não tenho medição para decidir entre os dois. 3) manter "pendência" só como
 `pendingItems`/`tomorrowPlan`/ausência de veredito do modelo, ou ampliar para considerar
 `sessionState`/git sujo também.
-**Resposta:** _(em aberto)_
-
 **Resposta:** **FECHADA — a regra de conteúdo é confirmada como interina; o corte de 7 dias sai.**
 
 **1) Handoff com `source !== "model"` sempre conta como pendente: certo, e é D-025 bem aplicado.**
@@ -1851,8 +1847,8 @@ Pense em quem volta de duas semanas de férias. O briefing de antes da viagem **
 parou; descartá-lo por idade não a protege de nada — só esconde a única coisa que responderia
 "onde eu estava?". E retomar trabalho antigo é decisão dela, não nossa.
 
-**A regra passa a ser: sem corte de produto por idade. Ache o briefing pendente mais recente e
-**diga a idade dele** quando não for de ontem.** Superfície de exibição resolve o risco melhor que
+**A regra passa a ser: sem corte de produto por idade — ache o briefing pendente mais recente e
+diga a idade dele quando não for de ontem.** Superfície de exibição resolve o risco melhor que
 omissão — o usuário vê "3 semanas atrás" e decide.
 
 Mantenha um limite **de varredura**, para não caminhar disco indefinidamente. Escolha um número
@@ -1862,3 +1858,15 @@ produto** — a diferença importa para quem for mexer depois.
 **3) Se "pendente" deveria pesar `sessionState` ou árvore suja:** não agora. `pendingItems` e
 `tomorrowPlan` são o que o handoff **afirma** sobre o que falta; árvore suja é indício e pode ser
 lixo esquecido. Misturar os dois torna a regra difícil de explicar sem melhorar a resposta.
+
+**Como ficou implementado.** `findPendingBriefing` acha o pendente mais recente a qualquer
+distância e devolve `daysAgo`; `MAX_BRIEFING_SCAN_DAYS` (30) é limite de varredura, rotulado no
+código como E/S e não julgamento de produto. Um pendente mais velho que a varredura devolve
+`found: false` **com `daysSearched`** — a função é honesta sobre o próprio alcance em vez de
+afirmar que não existe nada (D-025).
+
+**Nota à parte, para não se perder:** o `Storage` ganhou um segundo bloco
+`export interface Storage {}` mesclado porque a minha orientação ("aditivo no fim do arquivo")
+não dava caminho para acrescentar **método a interface que já existe** — a instrução estava
+incompleta, a execução não. Já corrigida no `FLUXO-DE-AGENTES.md`. A consolidação dos dois
+blocos acontece quando a S3-T2 aterrissar, que está com o `ports.ts` em paralelo.

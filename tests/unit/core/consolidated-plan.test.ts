@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { renderConsolidatedPlan } from '../../../src/core/consolidated-plan.js';
+import { renderConsolidatedPlan, renderRelativeAge } from '../../../src/core/consolidated-plan.js';
 import type { Briefing } from '../../../src/core/ports.js';
 import { createHandoff } from './_fixtures.js';
 
-describe('renderConsolidatedPlan', () => {
-  it('titles the plan with the day and session count', () => {
+// `daysAgo: 1` ("yesterday") throughout this describe block on purpose: it's the ordinary case
+// that adds no age note (see the "age note" describe block below for the cases that do), so tests
+// about session content aren't also, incidentally, tests about the age note.
+describe('renderConsolidatedPlan — content (daysAgo: 1, the ordinary case)', () => {
+  it('titles the plan with the day and session count, no age note for yesterday', () => {
     const briefing: Briefing = { day: '2026-08-16', handoffs: [createHandoff()], rejected: [] };
-    expect(renderConsolidatedPlan(briefing)).toContain('Plan for 2026-08-16 (1 session)');
+    const plan = renderConsolidatedPlan(briefing, 1);
+    expect(plan).toContain('Plan for 2026-08-16 (1 session)');
+    expect(plan).not.toContain('ago');
   });
 
   it('pluralizes the session count', () => {
@@ -18,7 +23,7 @@ describe('renderConsolidatedPlan', () => {
       ],
       rejected: [],
     };
-    expect(renderConsolidatedPlan(briefing)).toContain('Plan for 2026-08-16 (2 sessions)');
+    expect(renderConsolidatedPlan(briefing, 1)).toContain('Plan for 2026-08-16 (2 sessions)');
   });
 
   it('lists pending items and plan for a session with real work left', () => {
@@ -34,7 +39,7 @@ describe('renderConsolidatedPlan', () => {
       ],
       rejected: [],
     };
-    const plan = renderConsolidatedPlan(briefing);
+    const plan = renderConsolidatedPlan(briefing, 1);
     expect(plan).toContain('projeto-a');
     expect(plan).toContain('c:\\code\\a');
     expect(plan).toContain('pending: fix the flaky test');
@@ -47,7 +52,7 @@ describe('renderConsolidatedPlan', () => {
       handoffs: [createHandoff({ pendingItems: ['fix the flaky test'], tomorrowPlan: [] })],
       rejected: [],
     };
-    const plan = renderConsolidatedPlan(briefing);
+    const plan = renderConsolidatedPlan(briefing, 1);
     expect(plan).toContain('pending: fix the flaky test');
     expect(plan).not.toContain('plan:');
   });
@@ -58,7 +63,7 @@ describe('renderConsolidatedPlan', () => {
       handoffs: [createHandoff({ pendingItems: [], tomorrowPlan: ['ship the release'] })],
       rejected: [],
     };
-    const plan = renderConsolidatedPlan(briefing);
+    const plan = renderConsolidatedPlan(briefing, 1);
     expect(plan).not.toContain('pending:');
     expect(plan).toContain('plan: ship the release');
   });
@@ -69,7 +74,7 @@ describe('renderConsolidatedPlan', () => {
       handoffs: [createHandoff({ pendingItems: [], tomorrowPlan: [] })],
       rejected: [],
     };
-    expect(renderConsolidatedPlan(briefing)).toContain('nothing pending recorded');
+    expect(renderConsolidatedPlan(briefing, 1)).toContain('nothing pending recorded');
   });
 
   it('marks a non-model handoff as unknown status, never as confirmed-clean (D-025)', () => {
@@ -85,7 +90,7 @@ describe('renderConsolidatedPlan', () => {
       ],
       rejected: [],
     };
-    const plan = renderConsolidatedPlan(briefing);
+    const plan = renderConsolidatedPlan(briefing, 1);
     expect(plan).toContain('status unknown');
     expect(plan).not.toContain('nothing pending recorded');
   });
@@ -96,8 +101,53 @@ describe('renderConsolidatedPlan', () => {
       handoffs: [],
       rejected: [{ file: 'sessions/broken.json', raw: undefined, reason: 'not valid JSON' }],
     };
-    const plan = renderConsolidatedPlan(briefing);
+    const plan = renderConsolidatedPlan(briefing, 1);
     expect(plan).toContain('Plan for 2026-08-16 (0 sessions)');
     expect(plan).toContain('1 entry could not be read');
+  });
+});
+
+describe('renderRelativeAge', () => {
+  it('names today and yesterday specially', () => {
+    expect(renderRelativeAge(0)).toBe('today');
+    expect(renderRelativeAge(1)).toBe('yesterday');
+  });
+
+  it('counts single days under a week', () => {
+    expect(renderRelativeAge(2)).toBe('2 days ago');
+    expect(renderRelativeAge(6)).toBe('6 days ago');
+  });
+
+  it('switches to weeks from 7 days on, singular', () => {
+    expect(renderRelativeAge(7)).toBe('1 week ago');
+  });
+
+  it('switches to weeks, plural, and rounds to the nearest week', () => {
+    expect(renderRelativeAge(14)).toBe('2 weeks ago');
+    expect(renderRelativeAge(21)).toBe('3 weeks ago');
+    expect(renderRelativeAge(13)).toBe('2 weeks ago');
+  });
+});
+
+describe('renderConsolidatedPlan — age note (Q-026: no cutoff, but the age is shown)', () => {
+  it('adds no age note when the briefing is from yesterday (the ordinary case)', () => {
+    const briefing: Briefing = { day: '2026-08-15', handoffs: [createHandoff()], rejected: [] };
+    expect(renderConsolidatedPlan(briefing, 1)).not.toContain('ago');
+  });
+
+  it('calls out "today" explicitly when the briefing is from the same day', () => {
+    const briefing: Briefing = { day: '2026-08-16', handoffs: [createHandoff()], rejected: [] };
+    expect(renderConsolidatedPlan(briefing, 0)).toContain('today');
+  });
+
+  it('reads as "3 weeks ago" for an old but still-pending briefing, never silently resumed as fresh', () => {
+    const briefing: Briefing = {
+      day: '2026-07-26',
+      handoffs: [createHandoff({ pendingItems: ['pick this back up'] })],
+      rejected: [],
+    };
+    const plan = renderConsolidatedPlan(briefing, 21);
+    expect(plan).toContain('Plan for 2026-07-26');
+    expect(plan).toContain('3 weeks ago');
   });
 });

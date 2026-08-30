@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   findPendingBriefing,
-  MAX_BRIEFING_LOOKBACK_DAYS,
+  MAX_BRIEFING_SCAN_DAYS,
 } from '../../../src/application/find-pending-briefing.js';
 import { subtractLocalDays, localDayString } from '../../../src/core/day.js';
 import { createHandoff } from '../core/_fixtures.js';
@@ -20,16 +20,16 @@ function dayOffset(offset: number): string {
 }
 
 describe('findPendingBriefing — nothing captured anywhere (aceite #5: normal, not an error)', () => {
-  it('reports found: false with how many days it looked, never throws', async () => {
+  it('reports found: false with how many days it scanned, never throws', async () => {
     const storage = new FakeStorage(DEFAULT_TEST_CONFIG);
     const clock = new FakeClock(TODAY);
     const result = await findPendingBriefing(storage, clock);
-    expect(result).toEqual({ found: false, daysSearched: MAX_BRIEFING_LOOKBACK_DAYS + 1 });
+    expect(result).toEqual({ found: false, daysSearched: MAX_BRIEFING_SCAN_DAYS + 1 });
   });
 });
 
 describe('findPendingBriefing — "mais recente" (Q-026)', () => {
-  it("finds today's briefing when it still has pending work", async () => {
+  it("finds today's briefing when it still has pending work, daysAgo: 0", async () => {
     const storage = new FakeStorage(DEFAULT_TEST_CONFIG);
     const handoff = createHandoff({ pendingItems: ['finish the parser'] });
     await storage.saveHandoff(dayOffset(0), handoff);
@@ -39,10 +39,11 @@ describe('findPendingBriefing — "mais recente" (Q-026)', () => {
     expect(result.found).toBe(true);
     if (result.found) {
       expect(result.briefing.day).toBe(dayOffset(0));
+      expect(result.daysAgo).toBe(0);
     }
   });
 
-  it('walks backward to yesterday when today has no briefing at all', async () => {
+  it('walks backward to yesterday when today has no briefing at all, daysAgo: 1', async () => {
     const storage = new FakeStorage(DEFAULT_TEST_CONFIG);
     const handoff = createHandoff({ pendingItems: ['finish the parser'] });
     await storage.saveHandoff(dayOffset(1), handoff);
@@ -52,6 +53,7 @@ describe('findPendingBriefing — "mais recente" (Q-026)', () => {
     expect(result.found).toBe(true);
     if (result.found) {
       expect(result.briefing.day).toBe(dayOffset(1));
+      expect(result.daysAgo).toBe(1);
     }
   });
 
@@ -93,24 +95,44 @@ describe('findPendingBriefing — "mais recente" (Q-026)', () => {
   });
 });
 
-describe('findPendingBriefing — bounded lookback (Q-026: stale is not "yesterday")', () => {
-  it('never looks further back than maxLookbackDays', async () => {
+describe('findPendingBriefing — no product-level age cutoff (Q-026, PO review)', () => {
+  it('finds a genuinely old pending briefing (e.g. someone back from a 3-week vacation)', async () => {
     const storage = new FakeStorage(DEFAULT_TEST_CONFIG);
-    // One day beyond the default window — must never be found.
+    const threeWeeksAgo = 21;
     await storage.saveHandoff(
-      dayOffset(MAX_BRIEFING_LOOKBACK_DAYS + 1),
-      createHandoff({ pendingItems: ['ancient work'] }),
+      dayOffset(threeWeeksAgo),
+      createHandoff({ pendingItems: ['pick this back up'] }),
     );
     const clock = new FakeClock(TODAY);
 
     const result = await findPendingBriefing(storage, clock);
-    expect(result).toEqual({ found: false, daysSearched: MAX_BRIEFING_LOOKBACK_DAYS + 1 });
+    expect(result.found).toBe(true);
+    if (result.found) {
+      expect(result.briefing.day).toBe(dayOffset(threeWeeksAgo));
+      expect(result.daysAgo).toBe(threeWeeksAgo);
+    }
+  });
+});
+
+describe('findPendingBriefing — MAX_BRIEFING_SCAN_DAYS is an I/O bound, not a product cutoff', () => {
+  it('never reads past the scan bound', async () => {
+    const storage = new FakeStorage(DEFAULT_TEST_CONFIG);
+    // One day beyond the scan bound — a real pending briefing that simply isn't found, not
+    // "correctly rejected for being too old" (there is no such rejection any more).
+    await storage.saveHandoff(
+      dayOffset(MAX_BRIEFING_SCAN_DAYS + 1),
+      createHandoff({ pendingItems: ['further back than this call is willing to scan'] }),
+    );
+    const clock = new FakeClock(TODAY);
+
+    const result = await findPendingBriefing(storage, clock);
+    expect(result).toEqual({ found: false, daysSearched: MAX_BRIEFING_SCAN_DAYS + 1 });
   });
 
-  it('does find a briefing exactly at the edge of the window', async () => {
+  it('does find a briefing exactly at the edge of the scan bound', async () => {
     const storage = new FakeStorage(DEFAULT_TEST_CONFIG);
     await storage.saveHandoff(
-      dayOffset(MAX_BRIEFING_LOOKBACK_DAYS),
+      dayOffset(MAX_BRIEFING_SCAN_DAYS),
       createHandoff({ pendingItems: ['still counts'] }),
     );
     const clock = new FakeClock(TODAY);
@@ -118,11 +140,11 @@ describe('findPendingBriefing — bounded lookback (Q-026: stale is not "yesterd
     const result = await findPendingBriefing(storage, clock);
     expect(result.found).toBe(true);
     if (result.found) {
-      expect(result.briefing.day).toBe(dayOffset(MAX_BRIEFING_LOOKBACK_DAYS));
+      expect(result.briefing.day).toBe(dayOffset(MAX_BRIEFING_SCAN_DAYS));
     }
   });
 
-  it('a caller can narrow the window explicitly', async () => {
+  it('a caller can narrow the scan bound explicitly', async () => {
     const storage = new FakeStorage(DEFAULT_TEST_CONFIG);
     await storage.saveHandoff(dayOffset(2), createHandoff({ pendingItems: ['too far for 1'] }));
     const clock = new FakeClock(TODAY);
