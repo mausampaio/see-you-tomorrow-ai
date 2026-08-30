@@ -133,6 +133,33 @@ Testes de contrato, marcados para **não** rodar no CI padrão (`vitest --projec
   `--model`, `--max-budget-usd`, `--no-session-persistence`.
 - `claude agents --json` ainda devolve array com `pid`, `sessionId`, `cwd`.
 - `CLAUDE_CODE_FORCE_SESSION_PERSISTENCE` ainda é reconhecido pela versão instalada.
+- `--append-system-prompt-file` ainda **acrescenta** ao prompt de sistema padrão do Claude Code,
+  em vez de substituí-lo (D-004 depende disto para o fallback da retomada escolher este flag em
+  vez de `--system-prompt-file`, Q-027 item 3). Prova por assimetria observável de fora, **com
+  braço negativo**: uma chamada `claude -p --model haiku` com o flag pede, no mesmo turno, o nome
+  do produto de CLI (só respondível a partir do prompt padrão) e um marcador sintético só presente
+  no arquivo anexado. Uma chamada de controle (sem flag nenhum) e uma chamada com
+  `--system-prompt-file` (o flag que de fato SUBSTITUI, mesmo arquivo) fecham o argumento: medido
+  na 2.1.251, controle e append respondem com o nome do produto, replace responde `UNKNOWN` —
+  mesmo com o marcador do arquivo presente nos dois casos. Sem esse terceiro braço, "os dois fatos
+  chegam" seria compatível com as duas semânticas (achado do review, não do desenvolvimento
+  original — Q-029 registra a versão anterior, só com controle+append, que não discriminava de
+  verdade). **Achado à parte, e sério: `--model sonnet` NÃO discrimina** — respondeu o nome do
+  produto mesmo com o prompt inteiramente substituído (autorrelato de identidade não depende do
+  prompt de sistema nesse modelo) e ainda estourou o teto de custo via uma chamada de classificação
+  interna em haiku antes do turno de sonnet. Por isso o teste final usa só `haiku`, a única
+  configuração medida a discriminar. **Exatamente 3 chamadas reais por execução**,
+  `--no-session-persistence` + `--max-budget-usd` baixo, `cwd` descartável em `%TEMP%`, ambiente
+  saneado (D-017, reaproveitando `adapters/generation/env.ts#buildGenerationEnv`) — nunca mais que
+  isso, comentário no topo de `tests/contract/append-system-prompt-file.test.ts` explica o porquê.
+  **Flakiness medida e documentada, não escondida:** a chamada de controle especificamente já
+  respondeu `UNKNOWN` uma vez sem motivo (ruído de amostragem do haiku nessa pergunta de
+  autorrelato) enquanto append e replace nunca flakaram nas mesmas rodadas — a mensagem de falha
+  do teste de controle explica que uma falha isolada ali não é, sozinha, evidência de regressão.
+  **Limitação registrada em Q-029, não escondida:** a medição usa `-p` (headless); o fallback real
+  de `adapters/resumption` roda em modo interativo puro com `stdio: 'inherit'`, que não deixa o
+  `seeya` ler o stdout do processo filho — supor que a construção do prompt de sistema é a mesma
+  rotina nos dois modos é engenharia razoável, não medição direta.
 
 **Registrar sempre a versão contra a qual o contrato rodou.** O Spike D mostrou que o
 comportamento muda entre versões (2.1.201 × 2.1.233) e que **duas versões coexistem na mesma

@@ -2146,6 +2146,131 @@ a mudança é de texto de saída, e a S3-T5 foi instruída a não tocar nesses a
 
 ---
 
+
+---
+
+## Q-029 — Resultado do teste de contrato de `--append-system-prompt-file` (S3-T4)
+**Tarefa:** S3-T4
+**Bloqueia:** não — a tarefa foi entregue; registro do que foi medido e das duas limitações que o
+teste não cobre, no mesmo padrão de Q-017/Q-021/Q-022/Q-023/Q-027/Q-028.
+
+**Resultado, em uma linha: a distinção "append, não replace" É observável de fora, e agora o teste
+tem o braço negativo que fecha o argumento de verdade — o review do mantenedor pegou, com razão,
+que a primeira versão só tinha o braço positivo, e "os dois fatos chegam" é compatível com as duas
+semânticas até alguém medir o que o replace de fato faz.**
+
+**O que foi medido (claude 2.1.251, mais nova que a 2.1.235 do Spike H — já é sinal de que a versão
+instalada muda sem aviso, exatamente o risco que a tarefa existe para cobrir).**
+
+1. `claude --help` nesta máquina: nenhum dos dois flags (`--append-system-prompt-file`,
+   `--system-prompt-file`) tem entrada própria — igual ao Spike H. **Achado novo:** agora existe
+   uma menção **indireta**, dentro da descrição do flag `--bare`: "Explicitly provide context via:
+   `--system-prompt[-file]`, `--append-system-prompt[-file]`, ...". Isso é mais fraco que
+   documentado — não há descrição do que a variante `-file` faz sozinha, só confirmação de que ela
+   existe como forma aceita. Não muda a conclusão da S3-T4 (a semântica continua não-documentada),
+   mas vale registrar para quem for reler o Spike H achando que "nenhum aparece" ainda é
+   literalmente verdade em toda leitura do `--help`.
+
+2. **Método usado, com o braço negativo:** três chamadas reais de `claude -p` por execução do
+   teste (nunca mais, ver comentário no topo do arquivo) — uma sem flag nenhum (controle), uma com
+   `--append-system-prompt-file <arquivo>` (o caso real), e uma com `--system-prompt-file
+   <arquivo>` (o flag que de fato SUBSTITUI — o braço negativo que faltava). As três pedem, no
+   mesmo turno, duas coisas via `--json-schema`: (a) o nome do produto de CLI em que o modelo está
+   rodando, e (b) o token secreto anexado (`SEEYA-CONTRACT-K7QF2`). `--no-session-persistence` +
+   `--max-budget-usd 0.10` limitam custo e não deixam sessão persistida; `cwd` é `mkdtemp`
+   descartável em `%TEMP%`; ambiente saneado reaproveitando
+   `adapters/generation/env.ts#buildGenerationEnv(..., 'lean')` (mesma lista D-017, sem duplicar).
+
+3. **Resultado, com `--model haiku`: o braço negativo discrimina.** Controle (sem flag) e
+   `--append-system-prompt-file`: nome do produto = "Claude Code". `--system-prompt-file`
+   (replace): nome do produto = `UNKNOWN`, marcador ainda presente (`SEEYA-CONTRACT-K7QF2`) — ou
+   seja, o conteúdo do arquivo chegou nos dois casos, mas o fato do prompt padrão só sobreviveu
+   no caso append. **Isto é a prova que faltava**: o observável realmente discrimina entre as duas
+   semânticas, porque foi medido o que o replace faz de verdade, não só assumido a partir do nome
+   dos flags.
+
+4. **Achado grande e não previsto: `--model sonnet` NÃO discrimina, e por um motivo sério.**
+   Medido uma vez, com as três chamadas: (a) custo disparou para ~US$0,13 por chamada — acima do
+   teto de US$0,10 — e duas das três chamadas (controle, append) saíram com
+   `error_max_budget_usd` antes de completar. A causa aparece no `modelUsage` bruto: `--model
+   sonnet` aqui passa por uma chamada interna de classificação em `claude-haiku-4-5-*` **antes**
+   do turno de verdade em `claude-sonnet-5`, e cada uma paga criação de cache nova
+   (`cache_creation_input_tokens`) sob `--no-session-persistence`, porque não há sessão persistida
+   para reaproveitar cache entre chamadas. (b) **Mais grave:** a ÚNICA chamada de sonnet que
+   completou foi exatamente a de replace, e ela respondeu `"Claude Code"` mesmo com o prompt de
+   sistema padrão inteiramente substituído por um arquivo que nunca menciona nome de produto
+   nenhum. Ou seja: com sonnet, o autorrelato de identidade **não depende do prompt de sistema** —
+   vem de conhecimento geral do modelo ou de outro sinal do ambiente, e o observável que este
+   arquivo inteiro usa deixa de discriminar por completo. `sonnet` foi descartado pelas duas
+   razões, independentemente uma da outra; o teste final usa só `haiku`, a única configuração
+   medida a discriminar de verdade.
+
+**Limitação 1 — a primeira formulação da pergunta deu falso negativo, e por que isso importa mais
+do que parece.** A primeira versão pedia um booleano direto ("você sabe seu próprio nome de
+produto? true/false") — na chamada de CONTROLE, sem flag nenhum, o modelo respondeu `false`. Não
+é evidência de que o prompt padrão não tem a informação: é forma de recusa a uma pergunta
+meta sobre as próprias instruções, o mesmo tipo de cautela treinada que faz um modelo hesitar em
+"confirmar" fatos sobre si mesmo mesmo quando os tem. Trocar a pergunta para pedir o fato
+diretamente ("qual é o nome do produto — responda UNKNOWN só se não souber mesmo") resolveu.
+
+**Limitação 1b — NOVA, achada só depois de acrescentar o braço negativo: mesmo a formulação
+corrigida tem uma taxa de falha mensurada na chamada de CONTROLE especificamente.** Rodando o
+arquivo final (haiku, três chamadas) uma segunda vez, sem mudar nada, a chamada sem flag nenhum
+respondeu `UNKNOWN` de novo — enquanto a chamada de append e a de replace, nas mesmas duas rodadas
+completas, **nunca** falharam (append sempre "Claude Code", replace sempre `UNKNOWN`, sustentando a
+discriminação nos dois casos). Isto é ruído de amostragem do haiku especificamente nesta pergunta
+de autorrelato, isolado à chamada de controle — não foi observado no par que sustenta a alegação
+central (append vs. replace). A mensagem de falha do teste de controle documenta isso explicitamente:
+uma falha isolada ali, com os outros três testes verdes, é ruído até prova em contrário (rodar de
+novo antes de escalar); falha repetida, ou falha junto com o teste "append, not replace", já não é
+ruído. Registrado em vez de escondido — é exatamente o tipo de garantia que D-025 pede para não
+inflar.
+
+**Limitação 2 — o modo medido é `-p` (headless), não o modo que `adapters/resumption` usa de
+verdade.** `resumer.ts` chama o fallback (`buildFallbackArgs`) em modo **interativo puro** (sem
+`-p`), com `stdio: 'inherit'`, porque é isso que dá ao usuário uma sessão retomável de verdade
+(Spike H). O teste de contrato não pode inspecionar esse caminho por dentro: com `stdio: 'inherit'`
+o `seeya` nunca vê o stdout do processo filho (vai direto para a tela), e reproduzir o `stdio:
+'pipe'` sem TTY reintroduziria a degradação "responde uma vez e sai" que o próprio Spike H mediu —
+que é exatamente o comportamento usado aqui, só que via `-p` (mecanismo suportado e determinístico
+por design, em vez de uma degradação por ausência de TTY). **Suposição não verificada
+diretamente:** que a construção do prompt de sistema (onde `--append-system-prompt-file` entra) é
+a mesma rotina para os dois modos, e que o flag não muda de semântica entre `-p` e interativo. É
+uma suposição de engenharia razoável — um único ponto de tratamento de flag, não dois — mas não é
+medição, e fica registrada como tal em vez de virar afirmação.
+
+**O que o teste NÃO tenta provar, para não inflar a garantia (D-025):** que o texto completo do
+prompt de sistema padrão do Claude Code é preservado byte a byte; só que pelo menos um fato que só
+ele contém (o nome do produto) continua respondível, e que esse fato **de fato depende** do
+conteúdo do prompt (provado pelo braço negativo). Não prova nada sobre o modo interativo com TTY
+real. Não prova nada sobre modelos além de `haiku` — ao contrário, o achado 4 é evidência direta de
+que **não dá para supor** que outro modelo (`sonnet`, pelo menos) se comporta igual: o autorrelato
+de identidade pode vir de um lugar que não é o prompt de sistema, dependendo do modelo.
+
+**Invocações reais totais usadas para chegar a este resultado: 11** — 4 na fase original (duas
+tentativas de formulação de pergunta, só controle+append, antes do braço negativo existir); 1 sonda
+avulsa testando `--system-prompt-file` isoladamente antes de integrar ao arquivo; 3 na primeira
+integração completa do braço negativo (haiku, as três chamadas — controle flakou, append e replace
+discriminaram corretamente); 3 tentando `--model sonnet` (achado 4, acima — duas chamadas estouraram
+orçamento, a terceira revelou que sonnet não discrimina). **O arquivo final roda exatamente 3 por
+execução, para sempre depois disso.**
+
+**Opções que enxergo:** A) aceitar o resultado como está — o braço negativo prova a discriminação
+com `haiku`; a flakiness isolada do controle está documentada na própria mensagem de falha do
+teste, e não há orçamento (nem de invocação real, nem de tempo) para perseguir uma pergunta 100%
+determinística contra um modelo estatístico. B) se algum dia `adapters/resumption` ganhar um modo
+de depuração que capture stdout do modo interativo por outro canal, revisitar se vale medir os
+dois modos separadamente — não antes, para não guardar escopo especulativo (mesmo raciocínio da
+Q-027 item 4/opção C). C) o achado 4 (sonnet não discrimina) pode valer uma nota à parte em
+D-004/Q-027 sobre não confiar em autorrelato de modelo para decisões de produto — hoje o `seeya`
+não faz isso em lugar nenhum, mas fica como risco conhecido caso surja a tentação.
+**Resposta:** (preenchida pelo PO)
+
+---
+
+
+---
+
 ## Q-031 — S3-T6: legibilidade do `start-day`, a costura para S3-T5, e escolhas sem resposta literal
 
 **Tarefa:** S3-T6
@@ -2203,12 +2328,6 @@ só avisando aqui para não ser surpresa. C) para o item 4, medir com o mantened
 `--help` precisa mesmo dizer explicitamente "skips the interactive picker" em vez de deixar
 implícito.
 **Resposta:** (preenchida pelo PO)
-
----
-
-
----
-
 ## Q-032 — Na v2, com o `seeya` sendo dono das sessões, a captura pega carona no cache?
 
 **Tarefa:** nenhuma — pergunta do mantenedor em 2026-08-30, ao ler o Spike I.
