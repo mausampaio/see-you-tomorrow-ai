@@ -83,6 +83,7 @@ interface Storage {
   saveHandoff(day: Day, handoff: Handoff): Promise<void>;
   readBriefing(day: Day): Promise<Briefing | null>;
   readConfig(): Promise<Config>;
+  readHandoff(day: Day, sessionId: string): Promise<Handoff | null>;  // verifica em disco antes de terminar (D-002, Q-021)
   saveState(state: DayState): Promise<void>;
 }
 

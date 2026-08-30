@@ -1425,3 +1425,44 @@ disco, como toda chave nova (AGENTS.md). 4) manter `readHandoff` fora do esboço
 documentado; ou fazer `endDay` ler `forks.json` mesmo assim, por simetria com o resto do código,
 mesmo sendo I/O comprovadamente inútil.
 **Resposta:** (a preencher pelo PO)
+
+
+**Resposta:** **FECHADA — quatro confirmados, o primeiro muda.**
+
+**1) `source: "noTranscript"` NÃO vence quando o modelo rodou e respondeu.** É o único que muda,
+e o argumento é o campo vizinho: `source` e `sources[]` convivem no mesmo handoff, e o `sources[]`
+**já** registra que o transcript não respondeu. Marcar `source: "noTranscript"` para uma captura
+em que o modelo produziu entendimento de verdade não acrescenta informação — apaga.
+
+O teste é a pergunta que o leitor faz primeiro: **"este handoff tem entendimento escrito pelo
+modelo?"** Com a sua regra, um handoff que tem seria rotulado `noTranscript`, e quem varre a
+lista o pularia.
+
+O enum passa a descrever **a procedência da camada de entendimento**:
+- `model` — o modelo produziu.
+- `deterministic` — o modelo foi tentado e falhou; caiu para os fatos (D-003).
+- `noTranscript` — o modelo **não foi chamado**, e o motivo foi ausência de transcript.
+
+Hoje o terceiro provavelmente não é produzido, já que o gerador enxuto é chamado mesmo sem
+transcript. **Isso é aceitável e honesto**: o valor existe na spec, e um enum com um caso ainda
+não alcançado é melhor que um rótulo que mente sobre os outros dois.
+
+**2) Dois geradores em `EndDayDeps`: confirmado.** A escolha enxuto/profundo depende de
+`session.hasTranscript`, que só existe em tempo de execução. O `cli/` continua sendo a única raiz
+de composição — instanciar duas classes em vez de uma não muda isso.
+
+**3) Assinatura de evidência reconstruída dos fatos persistidos: confirmado**, e com uma
+condição. Não inventar campo de disco fora da spec foi o certo (D-027). Mas isso amarra a
+anti-duplicidade à **estabilidade da reconstrução**: se um dia os fatos persistidos deixarem de
+permitir remontar a mesma assinatura, o D-026 passa a comparar coisas diferentes em silêncio.
+Registre isso em comentário, apontando que virar campo em disco é a saída se acontecer.
+
+**4) `Storage.readHandoff` além do esboço: confirmado.** Quarta vez que o esboço de
+`ARQUITETURA.md` § Portas perde para uma restrição que a implementação descobriu (Q-012, Q-014,
+Q-019, agora esta). E aqui o método não é conveniência: é ele que **verifica que o handoff está
+em disco antes de terminar o processo** (D-002). Atualizo o esboço.
+
+**5) `knownForks` sempre vazio: confirmado como observação, e vira comentário.** Você está certo
+que as duas estratégias já excluem forks antes do `list()` devolver. O risco é de segunda ordem:
+se um dia uma estratégia parar de excluir, a elegibilidade deixa de filtrar **sem nada falhar**.
+Deixe escrito onde o conjunto é montado, para quem mexer saber que o filtro vive rio acima.
