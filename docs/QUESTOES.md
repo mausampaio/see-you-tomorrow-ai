@@ -2100,3 +2100,115 @@ ganhar leitor fora deste projeto algum dia, reconsiderar o par `save<Nome>`/`rea
 antes. C) para o item 5, se um retorno real de usuários mostrar que digitar errado é comum, um
 laço de nova tentativa vira tarefa própria.
 **Resposta:** (preenchida pelo PO)
+
+---
+
+## Q-030 — Cinco escolhas feitas fazendo S3-T5 (identificar a sessão na listagem e no `--session`), registradas para confirmação
+**Tarefa:** S3-T5
+**Bloqueia:** não — a tarefa foi entregue com a solução mínima em cada ponto, mesmo padrão de
+Q-017/Q-021/Q-022/Q-023/Q-027/Q-028.
+
+**1) Normalização de caminho vira função pura em `core/cwd-normalization.ts`, com a plataforma
+como parâmetro — não lida do `process.platform` ali dentro.** `core/eligibility.ts` já dizia que
+normalizar é "responsabilidade de quem monta o objeto, fora do núcleo", mas isso deixava em aberto
+**onde** essa normalização deveria morar fisicamente. Duas leituras possíveis: (a) fora de `core/`
+inteiramente (em cada adapter/cli que precisa dela, duplicada), ou (b) uma função pura dentro de
+`core/`, já que ela não importa `node:*` nem faz I/O — só string, igual a
+`adapters/discovery/session-mapping.ts#deriveNameFromCwd`, que já vive fora do núcleo por lidar com
+`cwd` mas é puramente string. Escolhi (b), com a plataforma **injetada como parâmetro** (mesma
+disciplina do `Clock`, D-019): a função nunca lê `process.platform`, então dá para testar a
+ramificação Windows inteira rodando em qualquer SO — é literalmente o requisito do aceite ("não
+depende de rodar no Windows para valer"). `application/eligibility-assembly.ts` e
+`cli/session-reference.ts`/`cli/end-day-command.ts`/`cli/eligibility-view.ts` são quem lê o
+`process.platform` real, uma vez cada, e passam a dica adiante. Isto é um padrão novo (nenhuma
+decisão fala de "porta de plataforma" explicitamente) — se o PO preferir tratar isto como uma porta
+formal (`core/ports.ts`) em vez de parâmetro simples, é reversível a baixo custo agora, antes de um
+segundo lugar copiar o padrão errado.
+
+**2) Prefixo de exibição do `sessionId`: 8 caracteres (primeiro grupo do UUID), escalando por
+fronteira de grupo (`8`, `13`, `18`, `23`, `36`) só para os que colidem.** Matemática registrada no
+docstring de `cli/session-id-display.ts`: para N sessões, a chance de colisão no primeiro grupo é
+~N²/2^33 — para 40 sessões, ~1,9e-7. Não tratei isso como "nunca acontece": a função sempre
+recalcula por lote e nunca deixa duas sessões com o mesmo prefixo exibido, subindo para o próximo
+grupo só para o par que colidiu. Alternativa descartada: hash curto sintético (perderia a leitura
+direta do `sessionId` real, que é o que a pessoa vai colar de volta em `--session`).
+
+**3) `--session` que casa mais de uma sessão é `ambiguous`, nunca processa todas.** Antes desta
+tarefa, `end-day --session <cwd>` que casasse várias sessões (o cenário que motivou a S3-T5)
+processava **todas elas em silêncio** — a igualdade de string exata nunca impedia isso, só nunca
+tinha acontecido de propósito. Isto é uma mudança de comportamento, não só uma extensão: agora
+`end-day-command.ts` resolve o `--session` contra uma descoberta própria **antes** de chamar
+`application/endDay`, e recusa se houver mais de um casamento (por qualquer método — prefixo, nome
+ou `cwd`), nomeando as sessões encontradas. A leitura literal da spec ("`--session` limita a uma
+sessão") sustenta isso, e a regra dura que o mantenedor escreveu na tarefa ("prefixo ambíguo nunca
+escolhe sozinho... se duas sessões casam, a saída diz quais e pede desambiguação") deixa pouca
+margem para a leitura antiga. Se o comportamento anterior (processar todas as que casarem por
+`cwd`) era intencional para outro caso de uso, isto reverte um comportamento que ninguém tinha
+testado — registrado aqui para o PO confirmar que a leitura nova é a certa.
+
+**4) A resolução do `--session` custa uma segunda chamada de descoberta.** Para recusar
+ambiguidade **antes** de `endDay` processar (e potencialmente encerrar) qualquer sessão,
+`end-day-command.ts` chama `deps.sessionProvider.list()` uma vez para resolver o valor, e `endDay`
+chama de novo, por conta própria, na sua própria execução. Isso abre uma corrida pequena e rara
+(uma sessão que existia na primeira leitura já não existe mais na segunda) — tratada com uma
+mensagem própria (`formatVanishedMatchMessage`) em vez de um "0 in scope" mudo, mas o custo de duas
+leituras por invocação de `--session` é real, ainda que barato (é um comando manual, não um laço
+quente). Alternativa que evitaria a segunda leitura: `EndDayResult` devolver a lista de sessões
+que o filtro deixou passar, não só a contagem — mudança maior em `application/types.ts` que não fiz
+por não estar no escopo de arquivos desta tarefa.
+
+**5) `start-day`: ambíguo vira a mesma mensagem que "não encontrado" — sem detalhe.**
+`cli/start-day-selection.ts#findHandoffBySessionReference` já devolve `ambiguous` com a lista
+completa de casamentos, mas `start-day-command.ts` colapsa `ambiguous` em `blocked` usando a MESMA
+`formatNoSessionMatch` que já existia — porque uma mensagem que nomeasse as sessões ambíguas
+precisaria mexer em `format-start-day.ts`, que é do S3-T6 e está fora do meu alcance nesta tarefa
+(instrução explícita do mantenedor). A regra dura ("nunca resolve sozinho") está cumprida — uma
+sessão nunca é retomada por adivinhação —, mas a pessoa recebe menos informação em `start-day` do
+que em `end-day` para o mesmo tipo de erro. Fica para o mantenedor costurar (ou para uma tarefa
+nova) uma mensagem própria de ambiguidade em `format-start-day.ts`.
+
+**Opções que enxergo:** A) confirmar as cinco como estão. B) para o item 1, formalizar uma porta de
+plataforma em vez do parâmetro simples, se o padrão se repetir em uma terceira tarefa. C) para o
+item 3, se o comportamento antigo (processar todas as sessões de um `cwd` compartilhado) for
+desejado em algum fluxo, ele precisaria de uma flag própria (`--all-matching`?), não do
+`--session` que hoje promete "uma sessão". D) para o item 5, o mantenedor decide quando costurar a
+mensagem de ambiguidade em `format-start-day.ts`.
+**Resposta:** (preenchida pelo PO)
+
+---
+
+## Q-030a — Achado ortogonal: `verificar:linux` ficou intermitente ao rodar a suíte `guards` completa, mesmo sem relação com o código desta tarefa
+**Tarefa:** S3-T5 (achado incidental, não é o escopo da tarefa)
+**Bloqueia:** não — `verificar` e `verificar:linux` fecharam verdes antes de eu parar (ver
+"Aceite" no relatório da tarefa), mas o padrão vale registro porque pode morder a próxima tarefa
+que acrescentar arquivo a `src/`.
+
+**O que medi.** `node scripts/verificar-linux.mjs`, rodado 6 vezes com o código desta tarefa: 4
+verdes, 2 vermelhos — os dois vermelhos sempre no mesmo lugar,
+`tests/integration/guards/eslint-restrictions.test.ts`, nos casos `rejects setTimeout`/`rejects
+setInterval` outside `src/adapters/clock/`, com a mensagem `"[guard child process exceeded its own
+30000ms budget (CHILD_PROCESS_BUDGET_MS) and was killed (SIGTERM) before finishing]"` — não uma
+falha de asserção, um estouro do orçamento do processo filho (`tests/integration/guards/_support.ts`,
+constante fixada na S2-T7). Rodei o MESMO script 3 vezes com as minhas mudanças guardadas
+(`git stash`, voltando ao código anterior a esta tarefa): **3 de 3 verdes**. Rodando só
+`eslint-restrictions.test.ts` sozinho (sem o resto da suíte `guards` por perto) dentro do mesmo
+container, cada `eslint` real terminou em 6-12s, bem dentro do orçamento — a lentidão só aparece
+quando a suíte inteira de `guards` roda junto (`layer-matrix.test.ts` e `dependency-cruiser.test.ts`
+já são pesados sozinhos, cada um com 20 asserções que sobem um processo real).
+
+**O que infiro, sem ter medido a fundo.** O padrão bate com o que a S2-T7/S2-T8 já escreveram: o
+orçamento de 30s foi medido nesta máquina Windows, fora de container, e o S2-T8 já tinha
+encontrado o mesmo tipo de problema (orçamento medido no lugar errado) para outro teste. O container
+Docker parece ter menos folga que a máquina local sob concorrência real da suíte `guards` inteira, e
+os três arquivos novos que esta tarefa acrescentou a `src/` (mais os seis em `tests/`) parecem ser o
+suficiente para empurrar a contenção — que já estava perto da borda — para cima do limite, com
+alguma frequência. Não medi o suficiente para separar "é sempre assim, eu só tive azar nas execuções
+sem meu código" de "meu código genuinamente aumenta a contenção" — as duas hipóteses são compatíveis
+com os números que tenho.
+
+**Por que não mexi no orçamento.** `CHILD_PROCESS_BUDGET_MS` é infraestrutura compartilhada por toda
+a suíte `guards`, não desta tarefa, e a própria S2-T8 registrou a lição de que subir um número sem
+medir no ambiente real ("medir na máquina do desenvolvedor e publicar é o mesmo erro de sempre, com
+outra roupa") é pior que não mexer. Mudar isso exigiria a mesma disciplina de medição da S2-T7/S2-T8,
+que não é o escopo desta tarefa.
+**Resposta:** (preenchida pelo PO)

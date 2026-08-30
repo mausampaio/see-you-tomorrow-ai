@@ -57,6 +57,18 @@ O que precisa estar coberto com rigor, porque é onde os bugs vão doer:
   como regressão silenciosa. `resumeSessions` (`application/start-day.ts`) grava a marca **depois**
   de cada `resume()` completar, nunca em lote no fim; um `resume()` que lança para o laço e não
   marca a sessão que falhou.
+- **Identificação de sessão com `cwd` repetido (S3-T5)**: duas sessões descobertas com o **mesmo**
+  `cwd` (e até o mesmo `name` derivado) precisam continuar distinguíveis — `sessionId` completo
+  preservado na `SessionRow`, e um prefixo de exibição diferente para cada uma
+  (`computeDisplaySessionIds`). É o caso real que motivou a tarefa e que nenhuma suíte cobria
+  antes dela. `--session` casando mais de uma sessão (por prefixo, nome ou `cwd`) é `ambiguous`,
+  nunca resolvido escolhendo uma (D-025) — testado tanto em `end-day --session` quanto em
+  `start-day --session`.
+- **Normalização de caminho nas três plataformas sem depender de rodar nelas (S3-T5)**: separador,
+  maiúscula/minúscula (só Windows) e barra final exercitados chamando
+  `normalizeCwdForComparison` com a dica de plataforma como argumento explícito — a mesma função
+  roda com `'win32'` e `'posix'` no mesmo processo de teste, então o ramo Windows nunca fica
+  descoberto só porque a suíte rodou em Linux/macOS (a lição da S2-T1, aplicada de novo).
 
 Cobertura mínima: **`core/` 95%**, demais diretórios de produção **80%**. Configurado por
 diretório no vitest, e o CI falha abaixo disso.
