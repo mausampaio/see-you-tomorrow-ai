@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { PROJECT_ROOT, CHILD_PROCESS_TIMEOUT, runVitestWithCoverage } from './_support.js';
+import { PROJECT_ROOT, TEST_TIMEOUT_MS, runVitestWithCoverage } from './_support.js';
 
 /**
  * Proves that the per-directory coverage threshold (docs/TESTES.md, configured in
@@ -14,8 +14,9 @@ import { PROJECT_ROOT, CHILD_PROCESS_TIMEOUT, runVitestWithCoverage } from './_s
  * that exists in src/ at the time). The fixtures isolate the same mechanics with a minimal
  * subject, one path with 100% coverage and another with a branch left uncovered on purpose.
  *
- * `CHILD_PROCESS_TIMEOUT` (S0-T6): also spawns a real child process (a full vitest run with
- * coverage), the same class of flakiness under load as the eslint/depcruise guards.
+ * `TEST_TIMEOUT_MS` (S0-T6, split from the child's own budget in S2-T7): also spawns a real
+ * child process (a full vitest run with coverage), the same class of flakiness under load as
+ * the eslint/depcruise guards.
  */
 describe('guard: coverage threshold rejects when coverage is missing', () => {
   it(
@@ -34,7 +35,7 @@ describe('guard: coverage threshold rejects when coverage is missing', () => {
       expect(result.exitCode).not.toBe(0);
       expect(result.output).toContain('does not meet');
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 
   it(
@@ -46,6 +47,6 @@ describe('guard: coverage threshold rejects when coverage is missing', () => {
 
       expect(result.exitCode).toBe(0);
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 });

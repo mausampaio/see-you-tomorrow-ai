@@ -4,7 +4,7 @@ import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import {
   SYNTHETIC_TEST_LAYER_NAME,
   PROJECT_ROOT,
-  CHILD_PROCESS_TIMEOUT,
+  TEST_TIMEOUT_MS,
   deleteTempFile,
   guardFixturePath,
   writeTempFile,
@@ -73,7 +73,7 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
       const realViolations = violationsOutsideGuardFixtures(result.violations);
       expect(realViolations, result.raw).toEqual([]);
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 
   it(
@@ -93,7 +93,7 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
 
       expect(rules, result.raw).toContain('core-does-not-import-node');
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 
   it(
@@ -110,7 +110,7 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
 
       expect(rules, result.raw).toContain('core-does-not-import-other-layers');
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 
   it(
@@ -127,7 +127,7 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
 
       expect(rules, result.raw).toContain('adapters-does-not-import-application-cli-or-scheduler');
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 
   it(
@@ -142,7 +142,7 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
 
       expect(rules, result.raw).toContain('adapters-does-not-import-application-cli-or-scheduler');
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 
   it(
@@ -157,7 +157,7 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
 
       expect(rules, result.raw).toContain('adapters-does-not-import-application-cli-or-scheduler');
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 
   it(
@@ -172,7 +172,7 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
 
       expect(violations, result.raw).toEqual([]);
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 
   it(
@@ -187,7 +187,7 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
 
       expect(rules, result.raw).toContain('application-does-not-import-adapters-cli-or-scheduler');
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 
   it(
@@ -202,7 +202,7 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
 
       expect(rules, result.raw).toContain('application-does-not-import-adapters-cli-or-scheduler');
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 
   it(
@@ -217,7 +217,7 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
 
       expect(rules, result.raw).toContain('application-does-not-import-adapters-cli-or-scheduler');
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 
   it(
@@ -232,7 +232,7 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
 
       expect(violations, result.raw).toEqual([]);
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 
   it(
@@ -247,7 +247,7 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
 
       expect(rules, result.raw).toContain('scheduler-does-not-import-adapters');
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 
   it(
@@ -262,7 +262,7 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
 
       expect(rules, result.raw).toContain('scheduler-does-not-import-cli');
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 
   it(
@@ -277,7 +277,7 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
 
       expect(violations, result.raw).toEqual([]);
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 
   it(
@@ -292,7 +292,7 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
 
       expect(violations, result.raw).toEqual([]);
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 
   it(
@@ -307,7 +307,7 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
 
       expect(violations, result.raw).toEqual([]);
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 
   it(
@@ -322,7 +322,7 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
 
       expect(violations, result.raw).toEqual([]);
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 
   it(
@@ -337,7 +337,7 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
 
       expect(violations, result.raw).toEqual([]);
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 
   it(
@@ -352,7 +352,7 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
 
       expect(violations, result.raw).toEqual([]);
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 
   it(
@@ -374,7 +374,7 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
         });
       }
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 
   it(
@@ -391,6 +391,6 @@ describe('guard: dependency-cruiser rejects a layer violation', () => {
 
       expect(rules, result.raw).toContain('no-circular-dependency');
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 });

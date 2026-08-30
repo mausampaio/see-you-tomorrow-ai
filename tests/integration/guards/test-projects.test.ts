@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import rawViteConfig from '../../../vitest.config.js';
-import { CHILD_PROCESS_TIMEOUT, isRecord, listProjectTestFiles } from './_support.js';
+import { TEST_TIMEOUT_MS, isRecord, listProjectTestFiles } from './_support.js';
 import { DECLARED_PROJECTS, type DeclaredProject } from './_test-projects.js';
 
 /**
@@ -113,6 +113,6 @@ function testProject(project: DeclaredProject): void {
         expect(result.files.length, result.raw).toBe(0);
       }
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 }
