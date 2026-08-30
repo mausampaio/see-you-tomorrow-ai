@@ -5,6 +5,7 @@ import type {
   GitReadResult,
   HandoffGenerator,
   ProcessControl,
+  RejectedDiscoveryRecord,
   SessionProvider,
   Storage,
   TranscriptReader,
@@ -111,6 +112,9 @@ export function failingGenerator(message: string): FakeHandoffGenerator {
  * from the SAME map, so a test can assert "what would a real re-read see" after a save. */
 export class FakeStorage implements Storage {
   readonly savedHandoffs = new Map<string, Handoff>();
+  /** Keyed by `day`. Grows every time `endDay`'s S2-T4 step calls `saveBriefing` — a test can
+   * assert on the exact markdown, or just that a day got one at all. */
+  readonly savedBriefings = new Map<string, string>();
 
   constructor(
     private readonly config: Config,
@@ -148,6 +152,41 @@ export class FakeStorage implements Storage {
 
   readHandoff(day: string, sessionId: string): Promise<Handoff | null> {
     return Promise.resolve(this.savedHandoffs.get(FakeStorage.key(day, sessionId)) ?? null);
+  }
+
+  /** Every handoff currently in `savedHandoffs` for `day` — the in-memory equivalent of a real
+   * `sessions/` directory listing, with no corruption to report (`rejected` always empty here; see
+   * `StorageWithRejectedHandoffs` below for a double that exercises D-022's other side). */
+  listHandoffs(day: string): Promise<{ handoffs: Handoff[]; rejected: RejectedDiscoveryRecord[] }> {
+    const prefix = `${day}:`;
+    const handoffs = [...this.savedHandoffs.entries()]
+      .filter(([key]) => key.startsWith(prefix))
+      .map(([, handoff]) => handoff);
+    return Promise.resolve({ handoffs, rejected: [] });
+  }
+
+  saveBriefing(day: string, markdown: string): Promise<void> {
+    this.savedBriefings.set(day, markdown);
+    return Promise.resolve();
+  }
+}
+
+/** A `Storage` whose `listHandoffs` always reports one extra unreadable entry alongside whatever
+ * `FakeStorage` would otherwise return — for the briefing wiring test that checks `endDay`
+ * surfaces D-022's rejected side in the generated `summary.md`, not just the accepted one. */
+export class StorageWithRejectedHandoffs extends FakeStorage {
+  constructor(
+    config: Config,
+    private readonly rejection: RejectedDiscoveryRecord,
+  ) {
+    super(config);
+  }
+
+  override async listHandoffs(
+    day: string,
+  ): Promise<{ handoffs: Handoff[]; rejected: RejectedDiscoveryRecord[] }> {
+    const { handoffs, rejected } = await super.listHandoffs(day);
+    return { handoffs, rejected: [...rejected, this.rejection] };
   }
 }
 

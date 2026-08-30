@@ -1,9 +1,9 @@
 /**
- * `endDay`'s top-level orchestration (docs/ESPECIFICACAO.md § `seeya end-day`, steps 1-2 and 4;
- * step 3 — the consolidated briefing — is S2-T4, and step 5 — notifying the result — is S4-T1).
- * Discovers sessions, filters by the five eligibility conditions (docs/ESPECIFICACAO.md §
- * "Elegibilidade"), captures each eligible one under a concurrency limit
- * (`config.captureConcurrency`) with per-session failure isolation, and — for sessions that opted
+ * `endDay`'s top-level orchestration (docs/ESPECIFICACAO.md § `seeya end-day`, steps 1-3 and 4;
+ * step 5 — notifying the result — is S4-T1). Discovers sessions, filters by the five eligibility
+ * conditions (docs/ESPECIFICACAO.md § "Elegibilidade"), captures each eligible one under a
+ * concurrency limit (`config.captureConcurrency`) with per-session failure isolation, writes the
+ * day's consolidated briefing (S2-T4, `application/briefing.ts`), and — for sessions that opted
  * in — terminates the process only after its handoff is verified on disk (D-002).
  *
  * `--dry-run` and `--session` (docs/ESPECIFICACAO.md's flags) are S2-T5's concern: this function
@@ -11,6 +11,7 @@
  * with that — filtering which sessions to pass in, or not calling `endDay` at all for a pure
  * dry-run preview — without this use case needing to know about either flag.
  */
+import { writeDailyBriefing } from './briefing.js';
 import { localDayString } from '../core/day.js';
 import type { Config, Day, DiscoveredSession } from '../core/types.js';
 import { captureSession } from './capture-session.js';
@@ -116,13 +117,15 @@ function aggregate(outcomes: readonly SessionOutcome[]): AggregatedOutcomes {
 
 /**
  * Runs the whole end-of-day encerramento: read config, discover sessions, capture every eligible
- * one (bounded concurrency, per-session isolation), and report every outcome — captured,
- * ineligible, failed, and Q-007's termination notices — never silently dropping a bucket.
+ * one (bounded concurrency, per-session isolation), write the day's consolidated briefing, and
+ * report every outcome — captured, ineligible, failed, and Q-007's termination notices — never
+ * silently dropping a bucket.
  *
  * @example
  * const result = await endDay(deps);
- * // result.captured.length handoffs written; result.terminationNotices names any
- * // canTerminate: true session that stayed alive despite a graceful attempt (Q-007).
+ * // result.captured.length handoffs written, and ~/.seeya/days/<day>/summary.md consolidates
+ * // all of them; result.terminationNotices names any canTerminate: true session that stayed
+ * // alive despite a graceful attempt (Q-007).
  */
 export async function endDay(deps: EndDayDeps): Promise<EndDayResult> {
   const config = await deps.storage.readConfig();
@@ -136,6 +139,7 @@ export async function endDay(deps: EndDayDeps): Promise<EndDayResult> {
     (session) => runSession(deps, session, config, now, day),
   );
   const { ineligible, captured, failedCaptures, terminationNotices } = aggregate(outcomes);
+  await writeDailyBriefing(deps.storage, day, now);
 
   return {
     day,
