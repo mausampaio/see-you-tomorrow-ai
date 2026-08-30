@@ -33,6 +33,21 @@ aprovada. É o único que altera os documentos de autoridade.
 > por causa do código incompleto e foi publicado assim. O `main` escapou por acaso — o commit tinha
 > ido para o branch do agente —, não por cuidado.
 >
+> **Ao pedir mudança "aditiva" em arquivo compartilhado, seja específico — senão você provoca o
+> truque errado.** A instrução "acrescente no fim do arquivo, nada entre interfaces existentes"
+> serve para **tipo ou interface nova**. Para acrescentar um **método a uma interface que já
+> existe**, obedecer essa instrução ao pé da letra só é possível criando um **segundo bloco
+> `export interface X {}`** que o TypeScript funde por declaração.
+>
+> Isso já aconteceu duas vezes (S2-T4 e S3-T1), com dois agentes diferentes, os dois seguindo a
+> instrução corretamente. Funciona e é péssimo de ler: quem abre a interface vê um contrato
+> incompleto, sem sinal de que há mais métodos duzentas linhas abaixo. Fusão de declaração é
+> recurso legítimo da linguagem e lugar ruim para esconder a forma de um contrato.
+>
+> **Diga assim:** método em interface existente vai **dentro dela**, no lugar natural — é edição
+> pequena e localizada, e o git costuma fundir sem conflito. O "no fim do arquivo" vale para o
+> que é novo.
+
 > **Armadilha da worktree, a pior: ela vive DENTRO do repositório.** As worktrees ficam em
 > `.claude/worktrees/`, então qualquer ferramenta que varra a partir da raiz enxerga o checkout
 > dos outros agentes como se fosse o nosso. Medido com três agentes em paralelo: **1077 arquivos

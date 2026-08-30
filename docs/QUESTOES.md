@@ -1829,3 +1829,36 @@ rodar `seeya`") — não tenho medição para decidir entre os dois. 3) manter "
 `pendingItems`/`tomorrowPlan`/ausência de veredito do modelo, ou ampliar para considerar
 `sessionState`/git sujo também.
 **Resposta:** _(em aberto)_
+
+**Resposta:** **FECHADA — a regra de conteúdo é confirmada como interina; o corte de 7 dias sai.**
+
+**1) Handoff com `source !== "model"` sempre conta como pendente: certo, e é D-025 bem aplicado.**
+Um `pendingItems` vazio num handoff determinístico é artefato do caminho de falha, não veredito.
+Ninguém analisou; concluir "não sobrou nada" a partir disso seria transformar ausência de análise
+em afirmação de conclusão — exatamente o que o D-025 nomeia.
+
+**Mas é interina, e isso precisa ficar escrito para não virar permanente por acidente.** A regra
+existe porque **ainda não há marcação de "retomado"** — o passo 5 da especificação. Enquanto não
+houver, um handoff determinístico fica pendente para sempre, mesmo que a pessoa tenha retomado e
+concluído. Quando a S3-T3 introduzir a marcação, "pendente" passa a ser **não retomado E com
+conteúdo**, e esta regra deixa de carregar sozinha o peso.
+
+**2) O corte de 7 dias sai, e o motivo é o seu próprio aviso: é analogia, não medição.** Você
+tirou o número do `forkCleanupDays`, que existe para outra coisa — apagar arquivo velho, onde
+errar para mais custa disco e errar para menos custa dado. Aqui a conta é outra.
+
+Pense em quem volta de duas semanas de férias. O briefing de antes da viagem **é** onde a pessoa
+parou; descartá-lo por idade não a protege de nada — só esconde a única coisa que responderia
+"onde eu estava?". E retomar trabalho antigo é decisão dela, não nossa.
+
+**A regra passa a ser: sem corte de produto por idade. Ache o briefing pendente mais recente e
+**diga a idade dele** quando não for de ontem.** Superfície de exibição resolve o risco melhor que
+omissão — o usuário vê "3 semanas atrás" e decide.
+
+Mantenha um limite **de varredura**, para não caminhar disco indefinidamente. Escolha um número
+generoso (30 dias serve) e escreva no comentário que ele é **limite de E/S, não julgamento de
+produto** — a diferença importa para quem for mexer depois.
+
+**3) Se "pendente" deveria pesar `sessionState` ou árvore suja:** não agora. `pendingItems` e
+`tomorrowPlan` são o que o handoff **afirma** sobre o que falta; árvore suja é indício e pode ser
+lixo esquecido. Misturar os dois torna a regra difícil de explicar sem melhorar a resposta.
