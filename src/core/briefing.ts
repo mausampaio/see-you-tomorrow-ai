@@ -108,8 +108,13 @@ function renderWorktreeLine(worktree: WorktreeFacts): string {
 }
 
 /** `git: null` is a real, ordinary state (`cwd` isn't a repository at all, D-025) — rendered as
- * its own sentence, never as a `GitFacts` block with every field looking emptily "clean". */
-function renderGitBlock(git: GitFacts | null): string {
+ * its own sentence, never as a `GitFacts` block with every field looking emptily "clean".
+ *
+ * **Exported for `core/resume-prompt.ts` (S3-T1) to reuse as-is** for a `source !== "model"`
+ * handoff's facts-only resume prompt: same git facts, same "no repository here" honesty, and
+ * writing a second renderer for the same `GitFacts` shape would be exactly the duplication
+ * AGENTS.md § "Estilo de código" rules out. */
+export function renderGitBlock(git: GitFacts | null): string {
   if (git === null) {
     return '**Git**\n\n_No git repository at this path._';
   }
