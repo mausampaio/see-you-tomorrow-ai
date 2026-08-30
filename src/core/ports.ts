@@ -180,6 +180,42 @@ export interface Storage {
    * de autoridade").
    */
   readHandoff(day: Day, sessionId: string): Promise<Handoff | null>;
+
+  /**
+   * Reads every handoff written for `day` (`~/.seeya/days/<day>/sessions/*.json`), validating
+   * each file independently — D-022 names "os handoffs lidos de `~/.seeya/`" explicitly as a
+   * collection that must be checked item by item, never `z.array`'s tudo-ou-nada. One corrupted or
+   * hand-edited file never takes the rest of the day down: it's reported in `rejected`
+   * (`RejectedDiscoveryRecord`, same `file`/`raw`/`reason` shape `DiscoveryResult` already uses)
+   * and excluded, while every other handoff still comes back in `handoffs`.
+   *
+   * A missing or empty `sessions/` directory (nothing captured yet today) resolves to
+   * `{ handoffs: [], rejected: [] }`, not an error (D-025) — same "absence is normal" policy as
+   * `readConfig`/`readEarlyWarningState`/`readHandoff` above.
+   *
+   * Added in S2-T4 for `generateBriefingMarkdown` (`core/briefing.ts`): the day's consolidated
+   * `summary.md` is built from every handoff captured so far today, not only the ones a single
+   * `endDay` run just wrote, so re-running `seeya end-day --session <id>` (S2-T5) later the same
+   * day still produces a briefing reflecting everyone captured earlier.
+   */
+  listHandoffs(day: Day): Promise<{
+    readonly handoffs: Handoff[];
+    readonly rejected: RejectedDiscoveryRecord[];
+  }>;
+
+  /**
+   * Persists `markdown` at `~/.seeya/days/<day>/summary.md` (docs/ESPECIFICACAO.md § "Formato do
+   * handoff": "ao lado da pasta `sessions/`"), atomically — same `writeFileAtomic` every other
+   * write under `~/.seeya/` uses, reused rather than duplicated.
+   *
+   * **Named `saveBriefing`, not in AGENTS.md § "Idioma"'s glossary table.** That table fixes
+   * `readBriefing` (for S3-T1, still unimplemented) but never named the write side — an oversight
+   * this task fills by the same `save<Noun>`/`read<Noun>` pattern `saveHandoff`/`readHandoff` and
+   * `saveEarlyWarningState`/`readEarlyWarningState` already established, rather than a new,
+   * unrelated verb. Flagged in docs/QUESTOES.md for confirmation, per AGENTS.md § "Glossário de
+   * domínio": "termo novo entra aqui antes de entrar no código".
+   */
+  saveBriefing(day: Day, markdown: string): Promise<void>;
 }
 
 /**
@@ -310,48 +346,60 @@ export interface HandoffGenerator {
   generate(session: DiscoveredSession, facts: SessionFacts): Promise<GeneratedUnderstanding>;
 }
 
-/**
- * `Storage`'s S2-T4 growth, declared as a second block TypeScript merges with the one above
- * instead of edited into that interface's original body. Appending new members at the end of the
- * file, rather than touching a shared interface's existing text in place, is the lower-conflict
- * way to grow a port that more than one in-flight task may touch — this file's own history
- * already shows a mid-interface edit costing a broken merge more than once, and declaration
- * merging sidesteps that class of conflict entirely for interface types.
- */
-export interface Storage {
-  /**
-   * Reads every handoff written for `day` (`~/.seeya/days/<day>/sessions/*.json`), validating
-   * each file independently — D-022 names "os handoffs lidos de `~/.seeya/`" explicitly as a
-   * collection that must be checked item by item, never `z.array`'s tudo-ou-nada. One corrupted or
-   * hand-edited file never takes the rest of the day down: it's reported in `rejected`
-   * (`RejectedDiscoveryRecord`, same `file`/`raw`/`reason` shape `DiscoveryResult` already uses)
-   * and excluded, while every other handoff still comes back in `handoffs`.
-   *
-   * A missing or empty `sessions/` directory (nothing captured yet today) resolves to
-   * `{ handoffs: [], rejected: [] }`, not an error (D-025) — same "absence is normal" policy as
-   * `readConfig`/`readEarlyWarningState`/`readHandoff` above.
-   *
-   * Added in S2-T4 for `generateBriefingMarkdown` (`core/briefing.ts`): the day's consolidated
-   * `summary.md` is built from every handoff captured so far today, not only the ones a single
-   * `endDay` run just wrote, so re-running `seeya end-day --session <id>` (S2-T5) later the same
-   * day still produces a briefing reflecting everyone captured earlier.
-   */
-  listHandoffs(day: Day): Promise<{
-    readonly handoffs: Handoff[];
-    readonly rejected: RejectedDiscoveryRecord[];
-  }>;
+// Own block at the end of the file on purpose (S2-T6): a second in-flight task (S2-T4) touches
+// this same file's earlier interfaces, and D-022/D-025 already established the pattern (see the
+// `GitFacts` import comment above) of keeping an addition self-contained, appended after
+// everything that exists already, to reduce merge collisions instead of inserting mid-file.
 
-  /**
-   * Persists `markdown` at `~/.seeya/days/<day>/summary.md` (docs/ESPECIFICACAO.md § "Formato do
-   * handoff": "ao lado da pasta `sessions/`"), atomically — same `writeFileAtomic` every other
-   * write under `~/.seeya/` uses, reused rather than duplicated.
-   *
-   * **Named `saveBriefing`, not in AGENTS.md § "Idioma"'s glossary table.** That table fixes
-   * `readBriefing` (for S3-T1, still unimplemented) but never named the write side — an oversight
-   * this task fills by the same `save<Noun>`/`read<Noun>` pattern `saveHandoff`/`readHandoff` and
-   * `saveEarlyWarningState`/`readEarlyWarningState` already established, rather than a new,
-   * unrelated verb. Flagged in docs/QUESTOES.md for confirmation, per AGENTS.md § "Glossário de
-   * domínio": "termo novo entra aqui antes de entrar no código".
-   */
-  saveBriefing(day: Day, markdown: string): Promise<void>;
+/**
+ * One fork's cleanup outcome (D-012, S2-T6) — only ever produced for a `sessionId` this port's
+ * implementation already decided is stale (`core/fork-cleanup.ts#planForkCleanup`); a fork that's
+ * still within `forkCleanupDays` never appears here at all.
+ *
+ * A discriminated union, not one shape with an optional `reason` (D-024): `reason` only exists to
+ * explain a `failed` outcome, and a type that let `deleted`/`alreadyAbsent` carry one too would
+ * make "was there a reason or not" representable when it never should be.
+ *
+ * - `deleted` — the fork's transcript file existed under `~/.claude/projects/` and was removed.
+ * - `alreadyAbsent` — no such file was found. Not an error (D-025): the user may have deleted it
+ *   by hand, and D-012's exception exists to guard against rediscovery, which nothing left on
+ *   disk can trigger anyway. Same outcome whether the file never existed or vanished mid-attempt.
+ * - `failed` — deletion was attempted and a real error stopped it (permission denied, a locked
+ *   file). Named with the raw error so it stays diagnosable (AGENTS.md § "Mensagens de erro").
+ */
+export type ForkCleanupOutcome =
+  | { readonly sessionId: string; readonly outcome: 'deleted' }
+  | { readonly sessionId: string; readonly outcome: 'alreadyAbsent' }
+  | { readonly sessionId: string; readonly outcome: 'failed'; readonly reason: string };
+
+/**
+ * `ForkCleanup.cleanup()`'s return shape — D-022's "both sides" applied to a deletion pass instead
+ * of a validation pass: `outcomes` is what happened to every stale fork attempted (one failure
+ * never stops the others, AGENTS.md D-022), and `rejected` is `forks.json`'s own D-022 contract
+ * (a malformed entry in the registry itself, reported and dropped, never silently lost) — reusing
+ * `RejectedDiscoveryRecord`'s shape rather than inventing a fourth one for the same
+ * `file`/`raw`/`reason` triple this file already declares three times over.
+ */
+export interface ForkCleanupResult {
+  readonly outcomes: readonly ForkCleanupOutcome[];
+  readonly rejected: readonly RejectedDiscoveryRecord[];
+}
+
+/**
+ * Deletes forks `seeya` itself created and registered (D-012) once they're older than
+ * `forkCleanupDays`. Implemented in `adapters/discovery/` (S2-T6) — the same adapter that already
+ * owns `forks.json`'s reader (`fork-registry.ts`, S1-T3) and the transcript-file lookup
+ * (`transcript-lookup.ts`, S1-T4) this port's implementation reuses to find each fork's file.
+ *
+ * **The one port whose implementation is allowed to delete a file outside `~/.seeya/`.** Every
+ * other adapter's writes stay inside the injected `seeyaHome` root (AGENTS.md § "Sistema de
+ * arquivos"); this is D-012's single, narrow exception, and only for a `sessionId` this port's own
+ * implementation already found listed in `forks.json` — never a path the caller supplies.
+ *
+ * Never throws on a single fork's deletion failing — that outcome is `failed`, inside the
+ * returned `ForkCleanupResult`, not a rejected promise (D-022's "uma falha não aborta as outras"
+ * applied to this port specifically).
+ */
+export interface ForkCleanup {
+  cleanup(forkCleanupDays: number): Promise<ForkCleanupResult>;
 }

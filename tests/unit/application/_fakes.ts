@@ -235,4 +235,5 @@ export const DEFAULT_TEST_CONFIG: Config = {
   captureConcurrency: 3,
   ignore: [],
   projectPolicy: {},
+  forkCleanupDays: 7,
 };

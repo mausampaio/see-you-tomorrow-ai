@@ -592,10 +592,10 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       `application/eligibility-assembly.ts#NO_KNOWN_FORKS` (Q-021 item 5). Q-021 fechada:
       confirmado nos itens 2 a 5, item 1 corrigido. `npm run verificar` e `npm run
       verificar:linux` verdes; `application/` em 100% linhas/statements, 98% branches.
-- [ ] **S2-T6 — Limpeza de forks.** Apaga forks próprios com mais de `forkCleanupDays`.
+- [x] **S2-T6 — Limpeza de forks.** Apaga forks próprios com mais de `forkCleanupDays`.
       *Aceite:* apaga apenas IDs presentes em `forks.json`; um teste prova que nenhum outro
       arquivo de `~/.claude/projects/` é tocado.
-- [~] **S2-T4 — Briefing.** Geração do `summary.md` a partir dos handoffs.
+- [x] **S2-T4 — Briefing.** Geração do `summary.md` a partir dos handoffs.
       **Implementado em 2026-08-29:** `core/briefing.ts#generateBriefingMarkdown` é a regra pura
       (sem I/O, sem `Date.now()`, D-019) que renderiza o markdown a partir de `Handoff[]` e das
       rejeições de D-022; `application/briefing.ts#writeDailyBriefing` é a casca de I/O que lê
@@ -616,6 +616,48 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       par `save<Nome>`/`read<Nome>` já usado por `saveHandoff`/`saveEarlyWarningState`. Três
       escolhas registradas em Q-022 para confirmação. `npm run verificar` e `npm run
       verificar:linux` verdes; `core/` e `application/` em 100% de linhas e branches nos dois.
+      **Implementado em 2026-08-29:** `forkCleanupDays` (D-012, default 7) faltava no `Config`
+      desde a Q-013 (S1-T5 tinha registrado a lacuna sem inventar a chave) — acrescentado agora em
+      `core/types.ts`/`adapters/storage/config-schema.ts`, primeira leitura real. Decisão pura em
+      `core/fork-cleanup.ts#planForkCleanup`: idade comparada a partir do `Clock` injetado (D-019,
+      nunca `Date.now()`), "mais de" é estritamente maior (fork com idade exata no limite é
+      mantido), e uma entrada sem `createdAt` é sempre mantida — nunca tratada como "óbvia
+      candidata" por falta de prova (D-025). Porta nova `ForkCleanup` em `core/ports.ts`
+      (`ForkCleanupOutcome` como união discriminada, D-024: `reason` só existe no caso `failed`),
+      aditiva ao final do arquivo por causa da S2-T4 em paralelo no mesmo arquivo.
+      `adapters/discovery/fork-cleanup.ts#DiscoveryForkCleanup` é a única exceção do projeto que
+      apaga arquivo fora de `~/.seeya/` (D-012) — reaproveita o leitor de `fork-registry.ts` (S1-T3)
+      e o `locateTranscriptFile` de `transcript-lookup.ts` (S1-T4) em vez de duplicar a busca do
+      `.jsonl`. Cada fork stale é resolvido independentemente (`Promise.all` com `try`/`catch` por
+      item, D-022): uma falha real de exclusão (`failed`, com o erro bruto) nunca impede as outras,
+      e um arquivo já ausente (`alreadyAbsent`) não é erro (D-025) — o usuário pode ter apagado à
+      mão, e o objetivo da exceção já está satisfeito de qualquer forma. `forks.json` é reescrito
+      atomicamente removendo só as entradas `deleted`/`alreadyAbsent` (`failed` fica para nova
+      tentativa na próxima passagem); uma passagem sem nada para limpar nunca toca o arquivo.
+      Contenção provada por instantâneo antes/depois de toda a árvore `~/.claude/projects/` (mesmo
+      padrão do S2-T1 para git): conteúdo e `mtime` de um transcript real e de um fork ainda dentro
+      do prazo ficam idênticos byte a byte; a única diferença é o arquivo do fork realmente stale
+      desaparecendo (`tests/integration/discovery/fork-cleanup.test.ts`). Ainda sem raiz de
+      composição em `cli/` — não existe hoje nenhum comando que precise disparar a limpeza (mesmo
+      padrão já seguido por `adapters/generation` desde a S2-T2, sem wiring até existir chamador).
+      Duas decisões sem resposta literal em D-012 registradas em Q-022 para confirmação do PO: o
+      destino da entrada em `forks.json` após a exclusão, e o tratamento de arquivo já ausente.
+      `npm run verificar` e `npm run verificar:linux` verdes.
+- [ ] **S2-T4 — Briefing.** Geração do `summary.md` a partir dos handoffs.
+- [ ] **S2-T7 — O tempo limite do teste é igual ao do processo filho.** Diagnosticado pelo agente
+      da S2-T6 ao investigar a intermitência recorrente do `eslint-restrictions.test.ts` — que já
+      apareceu nas duas plataformas e foi atribuída a carga de máquina mais de uma vez.
+      A causa é de desenho: `CHILD_PROCESS_TIMEOUT = 20_000` (`tests/integration/guards/_support.ts`)
+      é usado **ao mesmo tempo** como orçamento do processo filho e como tempo limite do teste que
+      o chama. Os dois expiram no mesmo instante.
+      A consequência é pior que a lentidão: quando o filho demora, quem estoura primeiro é o
+      **teste**, com "Test timed out" — em vez de o filho reportar o próprio estouro, que seria
+      diagnosticável. A informação útil é sempre destruída pela corrida entre os dois.
+      - o orçamento do teste tem que ficar **confortavelmente acima** do orçamento do filho, senão
+        o interno nunca chega a disparar
+      - a folga vem de medição, não de chute (mesma disciplina da S1-T13)
+      *Aceite:* um filho que estoura o próprio orçamento produz falha **do filho**, com motivo
+      legível, e não "Test timed out". Provado por execução.
 - [ ] **S2-T5 — `seeya end-day` com `--dry-run` e `--session`.**
       *Aceite do sprint:* e2e 2, 3 e 4 passam. Encerramento com o modelo indisponível ainda
       produz handoffs úteis.

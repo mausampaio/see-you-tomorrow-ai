@@ -19,6 +19,11 @@
  * `early-warnings.ts` (wires that listing plus already-discovered sessions through
  * `core/early-warnings.ts`'s pure rule and the `Storage` port). Neither builds a session; both
  * only feed a warning.
+ *
+ * **S2-T6 (D-012) adds fork cleanup** — `fork-cleanup.ts`'s `DiscoveryForkCleanup`, the
+ * `ForkCleanup` port's implementation. Builds no session either; it deletes a fork's transcript
+ * file once `forkCleanupDays` has passed, reusing this adapter's own `fork-registry.ts` reader and
+ * `transcript-lookup.ts` file lookup instead of a third copy of either.
  */
 export {
   discoverSessionsFromRegistry,
@@ -47,3 +52,4 @@ export {
   type EarlyWarningDiscoveryOptions,
   type EarlyWarningDiscoveryResult,
 } from './early-warnings.js';
+export { DiscoveryForkCleanup, type DiscoveryForkCleanupOptions } from './fork-cleanup.js';
