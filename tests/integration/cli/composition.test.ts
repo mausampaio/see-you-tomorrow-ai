@@ -10,7 +10,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { buildCliContext, resolveCliHome } from '../../../src/cli/composition.js';
+import {
+  buildCliContext,
+  buildEndDayContext,
+  resolveCliHome,
+} from '../../../src/cli/composition.js';
 import { captureObservedProcStart } from '../../../src/adapters/process/proc-start.js';
 import { processExists } from '../../../src/adapters/process/existence.js';
 import {
@@ -104,5 +108,71 @@ describe('buildCliContext', () => {
 
     expect(result.sessions).toHaveLength(1);
     expect(result.sessions[0]).toMatchObject({ hasPid: true, processIsAlive: true });
+  });
+});
+
+/**
+ * `buildEndDayContext` (S2-T5): the composition step for `seeya end-day`, switching on the two
+ * pieces that were "pronto e desligado" until this task — S2-T2's generators and S2-T6's
+ * `ForkCleanup` — alongside the git/transcript readers S2-T5 itself is the first caller of. Doesn't
+ * spawn a real (or fake) `claude`: that full round trip is covered end-to-end by
+ * `tests/e2e/end-day.test.ts`; this integration test's own job is proving the WIRING — every port
+ * really is the real adapter, reading the real `config.json`, not a stub silently standing in.
+ */
+describe('buildEndDayContext', () => {
+  it('reads config.json for captureModel/budgetPerSessionUsd/forkCleanupDays and wires every port', async () => {
+    fixture = await createDiscoveryFixture();
+    await writeFile(
+      path.join(fixture.seeyaHome, 'config.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        captureModel: 'opus',
+        budgetPerSessionUsd: 0.5,
+        forkCleanupDays: 3,
+      }),
+      'utf8',
+    );
+
+    const { deps, config } = await buildEndDayContext(fixture.root);
+
+    expect(config.captureModel).toBe('opus');
+    expect(config.budgetPerSessionUsd).toBe(0.5);
+    expect(config.forkCleanupDays).toBe(3);
+    // Every EndDayDeps field is the real adapter, not left undefined by an incomplete wire-up.
+    expect(deps.sessionProvider).toBeDefined();
+    expect(deps.transcriptReader).toBeDefined();
+    expect(deps.gitReader).toBeDefined();
+    expect(deps.leanGenerator).toBeDefined();
+    expect(deps.deepGenerator).toBeDefined();
+    expect(deps.storage).toBeDefined();
+    expect(deps.processControl).toBeDefined();
+    expect(deps.forkCleanup).toBeDefined();
+  });
+
+  it('the real SessionProvider it wires discovers a fixture session, same as buildCliContext', async () => {
+    fixture = await createDiscoveryFixture();
+    await writeSessionRecord(fixture, 'stale', {
+      pid: 999_999,
+      sessionId: '11111111-1111-4111-8111-111111111111',
+      cwd: 'c:\\code\\projeto',
+      startedAt: Date.now() - 60_000,
+      procStart: 'this-will-never-match-a-real-process',
+      name: 'projeto',
+    });
+
+    const { deps } = await buildEndDayContext(fixture.root);
+    const result = await deps.sessionProvider.list();
+
+    expect(result.sessions).toHaveLength(1);
+    expect(result.sessions[0]).toMatchObject({ sessionId: '11111111-1111-4111-8111-111111111111' });
+  });
+
+  it('the real ForkCleanup it wires reads an empty forks.json without error', async () => {
+    fixture = await createDiscoveryFixture();
+
+    const { deps, config } = await buildEndDayContext(fixture.root);
+    const result = await deps.forkCleanup.cleanup(config.forkCleanupDays);
+
+    expect(result).toEqual({ outcomes: [], rejected: [] });
   });
 });

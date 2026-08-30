@@ -5,7 +5,9 @@ import type { RejectedDiscoveryRecord } from '../../../src/core/ports.js';
 import type { Config, Day, Handoff } from '../../../src/core/types.js';
 import {
   DEFAULT_TEST_CONFIG,
+  FailingForkCleanup,
   FakeClock,
+  FakeForkCleanup,
   FakeGitReader,
   FakeProcessControl,
   FakeSessionProvider,
@@ -64,6 +66,7 @@ function buildDeps(overrides: Partial<EndDayDeps> = {}): EndDayDeps {
     storage: new FakeStorage(DEFAULT_TEST_CONFIG),
     processControl: new FakeProcessControl(),
     clock: new FakeClock(NOW),
+    forkCleanup: new FakeForkCleanup(),
     ...overrides,
   };
 }
@@ -337,6 +340,230 @@ describe('endDay — briefing (S2-T4)', () => {
     const markdown = storage.savedBriefings.get(result.day);
     expect(markdown).toContain('1 entry could not be read');
     expect(markdown).toContain('sessions/broken.json');
+  });
+});
+
+describe('endDay — --session filtering (S2-T5)', () => {
+  it('sessionFilter narrows which sessions are captured, leaving the others out of every bucket', async () => {
+    const kept = createSessionWithPid({
+      sessionId: '11111111-1111-4111-8111-111111111111',
+      cwd: 'c:\\code\\mantido',
+      lastActivity: NOW,
+    });
+    const skipped = createSessionWithPid({
+      sessionId: '22222222-2222-4222-8222-222222222222',
+      cwd: 'c:\\code\\pulado',
+      lastActivity: NOW,
+    });
+    const deps = buildDeps({
+      sessionProvider: new FakeSessionProvider({ sessions: [kept, skipped], rejected: [] }),
+    });
+    const result = await endDay(deps, {
+      sessionFilter: (session) => session.sessionId === kept.sessionId,
+    });
+    expect(result.captured).toHaveLength(1);
+    expect(result.captured[0]?.handoff.sessionId).toBe(kept.sessionId);
+    expect(result.ineligible).toHaveLength(0);
+    expect(result.failedCaptures).toHaveLength(0);
+    // `discoveredCount` is the TOTAL discovery saw, unaffected by the filter — only
+    // `sessionsInScope` narrows, so "0 sessions found" and "0 sessions matched --session" stay
+    // distinguishable to whoever reads the result (cli/, S2-T5).
+    expect(result.discoveredCount).toBe(2);
+    expect(result.sessionsInScope).toBe(1);
+  });
+
+  it('a filter matching nothing captures nothing and reports sessionsInScope: 0', async () => {
+    const session = createSessionWithPid({ lastActivity: NOW });
+    const deps = buildDeps({
+      sessionProvider: new FakeSessionProvider({ sessions: [session], rejected: [] }),
+    });
+    const result = await endDay(deps, { sessionFilter: () => false });
+    expect(result.captured).toHaveLength(0);
+    expect(result.discoveredCount).toBe(1);
+    expect(result.sessionsInScope).toBe(0);
+  });
+
+  it('with no sessionFilter, every discovered session is in scope (unchanged default behavior)', async () => {
+    const session = createSessionWithPid({ lastActivity: NOW });
+    const deps = buildDeps({
+      sessionProvider: new FakeSessionProvider({ sessions: [session], rejected: [] }),
+    });
+    const result = await endDay(deps);
+    expect(result.sessionsInScope).toBe(1);
+    expect(result.dryRun).toBe(false);
+  });
+});
+
+describe('endDay — --dry-run (S2-T5)', () => {
+  it('writes no handoff and no briefing, but still returns a captured preview', async () => {
+    const session = createSessionWithPid({ hasTranscript: false, lastActivity: NOW });
+    const storage = new FakeStorage(DEFAULT_TEST_CONFIG);
+    const deps = buildDeps({
+      sessionProvider: new FakeSessionProvider({ sessions: [session], rejected: [] }),
+      storage,
+      gitReader: new FakeGitReader(
+        new Map([
+          [
+            session.cwd,
+            {
+              hasGit: true,
+              facts: {
+                branch: 'main',
+                dirty: true,
+                modifiedFiles: ['a.ts'],
+                commitsToday: [],
+                worktrees: [],
+              },
+              rejectedWorktrees: [],
+            },
+          ],
+        ]),
+      ),
+    });
+    const result = await endDay(deps, { dryRun: true });
+    expect(result.dryRun).toBe(true);
+    expect(result.captured).toHaveLength(1);
+    expect(storage.savedHandoffs.size).toBe(0);
+    expect(storage.savedBriefings.size).toBe(0);
+    expect(result.briefingPreview).not.toBeNull();
+    expect(result.briefingPreview).toContain(session.name);
+  });
+
+  it('a real run leaves briefingPreview null — the markdown is on disk instead', async () => {
+    const session = createSessionWithPid({ hasTranscript: false, lastActivity: NOW });
+    const deps = buildDeps({
+      sessionProvider: new FakeSessionProvider({ sessions: [session], rejected: [] }),
+    });
+    const result = await endDay(deps);
+    expect(result.dryRun).toBe(false);
+    expect(result.briefingPreview).toBeNull();
+  });
+
+  it(
+    "briefingPreview consolidates a PREVIOUSLY saved handoff with this dry run's own fresh one, " +
+      'the same way a real re-run would (application/briefing.ts#previewDailyBriefing)',
+    async () => {
+      const earlier = createSessionWithPid({
+        sessionId: '11111111-1111-4111-8111-111111111111',
+        cwd: 'c:\\code\\mais-cedo',
+        lastActivity: NOW,
+      });
+      const later = createSessionWithPid({
+        sessionId: '22222222-2222-4222-8222-222222222222',
+        cwd: 'c:\\code\\mais-tarde',
+        lastActivity: NOW,
+      });
+      const storage = new FakeStorage(DEFAULT_TEST_CONFIG);
+      await storage.saveHandoff('2026-08-16', {
+        sessionId: earlier.sessionId,
+        cwd: earlier.cwd,
+        name: earlier.name,
+        capturedAt: NOW,
+        sessionState: 'alive',
+        capturedDuringActiveTurn: false,
+        source: 'model',
+        captureMode: 'lean',
+        sources: ['registry'],
+        facts: { lastActivity: null, lastPrompts: [], touchedFiles: [], git: null },
+        understanding: 'earlier work',
+        pendingItems: [],
+        tomorrowPlan: [],
+        generationError: null,
+      });
+      const deps = buildDeps({
+        sessionProvider: new FakeSessionProvider({ sessions: [later], rejected: [] }),
+        storage,
+      });
+      const result = await endDay(deps, { dryRun: true });
+      expect(result.briefingPreview).toContain(earlier.name);
+      expect(result.briefingPreview).toContain(later.name);
+      // Still not written: the preview reads what's on disk, it never adds to it.
+      expect(storage.savedBriefings.size).toBe(0);
+    },
+  );
+
+  it('never attempts termination, even for a canTerminate: true session with a live PID', async () => {
+    const session = createSessionWithPid({ hasTranscript: true, lastActivity: NOW });
+    const config = {
+      ...DEFAULT_TEST_CONFIG,
+      projectPolicy: { [session.cwd]: { canTerminate: true, deepCapture: false } },
+    };
+    let terminateCalled = false;
+    const deps = buildDeps({
+      sessionProvider: new FakeSessionProvider({ sessions: [session], rejected: [] }),
+      storage: new FakeStorage(config),
+      processControl: new FakeProcessControl(() => {
+        terminateCalled = true;
+        return true;
+      }),
+    });
+    const result = await endDay(deps, { dryRun: true });
+    expect(terminateCalled).toBe(false);
+    expect(result.captured[0]?.terminated).toBe(false);
+    expect(result.terminationNotices).toHaveLength(0);
+  });
+
+  it('skips fork cleanup entirely — forkCleanup is null, never a preview', async () => {
+    let cleanupCalled = false;
+    class SpyForkCleanup extends FakeForkCleanup {
+      override cleanup(forkCleanupDays: number): ReturnType<FakeForkCleanup['cleanup']> {
+        cleanupCalled = true;
+        return super.cleanup(forkCleanupDays);
+      }
+    }
+    const deps = buildDeps({
+      sessionProvider: new FakeSessionProvider({ sessions: [], rejected: [] }),
+      forkCleanup: new SpyForkCleanup(),
+    });
+    const result = await endDay(deps, { dryRun: true });
+    expect(cleanupCalled).toBe(false);
+    expect(result.forkCleanup).toBeNull();
+    expect(result.forkCleanupError).toBeNull();
+  });
+});
+
+describe('endDay — fork cleanup wiring (D-012, S2-T5)', () => {
+  it('runs ForkCleanup.cleanup() with config.forkCleanupDays on a real run and reports its result', async () => {
+    const cleanupResult = {
+      outcomes: [
+        { sessionId: '11111111-1111-4111-8111-111111111111', outcome: 'deleted' as const },
+      ],
+      rejected: [],
+    };
+    let receivedDays: number | undefined;
+    class RecordingForkCleanup extends FakeForkCleanup {
+      constructor() {
+        super(cleanupResult);
+      }
+      override cleanup(days: number): ReturnType<FakeForkCleanup['cleanup']> {
+        receivedDays = days;
+        return super.cleanup(days);
+      }
+    }
+    const deps = buildDeps({
+      sessionProvider: new FakeSessionProvider({ sessions: [], rejected: [] }),
+      storage: new FakeStorage({ ...DEFAULT_TEST_CONFIG, forkCleanupDays: 9 }),
+      forkCleanup: new RecordingForkCleanup(),
+    });
+    const result = await endDay(deps);
+    expect(receivedDays).toBe(9);
+    expect(result.forkCleanup).toEqual(cleanupResult);
+    expect(result.forkCleanupError).toBeNull();
+  });
+
+  it('a ForkCleanup that throws is isolated: captures/briefing already done still stand', async () => {
+    const session = createSessionWithPid({ hasTranscript: false, lastActivity: NOW });
+    const storage = new FakeStorage(DEFAULT_TEST_CONFIG);
+    const deps = buildDeps({
+      sessionProvider: new FakeSessionProvider({ sessions: [session], rejected: [] }),
+      storage,
+      forkCleanup: new FailingForkCleanup(),
+    });
+    const result = await endDay(deps);
+    expect(result.captured).toHaveLength(1);
+    expect(storage.savedBriefings.get(result.day)).toBeDefined();
+    expect(result.forkCleanup).toBeNull();
+    expect(result.forkCleanupError).toMatch(/cleanup always fails/);
   });
 });
 

@@ -6,6 +6,8 @@
  */
 import type {
   Clock,
+  ForkCleanup,
+  ForkCleanupResult,
   GitReader,
   HandoffGenerator,
   ProcessControl,
@@ -14,7 +16,7 @@ import type {
   Storage,
   TranscriptReader,
 } from '../core/ports.js';
-import type { Day, Handoff } from '../core/types.js';
+import type { Day, DiscoveredSession, Handoff } from '../core/types.js';
 import type { IneligibilityReason } from '../core/eligibility.js';
 
 /**
@@ -35,6 +37,31 @@ export interface EndDayDeps {
   readonly storage: Storage;
   readonly processControl: ProcessControl;
   readonly clock: Clock;
+  /**
+   * D-012's daily janitorial task (S2-T6, `ForkCleanup`), wired here by S2-T5 rather than left
+   * dangling: `end-day` is the one routine this product already runs once a day, which is the
+   * "candidato natural" the task that requested this wiring named — see `end-day.ts`'s own
+   * docstring for the full reasoning and docs/QUESTOES.md for the write-up. Required, not
+   * optional: D-020's whole point is that every dependency `endDay` needs is explicit and
+   * injected, never a silently-skipped capability.
+   */
+  readonly forkCleanup: ForkCleanup;
+}
+
+/**
+ * `endDay`'s own behavior switches (S2-T5, docs/ESPECIFICACAO.md § `seeya end-day`: "`--dry-run`
+ * executa tudo menos escrever e terminar processos"; "`--session` limita a uma sessão"). Both
+ * optional so every existing call site (unit tests, S2-T3's own acceptance) keeps compiling
+ * unchanged with the real, full-day, real-write behavior it always had.
+ *
+ * `sessionFilter` is a plain predicate over `DiscoveredSession`, not a `sessionId`/`cwd` pair —
+ * `endDay` still runs `SessionProvider.list()` itself and only narrows what it processes
+ * afterward, so `application/` never needs to know `--session` accepts either an id or a `cwd`
+ * (`cli/`'s job, `end-day-command.ts`) or grow a special case for two different matching rules.
+ */
+export interface EndDayOptions {
+  readonly dryRun?: boolean;
+  readonly sessionFilter?: (session: DiscoveredSession) => boolean;
 }
 
 /** One session `evaluateEligibility` (`core/eligibility.ts`) excluded, and why — the "aceitos e
@@ -99,4 +126,33 @@ export interface EndDayResult {
   readonly captured: readonly CapturedSession[];
   readonly failedCaptures: readonly CaptureFailure[];
   readonly terminationNotices: readonly TerminationNotice[];
+  /** Whether `EndDayOptions.dryRun` was set (S2-T5) — `cli/` needs this on the result itself,
+   * not just on the options it passed in, to decide how to render `briefingPreview` below. */
+  readonly dryRun: boolean;
+  /**
+   * The day's consolidated briefing markdown, computed but never persisted, when `dryRun: true` —
+   * `null` on a real run (the same content is on disk at `~/.seeya/days/<day>/summary.md`
+   * instead, no need to carry it in memory too). Built from every handoff already saved today
+   * PLUS this run's own freshly-built (unsaved) ones, so a dry-run preview reflects the same
+   * consolidated view a real `seeya end-day --session <id>` run later today would produce
+   * (`application/briefing.ts#previewDailyBriefing`).
+   */
+  readonly briefingPreview: string | null;
+  /** How many discovered sessions `EndDayOptions.sessionFilter` actually let through to
+   * eligibility/capture — `discoveredCount` stays the TOTAL discovery saw, unaffected by the
+   * filter, so `cli/`'s `--session` handling can tell "0 sessions matched the given id/cwd" (a
+   * likely typo) apart from "0 sessions were discovered at all". */
+  readonly sessionsInScope: number;
+  /**
+   * D-012's cleanup outcome for today's run, or `null` when it didn't run at all — either because
+   * `dryRun: true` (deleting a stale fork's file is itself a write a preview must never perform,
+   * so it's skipped outright rather than previewed — see docs/QUESTOES.md for why no plan-only
+   * path exists for this yet) or because `forkCleanupError` below is set instead.
+   */
+  readonly forkCleanup: ForkCleanupResult | null;
+  /** Set only when `deps.forkCleanup.cleanup()` itself rejected (e.g. `forks.json` became
+   * unwritable) — isolated from the rest of the day's result the same way a single session's
+   * capture failure is (`failedCaptures`): a janitorial task failing must never make `endDay`
+   * itself reject and erase captures that already succeeded. */
+  readonly forkCleanupError: string | null;
 }

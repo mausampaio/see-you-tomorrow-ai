@@ -4,6 +4,7 @@ import { createSessionWithPid, createSessionWithoutPid } from '../core/_fixtures
 import {
   DEFAULT_TEST_CONFIG,
   FailingSaveStorage,
+  FakeForkCleanup,
   FakeGitReader,
   FakeProcessControl,
   FakeStorage,
@@ -52,6 +53,7 @@ function buildDeps(overrides: Partial<EndDayDeps> = {}): EndDayDeps {
     storage: new FakeStorage(DEFAULT_TEST_CONFIG),
     processControl: new FakeProcessControl(),
     clock: { now: () => NOW },
+    forkCleanup: new FakeForkCleanup(),
     ...overrides,
   };
 }
@@ -438,4 +440,138 @@ describe('captureSession — D-002 ordering and Q-007', () => {
       expect(outcome.terminationNotice?.reason).toMatch(/still alive/);
     },
   );
+});
+
+describe('captureSession — dry-run (S2-T5)', () => {
+  it('never calls saveHandoff/readHandoff/terminateGracefully when dryRun is true', async () => {
+    const session = createSessionWithPid({ hasTranscript: true, lastActivity: NOW });
+    let saveCalled = false;
+    let terminateCalled = false;
+    class SpyStorage extends FakeStorage {
+      override saveHandoff(day: Day, handoff: Handoff): Promise<void> {
+        saveCalled = true;
+        return super.saveHandoff(day, handoff);
+      }
+    }
+    const storage = new SpyStorage(DEFAULT_TEST_CONFIG);
+    const processControl = new FakeProcessControl(() => {
+      terminateCalled = true;
+      return true;
+    });
+    const config = {
+      ...DEFAULT_TEST_CONFIG,
+      projectPolicy: { [session.cwd]: { canTerminate: true, deepCapture: false } },
+    };
+    const deps = buildDeps({ storage, processControl });
+    const outcome = await captureSession({
+      deps,
+      session,
+      config,
+      now: NOW,
+      day: DAY,
+      dryRun: true,
+    });
+    if (outcome.kind !== 'captured') throw new Error('expected captured');
+    expect(outcome.terminated).toBe(false);
+    expect(outcome.terminationNotice).toBeNull();
+    expect(saveCalled).toBe(false);
+    expect(terminateCalled).toBe(false);
+    expect(storage.savedHandoffs.size).toBe(0);
+  });
+
+  it('still calls the real lean generator during a dry run — lean has no disk footprint (D-017)', async () => {
+    const session = createSessionWithPid({ hasTranscript: true, lastActivity: NOW });
+    const deps = buildDeps({
+      leanGenerator: succeedingGenerator({
+        understanding: 'dry-run preview',
+        pendingItems: [],
+        tomorrowPlan: [],
+      }),
+    });
+    const outcome = await captureSession({
+      deps,
+      session,
+      config: DEFAULT_TEST_CONFIG,
+      now: NOW,
+      day: DAY,
+      dryRun: true,
+    });
+    if (outcome.kind !== 'captured') throw new Error('expected captured');
+    expect(outcome.handoff.source).toBe('model');
+    expect(outcome.handoff.understanding).toBe('dry-run preview');
+  });
+
+  it(
+    'never calls the deep generator during a dry run — a real deep call would write a real fork ' +
+      '(D-012) that --dry-run must never create',
+    async () => {
+      const session = createSessionWithPid({ hasTranscript: true, lastActivity: NOW });
+      const config = {
+        ...DEFAULT_TEST_CONFIG,
+        projectPolicy: { [session.cwd]: { canTerminate: false, deepCapture: true } },
+      };
+      const deps = buildDeps({
+        deepGenerator: failingGenerator('deep must never be called during --dry-run'),
+      });
+      const outcome = await captureSession({
+        deps,
+        session,
+        config,
+        now: NOW,
+        day: DAY,
+        dryRun: true,
+      });
+      if (outcome.kind !== 'captured') throw new Error('expected captured');
+      expect(outcome.handoff.captureMode).toBe('deep');
+      expect(outcome.handoff.source).toBe('deterministic');
+      expect(outcome.handoff.generationError).toMatch(/dry-run/);
+    },
+  );
+
+  it('D-026 anti-duplication still runs for real during a dry run (a real read, not a write)', async () => {
+    const session = createSessionWithPid({ hasTranscript: false, lastActivity: NOW });
+    const unchangedGitFacts = {
+      branch: 'main',
+      dirty: false,
+      modifiedFiles: [],
+      commitsToday: [],
+      worktrees: [],
+    };
+    const facts = {
+      lastActivity: null,
+      lastPrompts: [],
+      touchedFiles: [],
+      git: unchangedGitFacts,
+    };
+    const storage = new FakeStorage(DEFAULT_TEST_CONFIG);
+    await storage.saveHandoff(DAY, {
+      sessionId: session.sessionId,
+      cwd: session.cwd,
+      name: session.name,
+      capturedAt: NOW,
+      sessionState: 'alive',
+      capturedDuringActiveTurn: false,
+      source: 'model',
+      captureMode: 'lean',
+      sources: ['git'],
+      facts,
+      understanding: '',
+      pendingItems: [],
+      tomorrowPlan: [],
+      generationError: null,
+    });
+    const gitReader = new FakeGitReader(
+      new Map([[session.cwd, { hasGit: true, facts: unchangedGitFacts, rejectedWorktrees: [] }]]),
+    );
+    const deps = buildDeps({ storage, gitReader });
+    const outcome = await captureSession({
+      deps,
+      session,
+      config: DEFAULT_TEST_CONFIG,
+      now: NOW,
+      day: DAY,
+      dryRun: true,
+    });
+    expect(outcome).toEqual({ kind: 'ineligible', reasons: ['duplicateToday'] });
+  });
 });

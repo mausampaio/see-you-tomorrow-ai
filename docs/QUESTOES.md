@@ -1619,3 +1619,99 @@ mtime, afirmando que a única diferença é o fork obsoleto sumindo — com tran
 e fork ainda no prazo saindo byte a byte idênticos. Numa tarefa que abre a **única exceção** do
 projeto à regra de não tocar em arquivo do usuário, provar o que **não** foi tocado vale mais
 que provar o que foi.
+
+---
+
+## Q-024 — As duas peças desligadas de S1-T7/S2-T6: uma ligada em `end-day`, a outra não
+
+**Tarefa:** S2-T5
+**Bloqueia:** não — as duas decisões seguiram, com o argumento abaixo; registro para confirmação.
+**Contexto:** a tarefa pediu explicitamente para decidir onde ligar duas peças que ficaram prontas
+e desligadas: os avisos precoces (S1-T7) e a limpeza de forks (S2-T6). Nenhuma das duas tinha
+consumidor em `cli/` até aqui.
+
+**1) Limpeza de forks (D-012) — ligada aqui, em `seeya end-day`.** `ForkCleanup` entrou em
+`EndDayDeps` (campo obrigatório, não opcional — D-020 quer toda dependência explícita) e
+`endDay()` chama `deps.forkCleanup.cleanup(config.forkCleanupDays)` como um passo próprio, depois
+da captura e do briefing, isolado do resto do resultado (`EndDayResult.forkCleanup`/
+`forkCleanupError`, no mesmo espírito de `failedCaptures`: uma falha na limpeza nunca invalida
+capturas que já tinham sido gravadas com sucesso na mesma execução). O argumento decisivo é
+literalmente o que a tarefa apontou: `end-day` é a única rotina diária que este produto já executa
+— `seeya sessions`/`status` são diagnóstico sob demanda, sem cadência —, e D-012 fala em "forks com
+mais de `forkCleanupDays`", uma condição pensada para ser reavaliada uma vez por dia, não a cada
+consulta de diagnóstico.
+
+**`--dry-run` NUNCA chama `cleanup()`, nem para pré-visualizar — só pula, com aviso explícito.**
+Apagar o arquivo de um fork obsoleto é exatamente o tipo de escrita que `--dry-run` existe para
+nunca fazer, e `ForkCleanup` não tem hoje um modo "só planejar" que leia `forks.json` sem apagar
+nada — só a função pura `core/fork-cleanup.ts#planForkCleanup` decide isso, e ela não é alcançável
+daqui sem duplicar a leitura de `forks.json` que `DiscoveryForkCleanup` já faz. Prefiro reportar
+"pulado" a inventar um segundo caminho de leitura só para a pré-visualização. Se quiser um preview
+de verdade aqui também, a peça que falta é dar ao port `ForkCleanup` um segundo método
+somente-leitura — não fiz isso sem perguntar, por ser mudança de porta, não de fiação.
+
+**2) Avisos precoces (D-018/D-029) — decidido que pertencem a `seeya sessions`, mas NÃO
+implementado nesta tarefa.** D-018 é explícito: o aviso sai "assim que a sessão é vista", e "ver"
+uma sessão é o que a descoberta faz — não o encerramento do dia. `seeya end-day` também descobre
+sessões, mas só uma vez por dia (ou sob comando manual); `seeya sessions` é o comando que roda a
+qualquer momento, inclusive de forma repetida ao longo do dia, exatamente o padrão "avisa a
+primeira vez que vê, nunca de novo" que S1-T7 implementou. Ligar em `end-day` faria um usuário que
+só roda `end-day` à noite descobrir às 21h que uma sessão está sem transcript desde as 9h da manhã
+— o oposto do que D-018 quer ("quando ainda dá para reagir").
+
+**Por que não implementei a fiação, mesmo concordando que é ali que ela pertence.**
+`discoverEarlyWarnings` (S1-T7) grava `~/.seeya/early-warnings.json` quando há aviso novo — e
+`docs/ESPECIFICACAO.md` § `seeya sessions` diz textualmente "Não escreve nada." As duas coisas
+coexistem sob uma leitura (a que considero correta): "não escreve nada" descreve o **propósito**
+do comando — ele não participa da escrita de dados de domínio (handoffs, config, `forks.json`) —,
+e a marca de "já avisado" é bookkeeping de diagnóstico, do mesmo tipo que um log, não dado de
+produto. Mas é uma leitura, não a única possível, e ligar isso muda o comportamento de um comando
+já aprovado (S1-T6) e sua suíte de testes — six arquivos de teste (`sessions-command.test.ts`,
+`composition.test.ts`, o e2e nº1, mais os testes unitários de `format-sessions`/`session-view`)
+que não pediram esse escopo. Prefiro registrar a decisão com o argumento completo e deixar a
+fiação para quem confirmar a leitura acima, a forçar uma mudança de contrato num comando de outra
+tarefa dentro do orçamento desta.
+
+**Opções que enxergo:** A) confirmar as duas decisões como estão — fork cleanup ligado em
+`end-day`, avisos precoces decididos para `seeya sessions` mas ainda desligados. B) para os avisos,
+pedir a fiação agora mesmo, como extensão desta tarefa. C) para a limpeza de forks, pedir o segundo
+método somente-leitura em `ForkCleanup` para que `--dry-run` também pré-visualize a limpeza, em vez
+de só reportar "pulado".
+**Resposta:** _(em aberto)_
+
+**Resposta:** **FECHADA — a primeira confirmada; na segunda concordo com o seu argumento e
+discordo do seu destino.**
+
+**1) Limpeza de forks no `end-day`: confirmado.** É a única rotina com cadência que o produto
+roda. `sessions` e `status` são diagnóstico sob demanda, e pendurar manutenção neles significaria
+que quem não os roda nunca limpa nada. E pular a limpeza inteira no `--dry-run`, em vez de
+pré-visualizar, está certo: apagar arquivo é exatamente o que um ensaio não faz.
+
+**2) Avisos precoces: seu argumento contra o `end-day` está certo e é decisivo.** Quem só roda
+`end-day` à noite descobriria de manhã um problema da manhã — só à noite. Um aviso "precoce" que
+chega no fim do dia não é precoce, é autópsia.
+
+**Mas o `seeya sessions` também não é a casa.** Dois motivos, e o segundo é o que decide:
+
+A tensão que você registrou é real, não interpretação — a `ESPECIFICACAO.md` diz que o `sessions`
+**não escreve nada**, e `discoverEarlyWarnings` grava. Sua leitura ("não escreve dado de
+domínio") é defensável, mas eu não quero resolver uma contradição de especificação por leitura
+quando existe saída que não contradiz nada.
+
+E o motivo mais forte: o `sessions` é **sob demanda**. Quem nunca o roda nunca é avisado — e o
+usuário que mais precisa do aviso é justamente o que não fica inspecionando sessão.
+
+**A casa é o daemon (S4-T3).** Ele é a única coisa no produto que **vê sessões continuamente**,
+que é o que o D-018 quer dizer com "assim que a sessão é vista". Um aviso precoce precisa de
+cadência, e o daemon é a cadência.
+
+Isso também dissolve a tensão de especificação em vez de reinterpretá-la: o `sessions` continua
+sem escrever nada. Se um dia fizer sentido ele **mostrar** avisos já registrados, mostrar é
+leitura e não conflita.
+
+**Você fez certo em não fiar.** Mudar o contrato de um comando já aprovado por conta própria
+seria pior que deixar a peça desligada com o argumento escrito. Anotado na S4-T3.
+
+**Sobre a limpeza sem modo somente-leitura:** aceito como está. O `--dry-run` dizer "skipped (a
+dry run never deletes files)" é honesto e informa. Estender a porta para pré-visualizar exclusão
+custa mais do que rende; se alguém pedir, vira decisão nova.

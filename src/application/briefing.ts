@@ -9,7 +9,7 @@
  */
 import { generateBriefingMarkdown } from '../core/briefing.js';
 import type { Storage } from '../core/ports.js';
-import type { Day } from '../core/types.js';
+import type { Day, Handoff } from '../core/types.js';
 
 /**
  * Reads back every handoff saved for `day`, renders the consolidated markdown, and persists it as
@@ -24,4 +24,41 @@ export async function writeDailyBriefing(storage: Storage, day: Day, now: Date):
   const { handoffs, rejected } = await storage.listHandoffs(day);
   const markdown = generateBriefingMarkdown(day, now, handoffs, rejected);
   await storage.saveBriefing(day, markdown);
+}
+
+/** By `sessionId`, `fresh` entries winning over `persisted` ones — the same "last write wins"
+ * outcome a real second `saveHandoff` for the same session would produce on disk, applied here
+ * only in memory. */
+function mergeHandoffsBySessionId(
+  persisted: readonly Handoff[],
+  fresh: readonly Handoff[],
+): Handoff[] {
+  const bySessionId = new Map(persisted.map((handoff) => [handoff.sessionId, handoff]));
+  for (const handoff of fresh) {
+    bySessionId.set(handoff.sessionId, handoff);
+  }
+  return [...bySessionId.values()];
+}
+
+/**
+ * `--dry-run`'s (S2-T5) non-writing counterpart to `writeDailyBriefing` above: renders the SAME
+ * markdown a real run would, without ever calling `storage.saveBriefing`. `freshHandoffs` are this
+ * dry run's own just-built (never persisted) captures — merged with whatever `storage.listHandoffs`
+ * already has on disk for `day` so the preview stays honest about a day that had a real
+ * `seeya end-day --session <id>` run earlier and a `--dry-run` preview of a DIFFERENT session
+ * later: the preview shows both, matching what a real run would consolidate.
+ *
+ * @example
+ * const markdown = await previewDailyBriefing(deps.storage, day, now, capturedHandoffs);
+ * // markdown is what ~/.seeya/days/<day>/summary.md WOULD contain — nothing was written.
+ */
+export async function previewDailyBriefing(
+  storage: Storage,
+  day: Day,
+  now: Date,
+  freshHandoffs: readonly Handoff[],
+): Promise<string> {
+  const { handoffs, rejected } = await storage.listHandoffs(day);
+  const merged = mergeHandoffsBySessionId(handoffs, freshHandoffs);
+  return generateBriefingMarkdown(day, now, merged, rejected);
 }
