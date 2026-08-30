@@ -309,3 +309,49 @@ export interface GitReader {
 export interface HandoffGenerator {
   generate(session: DiscoveredSession, facts: SessionFacts): Promise<GeneratedUnderstanding>;
 }
+
+/**
+ * `Storage`'s S2-T4 growth, declared as a second block TypeScript merges with the one above
+ * instead of edited into that interface's original body. Appending new members at the end of the
+ * file, rather than touching a shared interface's existing text in place, is the lower-conflict
+ * way to grow a port that more than one in-flight task may touch — this file's own history
+ * already shows a mid-interface edit costing a broken merge more than once, and declaration
+ * merging sidesteps that class of conflict entirely for interface types.
+ */
+export interface Storage {
+  /**
+   * Reads every handoff written for `day` (`~/.seeya/days/<day>/sessions/*.json`), validating
+   * each file independently — D-022 names "os handoffs lidos de `~/.seeya/`" explicitly as a
+   * collection that must be checked item by item, never `z.array`'s tudo-ou-nada. One corrupted or
+   * hand-edited file never takes the rest of the day down: it's reported in `rejected`
+   * (`RejectedDiscoveryRecord`, same `file`/`raw`/`reason` shape `DiscoveryResult` already uses)
+   * and excluded, while every other handoff still comes back in `handoffs`.
+   *
+   * A missing or empty `sessions/` directory (nothing captured yet today) resolves to
+   * `{ handoffs: [], rejected: [] }`, not an error (D-025) — same "absence is normal" policy as
+   * `readConfig`/`readEarlyWarningState`/`readHandoff` above.
+   *
+   * Added in S2-T4 for `generateBriefingMarkdown` (`core/briefing.ts`): the day's consolidated
+   * `summary.md` is built from every handoff captured so far today, not only the ones a single
+   * `endDay` run just wrote, so re-running `seeya end-day --session <id>` (S2-T5) later the same
+   * day still produces a briefing reflecting everyone captured earlier.
+   */
+  listHandoffs(day: Day): Promise<{
+    readonly handoffs: Handoff[];
+    readonly rejected: RejectedDiscoveryRecord[];
+  }>;
+
+  /**
+   * Persists `markdown` at `~/.seeya/days/<day>/summary.md` (docs/ESPECIFICACAO.md § "Formato do
+   * handoff": "ao lado da pasta `sessions/`"), atomically — same `writeFileAtomic` every other
+   * write under `~/.seeya/` uses, reused rather than duplicated.
+   *
+   * **Named `saveBriefing`, not in AGENTS.md § "Idioma"'s glossary table.** That table fixes
+   * `readBriefing` (for S3-T1, still unimplemented) but never named the write side — an oversight
+   * this task fills by the same `save<Noun>`/`read<Noun>` pattern `saveHandoff`/`readHandoff` and
+   * `saveEarlyWarningState`/`readEarlyWarningState` already established, rather than a new,
+   * unrelated verb. Flagged in docs/QUESTOES.md for confirmation, per AGENTS.md § "Glossário de
+   * domínio": "termo novo entra aqui antes de entrar no código".
+   */
+  saveBriefing(day: Day, markdown: string): Promise<void>;
+}

@@ -1465,3 +1465,50 @@ em disco antes de terminar o processo** (D-002). Atualizo o esboço.
 que as duas estratégias já excluem forks antes do `list()` devolver. O risco é de segunda ordem:
 se um dia uma estratégia parar de excluir, a elegibilidade deixa de filtrar **sem nada falhar**.
 Deixe escrito onde o conjunto é montado, para quem mexer saber que o filtro vive rio acima.
+
+---
+
+## Q-022 — Três escolhas feitas fazendo S2-T4 (briefing), registradas para confirmação
+
+**Tarefa:** S2-T4
+**Bloqueia:** não esta tarefa — segui com a solução mínima nos três casos (AGENTS.md: "abra a
+questão e siga com a solução mínima").
+
+**1) Nome do método de escrita: `Storage.saveBriefing`, que não está na tabela de
+`AGENTS.md § Idioma`.** A tabela fixa `readBriefing` (reservado para S3-T1, ainda não
+implementado) mas nunca nomeou o lado de escrita — a tarefa que introduziria esse método
+(entender que seria esta) parece ter ficado de fora da fixação em S1-T0g. Escolhi `saveBriefing`
+por ser exatamente o padrão já em uso duas vezes no mesmo arquivo: `saveHandoff`/`readHandoff` e
+`saveEarlyWarningState`/`readEarlyWarningState`. Não inventei verbo novo; apliquei o par que já
+existia com o substantivo que a tabela já reservou.
+
+**2) `Storage` cresceu por um SEGUNDO bloco `export interface Storage { ... }`, mesclado pelo
+TypeScript com o original, em vez de editado no corpo da interface já existente.** S1-T7 e S2-T3
+cresceram esta mesma porta editando o corpo original diretamente — é o padrão do projeto até
+aqui. Diverjo aqui porque `core/ports.ts` está sendo tocado por outra tarefa do mesmo sprint ao
+mesmo tempo, e o histórico deste arquivo já registra merge quebrado por corte de conflito no meio
+de uma interface mais de uma vez. Merge de interface do TypeScript deixa a adição inteiramente no
+fim do arquivo, sem tocar o texto original — elimina essa classe de conflito, ao custo de a porta
+`Storage` agora existir como dois blocos de texto em vez de um. Se isso for considerado estilo
+ruim para o arquivo definitivo (depois que as duas tarefas convergirem), um commit de limpeza
+depois pode fundir os dois blocos manualmente sem risco, já que o compilador já garante que o
+resultado é idêntico.
+
+**3) O briefing é montado a partir de `Storage#listHandoffs(day)` (uma releitura do disco), não a
+partir do `EndDayResult` que o próprio `endDay` acabou de produzir em memória.** A
+`docs/ESPECIFICACAO.md` diz "consolidando **todos** os handoffs" — não só os desta chamada. Como
+`seeya end-day --session <id>` (S2-T5) ainda vai permitir capturar uma sessão de cada vez, uma
+segunda chamada no mesmo dia precisa que o `summary.md` continue refletindo as sessões capturadas
+antes. Reler do disco também é o que torna D-022 aplicável aqui pela primeira vez a handoffs (a
+tabela de D-022 já cita "os handoffs lidos de `~/.seeya/`" como coleção externa a validar item a
+item) — um handoff corrompido ou editado à mão nunca existiria no `EndDayResult` em memória, só
+aparece relendo o arquivo.
+
+**Opções que enxergo, por item:** 1) manter `saveBriefing`, ou aguardar confirmação do PO antes de
+gravar em disco pela primeira vez (o nome do método não vai a disco, só a chave `summary.md`, que
+já está fixada — risco baixo de errar para sempre). 2) manter os dois blocos mesclados, ou fundir
+manualmente agora e aceitar o risco de conflito que a S2-T6 paralela poderia gerar. 3) manter a
+releitura do disco a cada `endDay`, ou passar a montar o briefing a partir do `EndDayResult` em
+memória e perder a consolidação entre execuções + a cobertura de D-022 para handoffs.
+
+**Resposta:** (preenchida pelo PO)

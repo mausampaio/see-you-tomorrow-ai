@@ -595,7 +595,27 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 - [ ] **S2-T6 — Limpeza de forks.** Apaga forks próprios com mais de `forkCleanupDays`.
       *Aceite:* apaga apenas IDs presentes em `forks.json`; um teste prova que nenhum outro
       arquivo de `~/.claude/projects/` é tocado.
-- [ ] **S2-T4 — Briefing.** Geração do `summary.md` a partir dos handoffs.
+- [~] **S2-T4 — Briefing.** Geração do `summary.md` a partir dos handoffs.
+      **Implementado em 2026-08-29:** `core/briefing.ts#generateBriefingMarkdown` é a regra pura
+      (sem I/O, sem `Date.now()`, D-019) que renderiza o markdown a partir de `Handoff[]` e das
+      rejeições de D-022; `application/briefing.ts#writeDailyBriefing` é a casca de I/O que lê
+      `Storage#listHandoffs(day)` (nova, valida item a item — D-022 já citava "os handoffs lidos
+      de `~/.seeya/`" como coleção externa) e grava com `Storage#saveBriefing` (nova, reaproveita
+      `writeFileAtomic` da S1-T5). `endDay` chama isso como seu passo 3, relendo todos os handoffs
+      do dia do disco — não só os desta execução — para que `seeya end-day --session <id>` (S2-T5)
+      rodado mais de uma vez no mesmo dia continue produzindo um briefing consolidado. `source:
+      "deterministic"` vira um blockquote de aviso explícito ("entendimento não disponível, a
+      falha foi do modelo"); `capturedDuringActiveTurn: true` aparece colado à linha de estado;
+      evidência parcial (`sources[]` incompleto) nomeia exatamente o que faltou; dia sem handoff
+      nenhum produz "No sessions were captured today." em vez de silêncio ou invenção; handoff
+      ilegível vira uma linha nomeada em "Unreadable entries", sem derrubar os demais. `Storage`
+      cresceu como um segundo bloco `export interface Storage {}` mesclado pelo TypeScript (não
+      editado no corpo original) — S2-T6 mexe no mesmo arquivo em paralelo, e o histórico dele já
+      registrou merge quebrado por corte no meio de uma interface. Nome `saveBriefing` não estava
+      na tabela de disco do `AGENTS.md` (só `readBriefing` estava, reservado para S3-T1); segui o
+      par `save<Nome>`/`read<Nome>` já usado por `saveHandoff`/`saveEarlyWarningState`. Três
+      escolhas registradas em Q-022 para confirmação. `npm run verificar` e `npm run
+      verificar:linux` verdes; `core/` e `application/` em 100% de linhas e branches nos dois.
 - [ ] **S2-T5 — `seeya end-day` com `--dry-run` e `--session`.**
       *Aceite do sprint:* e2e 2, 3 e 4 passam. Encerramento com o modelo indisponível ainda
       produz handoffs úteis.

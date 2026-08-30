@@ -11,6 +11,7 @@ import {
   FakeSessionProvider,
   FakeStorage,
   FakeTranscriptReader,
+  StorageWithRejectedHandoffs,
   failingGenerator,
   succeedingGenerator,
 } from './_fakes.js';
@@ -276,6 +277,66 @@ describe('endDay — Q-007 termination notices', () => {
     const result = await endDay(deps);
     expect(result.captured[0]?.terminated).toBe(true);
     expect(result.terminationNotices).toHaveLength(0);
+  });
+});
+
+describe('endDay — briefing (S2-T4)', () => {
+  it('writes a consolidated summary.md for the day, reflecting a captured session', async () => {
+    const session = createSessionWithPid({ hasTranscript: false, lastActivity: NOW });
+    const storage = new FakeStorage(DEFAULT_TEST_CONFIG);
+    const deps = buildDeps({
+      sessionProvider: new FakeSessionProvider({ sessions: [session], rejected: [] }),
+      storage,
+      gitReader: new FakeGitReader(
+        new Map([
+          [
+            session.cwd,
+            {
+              hasGit: true,
+              facts: {
+                branch: 'main',
+                dirty: false,
+                modifiedFiles: [],
+                commitsToday: [],
+                worktrees: [],
+              },
+              rejectedWorktrees: [],
+            },
+          ],
+        ]),
+      ),
+    });
+    const result = await endDay(deps);
+    const markdown = storage.savedBriefings.get(result.day);
+    expect(markdown).toBeDefined();
+    expect(markdown).toContain(session.name);
+    expect(markdown).toContain('1 session captured today');
+  });
+
+  it('writes an honest, empty-day briefing when nothing was discovered (aceite #5)', async () => {
+    const storage = new FakeStorage(DEFAULT_TEST_CONFIG);
+    const deps = buildDeps({
+      sessionProvider: new FakeSessionProvider({ sessions: [], rejected: [] }),
+      storage,
+    });
+    const result = await endDay(deps);
+    expect(storage.savedBriefings.get(result.day)).toContain('No sessions were captured today.');
+  });
+
+  it("surfaces a corrupted handoff file from a PREVIOUS capture today, not just this run's own (D-022)", async () => {
+    const storage = new StorageWithRejectedHandoffs(DEFAULT_TEST_CONFIG, {
+      file: 'sessions/broken.json',
+      raw: undefined,
+      reason: 'not valid JSON',
+    });
+    const deps = buildDeps({
+      sessionProvider: new FakeSessionProvider({ sessions: [], rejected: [] }),
+      storage,
+    });
+    const result = await endDay(deps);
+    const markdown = storage.savedBriefings.get(result.day);
+    expect(markdown).toContain('1 entry could not be read');
+    expect(markdown).toContain('sessions/broken.json');
   });
 });
 

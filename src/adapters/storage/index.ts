@@ -5,9 +5,9 @@
  * não se negociam"). `cli/` is the only place that resolves the real root and constructs this
  * class (D-020).
  */
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
-import type { Storage } from '../../core/ports.js';
+import type { RejectedDiscoveryRecord, Storage } from '../../core/ports.js';
 import type { Config, Day, EarlyWarningState, Handoff } from '../../core/types.js';
 import { EMPTY_EARLY_WARNING_STATE } from '../../core/early-warnings.js';
 import { isEnoent } from './fs-errors.js';
@@ -71,6 +71,72 @@ async function readVersionedDocument(
   return resolveSchemaVersion(filePath, parsed as Record<string, unknown>, {}, expectedVersion);
 }
 
+/**
+ * Lists `dir`'s `.json` file names, or — instead of throwing — one `RejectedDiscoveryRecord`
+ * describing a directory-level failure (e.g. the path exists but isn't a directory). Same shape
+ * `adapters/discovery/registry.ts#listSessionJsonFilesOrRejection` already uses for the identical
+ * problem: a listing failure worse than "doesn't exist yet" degrades to one named rejection
+ * instead of aborting `listHandoffs` and losing every other handoff the day actually has.
+ */
+async function listJsonFilesOrRejection(dir: string): Promise<string[] | RejectedDiscoveryRecord> {
+  try {
+    const entries = await readdir(dir);
+    return entries.filter((name) => name.endsWith('.json'));
+  } catch (error) {
+    if (isEnoent(error)) {
+      return [];
+    }
+    return { file: dir, raw: undefined, reason: `listing ${dir} failed: ${String(error)}` };
+  }
+}
+
+/**
+ * Reads and validates one handoff file for `Storage#listHandoffs`. `null` means the file vanished
+ * between `readdir` and this read — a benign race (something else cleaned it up mid-listing), not
+ * a corruption, so it's silently skipped rather than reported (D-025: no claim either way about a
+ * file that no longer exists). Any other failure — bad JSON, a schema mismatch, an unsupported
+ * `schemaVersion` — becomes a `RejectedDiscoveryRecord` instead of throwing, which is what lets
+ * `listHandoffs` keep going through every other file (D-022).
+ */
+async function readOneHandoffOrRejection(
+  filePath: string,
+): Promise<Handoff | RejectedDiscoveryRecord | null> {
+  try {
+    const resolved = await readVersionedDocument(filePath, HANDOFF_SCHEMA_VERSION);
+    return resolved === null ? null : parseHandoffDocument(resolved);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return { file: filePath, raw: undefined, reason };
+  }
+}
+
+function isRejection(
+  value: Handoff | RejectedDiscoveryRecord | null,
+): value is RejectedDiscoveryRecord {
+  return value !== null && 'reason' in value;
+}
+
+/** Splits `readOneHandoffOrRejection`'s per-file outcomes into the two sides D-022 requires,
+ * dropping the benign "vanished mid-listing" `null`s silently (see that function's docstring). */
+function partitionHandoffOutcomes(
+  outcomes: readonly (Handoff | RejectedDiscoveryRecord | null)[],
+  rejectedSoFar: readonly RejectedDiscoveryRecord[],
+): { handoffs: Handoff[]; rejected: RejectedDiscoveryRecord[] } {
+  const handoffs: Handoff[] = [];
+  const rejected: RejectedDiscoveryRecord[] = [...rejectedSoFar];
+  for (const outcome of outcomes) {
+    if (outcome === null) {
+      continue;
+    }
+    if (isRejection(outcome)) {
+      rejected.push(outcome);
+    } else {
+      handoffs.push(outcome);
+    }
+  }
+  return { handoffs, rejected };
+}
+
 export class StorageAdapter implements Storage {
   constructor(private readonly seeyaHome: string) {}
 
@@ -99,11 +165,15 @@ export class StorageAdapter implements Storage {
     await writeFileAtomic(filePath, JSON.stringify(serializeEarlyWarningState(state)));
   }
 
+  private sessionsDir(day: Day): string {
+    return path.join(this.seeyaHome, 'days', day, 'sessions');
+  }
+
   /** `~/.seeya/days/<day>/sessions/<sessionId>.json` (docs/ESPECIFICACAO.md § "Formato do
    * handoff") — `node:path` throughout, never a literal `/`/`\` join (AGENTS.md § "Sistema de
    * arquivos"). */
   private handoffPath(day: Day, sessionId: string): string {
-    return path.join(this.seeyaHome, 'days', day, 'sessions', `${sessionId}.json`);
+    return path.join(this.sessionsDir(day), `${sessionId}.json`);
   }
 
   async saveHandoff(day: Day, handoff: Handoff): Promise<void> {
@@ -121,5 +191,29 @@ export class StorageAdapter implements Storage {
       return null;
     }
     return parseHandoffDocument(resolved);
+  }
+
+  /** `~/.seeya/days/<day>/summary.md` (docs/ESPECIFICACAO.md § "Formato do handoff": "ao lado da
+   * pasta `sessions/`"). */
+  private briefingPath(day: Day): string {
+    return path.join(this.seeyaHome, 'days', day, 'summary.md');
+  }
+
+  async listHandoffs(
+    day: Day,
+  ): Promise<{ handoffs: Handoff[]; rejected: RejectedDiscoveryRecord[] }> {
+    const dir = this.sessionsDir(day);
+    const namesOrRejection = await listJsonFilesOrRejection(dir);
+    const fileNames = Array.isArray(namesOrRejection) ? namesOrRejection : [];
+    const rejectedSoFar = Array.isArray(namesOrRejection) ? [] : [namesOrRejection];
+
+    const outcomes = await Promise.all(
+      fileNames.map((name) => readOneHandoffOrRejection(path.join(dir, name))),
+    );
+    return partitionHandoffOutcomes(outcomes, rejectedSoFar);
+  }
+
+  async saveBriefing(day: Day, markdown: string): Promise<void> {
+    await writeFileAtomic(this.briefingPath(day), markdown);
   }
 }
