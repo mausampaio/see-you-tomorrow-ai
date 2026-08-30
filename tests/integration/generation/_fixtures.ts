@@ -148,6 +148,19 @@ class Shim
 `;
 }
 
+/**
+ * Set by `_windows-shim-global-setup.ts` before any worker starts (S2-T8). Vitest isolates each
+ * test file's module registry by default, so the per-process memoization below only dedupes
+ * calls WITHIN one file — every file importing this module still paid its own `csc.exe` compile.
+ * Measured on this dev machine (`npm test`, the two files that use this fixture today —
+ * `lean-generator.test.ts` and `deep-generator.test.ts` — each in their own worker process):
+ * 317ms and 344ms, cheap here. On a cold, contended CI runner the same compile is far more
+ * expensive, and having it happen twice AT ONCE (both workers competing for the same CPU) is
+ * worse than the sum of the two — that contention, not the compile itself, produced "Hook timed
+ * out in 10000ms" in the Windows CI run this task investigates.
+ */
+export const WINDOWS_SHIM_PATH_ENV_VAR = 'SEEYA_TEST_WINDOWS_CLAUDE_SHIM_PATH';
+
 /** Compiled once per test process and reused by every fixture instance (S2-T2 measured `csc.exe`
  * cold-start as non-trivial; dozens of tests each calling `createFakeClaudeFixture()` would
  * otherwise recompile an identical launcher dozens of times). Never cleaned up by
@@ -155,7 +168,7 @@ class Shim
  * in its own `tmpdir()` entry the OS reclaims on its own schedule, same as the rest of `tmpdir()`. */
 let windowsShimPath: Promise<string> | undefined;
 
-async function compileWindowsShim(): Promise<string> {
+export async function compileWindowsShim(): Promise<string> {
   const shimDir = await mkdtemp(path.join(tmpdir(), 'seeya-fake-claude-shim-'));
   const sourcePath = path.join(shimDir, 'shim.cs');
   const exePath = path.join(shimDir, 'claude.exe');
@@ -164,7 +177,15 @@ async function compileWindowsShim(): Promise<string> {
   return exePath;
 }
 
+/** Prefers the shim `_windows-shim-global-setup.ts` already built once for the whole run (the
+ * `integration` project wires that global setup up; `existsSync` is a cheap guard against the
+ * unlikely case its teardown already ran). Any other project or a one-off single-file run falls
+ * back to the old per-process compile — slower, but correct, exactly what happened before S2-T8. */
 function getWindowsShimBinary(): Promise<string> {
+  const fromGlobalSetup = process.env[WINDOWS_SHIM_PATH_ENV_VAR];
+  if (fromGlobalSetup !== undefined && existsSync(fromGlobalSetup)) {
+    return Promise.resolve(fromGlobalSetup);
+  }
   windowsShimPath ??= compileWindowsShim();
   return windowsShimPath;
 }

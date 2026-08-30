@@ -1715,3 +1715,58 @@ seria pior que deixar a peça desligada com o argumento escrito. Anotado na S4-T
 **Sobre a limpeza sem modo somente-leitura:** aceito como está. O `--dry-run` dizer "skipped (a
 dry run never deletes files)" é honesto e informa. Estender a porta para pré-visualizar exclusão
 custa mais do que rende; se alguém pedir, vira decisão nova.
+
+---
+
+## Q-025 — S2-T8: uma terceira causa de vermelho no Windows CI, encontrada só medindo no runner
+
+**Tarefa:** S2-T8
+**Bloqueia:** não bloqueou a entrega — resolvida com a mesma técnica já usada para a primeira
+causa —, mas registro porque muda a contagem que a própria tarefa afirmava ("duas causas
+distintas") e porque a correção alcança dois arquivos de teste que a tarefa não citava.
+
+**Contexto.** A tarefa nomeava duas causas para o CI vermelho só no Windows, as duas medidas na
+máquina de desenvolvimento. Depois de corrigir a primeira (compilar o shim `.exe` uma vez por
+execução via `globalSetup`, não uma vez por arquivo de teste — `tests/integration/generation/
+_windows-shim-global-setup.ts`) e abrir um PR de rascunho só para medir no runner de verdade
+(`gh run watch`, autorizado pela própria tarefa), o Windows **ainda** ficou vermelho — mas num
+teste que nenhuma das duas causas descritas explica: `tests/integration/cli/composition.test.ts
+> buildCliContext > the real ProcessControl reports this test process itself as alive`, com
+"Test timed out in 5000ms" (o padrão do vitest, esse teste nunca teve orçamento explícito).
+
+**Achado.** O único passo lento desse teste é `captureObservedProcStart` no Windows
+(`src/adapters/process/proc-start.ts#captureWindows`), que spawna
+`powershell.exe -NoProfile -Command "(Get-Process -Id <pid>).StartTime.ToFileTimeUtc()"` — um
+processo real, não um fake. `tests/integration/process/liveness.test.ts` (mesma função) e o bloco
+Windows de `termination.test.ts` (via `console-signal.ts`) chamam o mesmo binário. Num runner
+recém-iniciado, a **primeira** vez que `powershell.exe` sobe paga um custo real de carregar
+`System.Management.Automation.dll` e afins do disco — a mesma forma de problema que o `csc.exe`
+do shim, e pela mesma razão que S1-T13/S2-T7 já tinham medido esse binário como caro no bloco
+Windows de `termination.test.ts`: ali o custo já estava embutido num orçamento generoso, mas
+`composition.test.ts` nunca teve orçamento nenhum, porque nunca tinha sido medido sob a mesma
+lente.
+
+**Conserto aplicado (mesma família B da causa 1): aquecer `powershell.exe` uma vez, em
+`globalSetup`, antes de qualquer worker subir** — `tests/integration/process/
+_powershell-warmup-global-setup.ts`, adicionado ao `globalSetup` do projeto `integration` ao lado
+do do shim. O comando executado (`exit`) não importa; o custo que se está pagando de propósito é
+subir o processo `powershell.exe`, não um cmdlet específico. Isso remove a loteria de "qual
+arquivo de teste chega primeiro no binário frio" para os três consumidores
+(`composition.test.ts`, `liveness.test.ts`, `termination.test.ts`) de uma vez, em vez de dar
+orçamento explícito a cada um separadamente.
+
+**Por que registro em vez de só consertar e seguir.** A tarefa afirmava "duas causas distintas,
+as duas medidas". Era uma afirmação factual específica, e uma terceira causa real a contradiz —
+não é uma opção de design em aberto, é a premissa "eu já sei quais são as causas" tendo saído
+incompleta mesmo depois de pedir medição no lugar certo. Reporto para quem escreveu a tarefa
+confirmar que o raciocínio (cold-start de processo real, não código deste projeto) está certo, e
+não é só uma tampa nova sobre um sintoma diferente.
+
+**Opções que enxergo:** A) aceitar o aquecimento único como está, cobrindo os três consumidores
+atuais de `powershell.exe`. B) além do aquecimento, dar a `composition.test.ts` e a
+`liveness.test.ts` um orçamento explícito próprio (hoje seguem no default do vitest), como
+segunda camada de margem caso o aquecimento por algum motivo não baste num runner ainda mais
+lento. C) mover o aquecimento para fora do projeto `integration` (por exemplo, um `globalSetup` na
+raiz do `vitest.config.ts`, compartilhado por `unit`/`guards` também), caso apareça um quarto
+consumidor de `powershell.exe` fora de `tests/integration/`.
+**Resposta:** _(em aberto)_
