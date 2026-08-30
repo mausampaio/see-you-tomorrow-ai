@@ -1769,7 +1769,71 @@ segunda camada de margem caso o aquecimento por algum motivo não baste num runn
 lento. C) mover o aquecimento para fora do projeto `integration` (por exemplo, um `globalSetup` na
 raiz do `vitest.config.ts`, compartilhado por `unit`/`guards` também), caso apareça um quarto
 consumidor de `powershell.exe` fora de `tests/integration/`.
-**Resposta:** _(em aberto)_
+**Resposta:** **FECHADA — o aquecimento sobe para a raiz (opção C). Orçamento continua no
+default, avaliado caso a caso (nem A puro nem B).**
+
+Seu raciocínio sobre o aquecimento está certo e é o motivo certo: enquanto ele estiver preso ao
+projeto `integration`, todo teste novo que tocar `powershell.exe` reabre esta decisão do zero. E
+`powershell.exe` é alcançável a partir de `src/adapters/process/` em geral — não há nada que
+prenda um consumidor futuro a `tests/integration/`.
+
+**Medido antes de mexer (duas sondas descartáveis, apagadas depois):**
+
+- um `globalSetup` declarado na **raiz** roda para um projeto que não declara nenhum;
+- raiz e projeto **coexistem** — os dois disparam, o da raiz não substitui o do projeto.
+
+Então o aquecimento foi para `tests/_powershell-warmup-global-setup.ts`, na raiz do
+`vitest.config.ts`, e passa a valer para `unit`, `guards`, `e2e`, `contract` e para qualquer projeto
+que venha depois — sem passo de fiação que alguém possa esquecer. O irmão dele, o shim de
+`csc.exe`, **não** foi junto de propósito: aquele custa segundos (compila), não milissegundos, e
+o único consumidor dele é um fixture que é estruturalmente de integração.
+
+**Agora a parte que você disse não conseguir julgar sozinho: o default basta?**
+
+**Basta — e com folga de ~7×.** Achei a medição por teste que já existe no próprio CI: uma
+execução da S2-T8 rodou um passo temporário com `--reporter=verbose` no `windows-latest`, **com o
+aquecimento já em vigor**:
+
+| teste (Windows CI, aquecido) | duração |
+| --- | --- |
+| `composition.test.ts > the real ProcessControl reports this test process itself as alive` | **723ms** |
+| `liveness.test.ts > real procStart capture round-trips` | 648ms |
+| `liveness.test.ts > the captured procStart matches this platform's documented shape` | 437ms |
+| `liveness.test.ts > a live PID with a genuinely divergent procStart` | 331ms |
+
+O primeiro é **exatamente o teste que estourou os 5000ms** e abriu esta questão. Aquecido, ele
+gasta 723ms.
+
+Conferi que não foi sorte de uma execução: nas 8 execuções verdes mais recentes do
+`windows-latest`, o arquivo inteiro fica entre **762ms e 2495ms** (`composition`, 7 testes) e entre
+**1488ms e 2460ms** (`liveness`, 5 testes). O total do arquivo é limite superior rígido para
+qualquer teste dentro dele — o pior arquivo observado ainda cabe em metade do default.
+
+**Por isso não entra orçamento explícito, e a razão importa mais que a conclusão.** Um orçamento
+em cima de 723ms medidos seria um número inventado sem medição que o sustente — a mesma coisa
+que a Q-026 acabou de tirar do código. Sua regra ("avaliar caso a caso, fugir do default só
+quando aquele caso pedir") é a certa, e este caso não pede: ele já **é** o default com folga.
+
+**A dependência que precisa ficar explícita.** Essa folga de 7× existe **por causa do
+aquecimento**. Frio, o mesmo teste passou de 5000ms — não é hipótese, é a falha medida que
+gerou esta questão. Ou seja: "o default basta" é uma afirmação **condicionada** a o aquecimento
+rodar. É por isso que ele tinha mesmo que sair do projeto e ir para a raiz: a condição precisa
+valer em todo lugar, automaticamente, e não por alguém lembrar de ligar.
+
+**O que fecha a porta para a decisão reabrir.** Com o aquecimento na raiz não existe mais passo
+de fiação para um teste novo perder — a única forma de perdê-lo é apagar a linha da raiz, que é
+ato deliberado, não esquecimento. Por isso **não** acrescentei um teste de guarda para vigiar a
+fiação: não sobrou fiação para vigiar.
+
+**Custo de cobrir quem não precisa:** uma subida quente de `powershell.exe` por execução —
+**~450ms** medidos nesta máquina Windows (5 repetições: 459/420/463/476/487ms), no-op no POSIX.
+Barato perto dos >5s que o caminho frio produziu.
+
+**Sobre a contagem que a S2-T8 errou:** sim, o raciocínio está certo — cold-start de processo
+real, não código deste projeto. A tarefa afirmava "duas causas distintas, as duas medidas", e
+eram três. A terceira só apareceu medindo no runner, que é o lugar onde a afirmação podia ser
+checada. Fica registrado como o que era: uma premissa minha entregue incompleta, não uma
+medição do agente que falhou.
 
 ---
 

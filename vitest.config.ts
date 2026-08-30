@@ -94,6 +94,13 @@ const PRODUCTION_DIRECTORY_THRESHOLDS = {
 export default defineConfig({
   test: {
     passWithNoTests: true,
+    // Q-025: at the ROOT, so every project gets it — not just `integration`, where it started.
+    // `powershell.exe` is reachable from `src/adapters/process/` in general, so a future test in
+    // any project can spawn it; wired per-project, each such test would hit a cold binary with no
+    // warm-up and reopen this same decision from scratch. Measured: a root `globalSetup` runs for
+    // projects that declare none, and coexists with a project's own (both fire). See the file's
+    // own docstring for the numbers.
+    globalSetup: ['tests/_powershell-warmup-global-setup.ts'],
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
@@ -119,14 +126,12 @@ export default defineConfig({
           // notification/ starting at Sprint 1) uses a per-test isolated tmpdir and doesn't
           // contend for any resource, so it keeps Vitest's default parallelism.
           exclude: [...configDefaults.exclude, 'tests/integration/guards/**'],
-          // S2-T8: pays two Windows-only cold-start costs exactly ONCE for the whole project run,
-          // instead of leaving them to whichever test file's worker hits them first (see each
-          // global setup's own comment). No-op on POSIX and on the `unit`/`guards`/`e2e`/`contract`
-          // projects, which don't have this wired.
-          globalSetup: [
-            'tests/integration/generation/_windows-shim-global-setup.ts',
-            'tests/integration/process/_powershell-warmup-global-setup.ts',
-          ],
+          // S2-T8: pays the `csc.exe` shim compilation exactly ONCE for the whole project run,
+          // instead of leaving it to whichever test file's worker hits it first (see that global
+          // setup's own comment). Stays here, project-scoped, while its `powershell.exe` sibling
+          // moved to the root (Q-025): this one costs seconds rather than milliseconds, and its
+          // only consumer is a fixture that is structurally integration-only. No-op on POSIX.
+          globalSetup: ['tests/integration/generation/_windows-shim-global-setup.ts'],
         },
       },
       {

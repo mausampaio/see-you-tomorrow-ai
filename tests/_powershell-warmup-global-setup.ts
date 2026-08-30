@@ -1,8 +1,9 @@
 /**
- * Global setup for the `integration` vitest project (S2-T8, second finding). Spawns
+ * Root-level global setup — every vitest project, not just `integration` (S2-T8 found it,
+ * Q-025 promoted it). Spawns
  * `powershell.exe` once, in vitest's main process, before any worker starts — the same timing
- * guarantee `generation/_windows-shim-global-setup.ts` uses for `csc.exe`, applied to a second,
- * unrelated cold-start cost this task's real-CI measurement surfaced.
+ * guarantee `integration/generation/_windows-shim-global-setup.ts` uses for `csc.exe`, applied to a
+ * second, unrelated cold-start cost this task's real-CI measurement surfaced.
  *
  * Found investigating this task on the actual Windows CI runner (docs/QUESTOES.md Q-025): with
  * the `csc.exe` fix above already in place, `tests/integration/cli/composition.test.ts`'s
@@ -22,8 +23,20 @@
  *
  * The command run here is irrelevant — `exit` — because the cost being amortized is starting the
  * `powershell.exe` process itself, not any particular cmdlet.
+ *
+ * **Why the root and not the `integration` project (Q-025).** It started wired to `integration`,
+ * because that is where the three known callers lived. But `powershell.exe` is reachable from
+ * `src/adapters/process/` generally, so any future test in ANY project can spawn it — and would
+ * then hit a cold binary with no warm-up and reopen this same decision from scratch. Measured:
+ * a `globalSetup` declared at the root runs for a project that declares none, and coexists with a
+ * project's own (both fire), so promoting it here removes the wiring step a new test could miss.
+ * The cost of covering projects that never touch `powershell.exe` is one warm spawn per run
+ * (~450ms measured on a warm Windows dev machine, no-op on POSIX) — cheap next to the >5s
+ * timeout the cold path produced on CI. Its `csc.exe` sibling deliberately did NOT follow: that
+ * one compiles a shim, costing seconds rather than milliseconds, and its only consumer is a
+ * fixture that is structurally integration-only.
  */
-import { runForStdout } from '../../../src/adapters/process/spawn-stdout.js';
+import { runForStdout } from '../src/adapters/process/spawn-stdout.js';
 
 export async function setup(): Promise<void> {
   if (process.platform !== 'win32') {
