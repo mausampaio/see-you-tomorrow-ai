@@ -901,20 +901,40 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       distinção **é** observável de fora: uma chamada `claude -p --model haiku
       --append-system-prompt-file <arquivo>` pede, no mesmo turno, o nome do produto de CLI (só
       respondível a partir do prompt padrão) e um marcador sintético só presente no arquivo
-      anexado — replace derrubaria o primeiro sem afetar o segundo, e não foi isso que a 2.1.251
-      mostrou (os dois vieram corretos). Uma chamada de controle sem o flag prova que a pergunta
-      do nome do produto resolve de verdade na ausência do flag, isolando "o flag mudou de
-      comportamento" de "a pergunta não é respondível de forma confiável" — distinção que existe
-      porque a primeira formulação tentada (booleano direto: "você sabe seu nome de produto?") deu
-      falso negativo mesmo no controle (recusa treinada a uma pergunta meta, não ausência do
-      fato); reformular para pedir o fato direto resolveu. Registrado com o achado bruto em
-      Q-029, sem apagar a formulação descartada (comentário no arquivo).
-      **Exatamente 2 chamadas reais por execução, nunca mais** (documentado em comentário no topo
+      anexado — replace derrubaria o primeiro sem afetar o segundo.
+      **Revisão do mantenedor pegou que a primeira entrega só tinha o braço positivo**: "os dois
+      fatos chegam" é compatível com as duas semânticas até alguém medir o que o replace de fato
+      faz — sem isso, o teste passaria de qualquer jeito, decorativo. **Braço negativo
+      acrescentado:** uma terceira chamada com `--system-prompt-file <mesmo arquivo>` (o flag que
+      de fato SUBSTITUI) fecha o argumento. Medido na 2.1.251, com `--model haiku`: controle e
+      append respondem com o nome do produto ("Claude Code"), replace responde `UNKNOWN` — com o
+      marcador do arquivo presente nos três casos. Essa é a prova que faltava.
+      **Achado sério durante o fechamento do braço negativo: `--model sonnet` NÃO discrimina.**
+      Tentado como forma de reduzir a instabilidade do haiku em responder a pergunta de
+      autorrelato (abaixo); medido uma vez: (a) estourou o teto de US$0,10 por chamada (chegou a
+      ~US$0,13) porque `--model sonnet` aqui passa por uma chamada interna de classificação em
+      haiku antes do turno de sonnet, cada uma pagando criação de cache nova sob
+      `--no-session-persistence`; (b) pior, a única chamada de sonnet que completou (a de replace)
+      respondeu "Claude Code" mesmo com o prompt de sistema inteiramente substituído — autorrelato
+      de identidade não depende do prompt de sistema nesse modelo, e o observável deixa de
+      discriminar por completo. Revertido para `haiku`, a única configuração medida a funcionar.
+      A primeira formulação da pergunta (booleano direto: "você sabe seu nome de produto?") tinha
+      dado falso negativo mesmo no controle (recusa treinada a uma pergunta meta, não ausência do
+      fato); a formulação corrigida (pedir o fato direto, com `UNKNOWN` como saída explícita) segue
+      em uso. **Flakiness residual, medida e documentada, não escondida:** rodando o arquivo final
+      (haiku, três chamadas) uma segunda vez, só a chamada de CONTROLE (sem flag) respondeu
+      `UNKNOWN` de novo, sem motivo — append e replace nunca flakaram nas mesmas rodadas,
+      sustentando a discriminação central. A mensagem de falha do teste de controle explica que uma
+      falha isolada ali (com os outros três verdes) é ruído de amostragem até prova em contrário,
+      não sinal de regressão. Nada disso foi escondido: comentário no arquivo preserva as três
+      formulações tentadas (duas de pergunta, uma de modelo) e por que cada uma foi descartada.
+      **Exatamente 3 chamadas reais por execução, nunca mais** (documentado em comentário no topo
       do arquivo): `--model haiku`, `--no-session-persistence`, `--max-budget-usd 0.10`, `cwd`
       descartável em `%TEMP%`, ambiente saneado reaproveitando
       `adapters/generation/env.ts#buildGenerationEnv(..., 'lean')` em vez de duplicar a lista
-      D-017. Total de chamadas reais gastas durante o desenvolvimento (contando a formulação que
-      deu falso negativo): 4.
+      D-017. **Total de chamadas reais gastas durante todo o desenvolvimento: 11** (4 na entrega
+      original sem braço negativo; 1 sonda avulsa testando `--system-prompt-file`; 3 integrando o
+      braço negativo com haiku; 3 tentando — e descartando — sonnet).
       **Achado extra, sem afetar a conclusão:** `claude --help` na 2.1.251 (mais nova que a 2.1.235
       do Spike H) já **menciona** as duas variantes `-file`, mas só de forma indireta, dentro da
       descrição do flag `--bare` — sem entrada própria nem descrição do que fazem. Continua sem

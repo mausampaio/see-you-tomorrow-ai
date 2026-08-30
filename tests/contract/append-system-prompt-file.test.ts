@@ -16,22 +16,41 @@
  * append-vs-replace distinction the way the task asked: by asking the model, in the SAME turn, one
  * thing only the default Claude Code system prompt would answer (the product name it is running
  * inside) and one thing only the appended file says (a synthetic marker token). If replace ever
- * happens instead of append, the file's content still reaches the model (the marker still comes
- * back) but the product-name question stops resolving to Claude Code — because nothing in
- * `seeya`'s own appended file mentions any CLI product name. That asymmetry is what makes the two
- * flags distinguishable from outside the process, without reading any Claude Code source.
+ * happened instead of append, the file's content would still reach the model (the marker still
+ * comes back) but the product-name question would stop resolving to Claude Code — because nothing
+ * in `seeya`'s own appended file mentions any CLI product name. That asymmetry is what makes the
+ * two flags distinguishable from outside the process, without reading any Claude Code source.
  *
- * **Invocation count: exactly 2 real `claude -p` calls per run, both in `beforeAll`, never
- * retried.** One baseline (no `--append-system-prompt-file` at all) establishes that the
- * product-name question actually resolves to Claude Code under this flag's absence — without that
- * control, an "unknown" result from the real case would be ambiguous between "the flag replaced
- * the default" and "this model/prompt phrasing just doesn't answer that question reliably". The
- * second call is the real case under test. Both use `--model haiku` (the cheapest available
- * alias), `--no-session-persistence` and a hard `--max-budget-usd` ceiling, and both ask for a
- * short structured-JSON reply (two short strings) to keep output tokens minimal. `cwd` is a
- * disposable `mkdtemp` folder, never a real project; the environment is sanitized the same way
- * `adapters/generation` sanitizes it for its own real calls (D-017), reusing that adapter's own
- * pure function instead of re-declaring the variable list here.
+ * **This is a claim about what replace does, and a review of the first version of this file
+ * caught that the claim was never actually measured — only assumed from how the flags are named.**
+ * "Both facts arrive" is compatible with EITHER semantics unless something demonstrates that
+ * replacing the prompt really does blank out the product-name answer; without that, a pass here
+ * wouldn't discriminate anything, which is exactly the decorative-test failure mode CLAUDE.md § "O
+ * erro clássico neste projeto" warns about. The third call below (`--system-prompt-file`, the
+ * flag that DOES replace) closes that gap: measured on claude 2.1.251, it returns
+ * `{"tool":"UNKNOWN","secretToken":"SEEYA-CONTRACT-K7QF2"}` — the marker still arrives, but the
+ * product name does not. That is the missing negative control: it proves the observable actually
+ * discriminates between the two semantics, instead of merely being consistent with the one this
+ * file hopes is true. See Q-029 for the raw output.
+ *
+ * **Invocation count: exactly 3 real `claude -p` calls per run, all in `beforeAll`, never
+ * retried.** One baseline (no flag at all) establishes that the product-name question actually
+ * resolves to Claude Code under this flag's absence — without that control, an "unknown" result
+ * from the real case would be ambiguous between "the flag replaced the default" and "this
+ * model/prompt phrasing just doesn't answer that question reliably" (Q-029 documents exactly this
+ * ambiguity biting the first version of the prompt). The second call is `--append-system-prompt-file`,
+ * the real case under test. **The third is the negative control** described above
+ * (`--system-prompt-file`, same context file, same prompt, same schema) — without it, the second
+ * call passing would be compatible with replace ALSO preserving the product name for some
+ * unrelated reason (general model knowledge, another environment signal) — which is EXACTLY what
+ * measurement found `--model sonnet` doing (see the comment above `PROMPT`: sonnet answered
+ * "Claude Code" even under a full replace, and separately blew the budget ceiling below via an
+ * internal routing call). All three calls use `--model haiku`, the only configuration measured to
+ * actually discriminate, `--no-session-persistence` and a hard `--max-budget-usd` ceiling, and all
+ * three ask for a short structured-JSON reply (two short strings) to keep output tokens minimal.
+ * `cwd` is a disposable `mkdtemp` folder, never a real project; the environment is sanitized the
+ * same way `adapters/generation` sanitizes it for its own real calls (D-017), reusing that
+ * adapter's own pure function instead of re-declaring the variable list here.
  *
  * Doesn't run in standard CI — only via `npm run test:contrato`, same as the rest of this
  * directory (docs/TESTES.md § Contrato).
@@ -74,16 +93,43 @@ const RESPONSE_JSON_SCHEMA = {
 };
 
 /**
- * First version of this prompt asked a yes/no "do you know your own identity" question
- * (`identityKnown: boolean`). Measured against the real binary (claude 2.1.251, haiku): it came
- * back `false` even in the baseline call with NO `--append-system-prompt-file` at all — a
- * refusal-shaped answer to a meta-question about its own instructions, not evidence that the
- * identity fact itself is absent. Asking the model to just STATE the product name (with an
- * explicit escape hatch, `UNKNOWN`) instead of asserting a claim about its own knowledge is what
- * the second, current version below does — it passed the same control on the next call. Left this
- * note instead of silently swapping wording, per AGENTS.md § "Preserve os comentários existentes"
- * in spirit: the discarded phrasing is exactly the kind of measurement that shouldn't be thrown
- * away, because it is what justifies the control test existing at all.
+ * Three configurations tried, all measured against the real binary, kept here instead of silently
+ * swapping wording or model (AGENTS.md § "Preserve os comentários existentes" in spirit) — each is
+ * exactly the kind of measurement that justifies this file's design, and losing them would let
+ * someone redo a failed attempt in six months, or worse, pick the one that looks cheapest without
+ * knowing it silently proves nothing.
+ *
+ * **v1** asked a yes/no "do you know your own identity" question (`identityKnown: boolean`,
+ * `--model haiku`). Came back `false` even in the baseline call with NO flag at all — a
+ * refusal-shaped answer to a meta-question about its own instructions, not evidence the identity
+ * fact itself is absent.
+ *
+ * **v2 (current): asks the model to just STATE the product name** instead of asserting a claim
+ * about its own knowledge, `--model haiku`. The append vs. replace comparison itself has been
+ * measured twice this way (once as a standalone probe before the negative-control arm was wired
+ * into this file, once as this file's own three-call `beforeAll`), and BOTH times: the append call
+ * returned "Claude Code" and the replace call returned `UNKNOWN` — the discrimination this file
+ * exists to prove held on every comparison run. The ONE exception, across all measurements: a bare
+ * no-flag baseline call, on its own, once returned `UNKNOWN` too (same prompt, same model,
+ * different sample, in the second run). See the control test's own failure message below for what
+ * that specific, measured flake rate means for reading a red baseline in isolation.
+ *
+ * **v3, tried and REJECTED: `--model sonnet`**, hoping a larger model would answer the identity
+ * question more consistently than haiku's occasional refusal. Measured, once, against all three
+ * calls: (a) cost exploded to ~$0.13/call — well past the `$0.10` ceiling below, triggering
+ * `error_max_budget_usd` on two of the three calls — because `--model sonnet` here silently
+ * routes through an internal haiku classifier call before the real sonnet turn (visible in the
+ * raw `modelUsage` object: both `claude-haiku-4-5-*` and `claude-sonnet-5` billed in the SAME
+ * invocation), each paying a large fresh `cache_creation_input_tokens` charge under
+ * `--no-session-persistence`. (b) Far more importantly: **the one sonnet call that DID complete —
+ * the replace case — answered `"Claude Code"` anyway**, even with the default system prompt fully
+ * replaced by a file that never mentions any CLI product. That means sonnet's self-report does
+ * NOT depend on the system prompt at all (general training knowledge or some other environment
+ * signal answers it regardless) — the observable this whole file relies on stops discriminating
+ * completely under this model. `sonnet` is disqualified for BOTH reasons independently; reverted
+ * to `haiku` (v2), the only configuration measured to actually discriminate. This is exactly the
+ * "stop and report instead of continuing to iterate" case: the finding is now in Q-029 rather than
+ * chased through more real invocations.
  */
 const PROMPT =
   'Reply only via the JSON schema you were given. tool: the exact product name of the ' +
@@ -207,6 +253,7 @@ describe(`contract: --append-system-prompt-file semantics (claude ${version})`, 
   let contextFilePath: string;
   let baseline: RawCallResult;
   let withAppendedFile: RawCallResult;
+  let withReplacedFile: RawCallResult;
 
   beforeAll(async () => {
     // Disposable cwd in %TEMP%, never a real project (AGENTS.md § "Sistema de arquivos" is about
@@ -215,11 +262,13 @@ describe(`contract: --append-system-prompt-file semantics (claude ${version})`, 
     contextFilePath = path.join(cwd, 'context.txt');
     await writeFile(contextFilePath, CONTEXT_FILE_CONTENT, 'utf8');
 
-    // The only two real `claude` invocations this file makes — see the module docstring for why
-    // both are needed and why there isn't a third.
+    // The only three real `claude` invocations this file makes — see the module docstring for
+    // why all three are needed, in particular why the third (replace, not append) isn't optional:
+    // without it, the second call passing would be compatible with either semantics.
     baseline = callClaude(cwd, []);
     withAppendedFile = callClaude(cwd, ['--append-system-prompt-file', contextFilePath]);
-  }, 90_000);
+    withReplacedFile = callClaude(cwd, ['--system-prompt-file', contextFilePath]);
+  }, 120_000);
 
   afterAll(async () => {
     await rm(cwd, { recursive: true, force: true });
@@ -231,11 +280,13 @@ describe(`contract: --append-system-prompt-file semantics (claude ${version})`, 
     expect(
       identifiesAsClaudeCode(reply.tool),
       'The model did NOT report its own CLI product name under the plain default system prompt ' +
-        `(raw reply: ${JSON.stringify(reply)}). Without this control passing, an "unknown" ` +
-        'result from the real case (below) would be ambiguous between "the flag replaced the ' +
-        'default prompt" and "this question/model just does not answer reliably" — which is ' +
-        'exactly the ambiguity this control exists to rule out. Log this in docs/QUESTOES.md ' +
-        'before trusting the other assertion in this file either way.',
+        `(raw reply: ${JSON.stringify(reply)}). Measured during this file's own development: this ` +
+        'EXACT call (no flag, same prompt, same model) has flaked this way once before, while the ' +
+        'append and replace calls below have never flaked on the same measurements — so a lone ' +
+        'failure here, with the other three tests in this file passing, is more likely haiku ' +
+        'sampling noise on this specific self-report question than a real regression. Re-run the ' +
+        'suite once before escalating. If it fails AGAIN, or if it fails together with the ' +
+        '"append, not replace" test below, that is no longer noise — log it in docs/QUESTOES.md.',
     ).toBe(true);
 
     expect(
@@ -257,6 +308,37 @@ describe(`contract: --append-system-prompt-file semantics (claude ${version})`, 
     ).toBe(SECRET_TOKEN);
   });
 
+  it('negative control: --system-prompt-file (which DOES replace) blanks out the identity question while still relaying the secret — proving the observable actually discriminates', () => {
+    const reply = parseStructuredReply(withReplacedFile, 'with --system-prompt-file (replace)');
+
+    // Delivered first, deliberately: if the marker didn't arrive, `tool` being unknown would be
+    // just as consistent with "the flag isn't recognized at all" as with "replace happened" — this
+    // rules that out before the discriminating assertion below is trusted.
+    expect(
+      reply.secretToken,
+      "`--system-prompt-file` did not deliver the file's content either — the raw reply was " +
+        `${JSON.stringify(reply)}. That means this call failed in some other way (wrong flag ` +
+        'name, argument rejected, etc.) rather than genuinely replacing the prompt; the assertion ' +
+        'below cannot be trusted until this is understood. Log the raw output in docs/QUESTOES.md.',
+    ).toBe(SECRET_TOKEN);
+
+    expect(
+      identifiesAsClaudeCode(reply.tool),
+      'THE NEGATIVE CONTROL DID NOT DISCRIMINATE. `--system-prompt-file` (which replaces the ' +
+        `default system prompt outright) still let the model report its own CLI product name ` +
+        `(raw reply: ${JSON.stringify(reply)}), even though this file's context content never ` +
+        'mentions one. That means "the product name came through" is compatible with BOTH ' +
+        'append and replace — some other signal (general model knowledge, another part of the ' +
+        'environment) is answering the question, not the default system prompt specifically. If ' +
+        'this fires, the "append, not replace" assertion in the test below no longer proves ' +
+        'anything, even if it passes: the observable this whole file relies on has stopped ' +
+        'discriminating between the two semantics. Do not "fix" this by loosening either ' +
+        'assertion (CLAUDE.md § "O erro clássico neste projeto") — log the raw output in ' +
+        'docs/QUESTOES.md and reconsider whether this file can still support D-004/Q-027 item 3 ' +
+        'at all.',
+    ).toBe(false);
+  });
+
   it('append, not replace: the default system prompt still answers the identity question with the flag in use', () => {
     const reply = parseStructuredReply(withAppendedFile, 'with --append-system-prompt-file');
 
@@ -264,15 +346,16 @@ describe(`contract: --append-system-prompt-file semantics (claude ${version})`, 
       identifiesAsClaudeCode(reply.tool),
       'THIS IS THE CLAIM S3-T4 EXISTS TO PROVE, AND IT NO LONGER HOLDS. With ' +
         '`--append-system-prompt-file` in use, the model stopped reporting its own CLI product ' +
-        `name (raw reply: ${JSON.stringify(reply)}) — even though the control test just proved ` +
-        'that same question resolves with the product name under the plain default prompt, and ' +
-        "this file's own appended content never mentions any CLI product name. The only " +
-        'explanation left is ' +
-        `that \`--append-system-prompt-file\` on the installed version (claude ${version}) ` +
-        'stopped APPENDING to the default system prompt and started REPLACING it — the exact ' +
-        "regression D-004's fallback (adapters/resumption/args.ts#buildFallbackArgs) was written " +
-        'to avoid by choosing this flag over `--system-prompt-file`. Do not "fix" this by loosening ' +
-        'the assertion (CLAUDE.md § "O erro clássico neste projeto"): log the raw output in ' +
+        `name (raw reply: ${JSON.stringify(reply)}) — even though the control test proved that ` +
+        'same question resolves with the product name under the plain default prompt, the ' +
+        'negative-control test just proved that the question DOES go blank under a flag that ' +
+        "genuinely replaces the prompt, and this file's own appended content never mentions any " +
+        'CLI product name. The only explanation left is that `--append-system-prompt-file` on ' +
+        `the installed version (claude ${version}) stopped APPENDING to the default system ` +
+        'prompt and started REPLACING it — the exact regression ' +
+        "D-004's fallback (adapters/resumption/args.ts#buildFallbackArgs) was written to avoid " +
+        'by choosing this flag over `--system-prompt-file`. Do not "fix" this by loosening the ' +
+        'assertion (CLAUDE.md § "O erro clássico neste projeto"): log the raw output in ' +
         'docs/QUESTOES.md and treat D-004/Q-027 item 3 as needing re-review before touching ' +
         '`adapters/resumption`.',
     ).toBe(true);
