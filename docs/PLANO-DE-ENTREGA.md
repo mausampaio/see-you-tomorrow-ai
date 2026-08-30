@@ -644,12 +644,13 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       destino da entrada em `forks.json` após a exclusão, e o tratamento de arquivo já ausente.
       `npm run verificar` e `npm run verificar:linux` verdes.
 - [ ] **S2-T4 — Briefing.** Geração do `summary.md` a partir dos handoffs.
-- [~] **S2-T7 — O tempo limite do teste é igual ao do processo filho.** Diagnosticado pelo agente
+- [x] **S2-T7 — O tempo limite do teste é igual ao do processo filho.** Diagnosticado pelo agente
       da S2-T6 ao investigar a intermitência recorrente do `eslint-restrictions.test.ts` — que já
       apareceu nas duas plataformas e foi atribuída a carga de máquina mais de uma vez.
-      A causa é de desenho: `CHILD_PROCESS_TIMEOUT = 20_000` (`tests/integration/guards/_support.ts`)
-      é usado **ao mesmo tempo** como orçamento do processo filho e como tempo limite do teste que
-      o chama. Os dois expiram no mesmo instante.
+      A causa é de desenho, e **mais funda do que este texto dizia originalmente**: eu escrevi que
+      um mesmo valor servia de orçamento ao filho e de tempo limite ao teste. Não era isso — o
+      `spawnSync` era chamado **sem opção `timeout` nenhuma**, então o filho não tinha orçamento
+      próprio. Havia **um relógio só**, o do teste, matando o filho de fora.
       A consequência é pior que a lentidão: quando o filho demora, quem estoura primeiro é o
       **teste**, com "Test timed out" — em vez de o filho reportar o próprio estouro, que seria
       diagnosticável. A informação útil é sempre destruída pela corrida entre os dois.
