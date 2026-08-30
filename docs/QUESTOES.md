@@ -1512,3 +1512,36 @@ releitura do disco a cada `endDay`, ou passar a montar o briefing a partir do `E
 memória e perder a consolidação entre execuções + a cobertura de D-022 para handoffs.
 
 **Resposta:** (preenchida pelo PO)
+
+
+**Resposta:** **FECHADA — dois confirmados, o segundo se desfaz assim que puder.**
+
+**Antes dos três: o briefing ficou bom, e é o produto.** Ele trata as três armadilhas de
+ausência que eu tinha nomeado, e trata em **prosa**, que é onde elas escapam mais fácil. O
+`Evidence: git (missing: transcript, registry)` diz o que **não** respondeu em vez de omitir; o
+handoff sem entendimento vem com "The model call failed during capture", deixando claro que
+faltou entendimento e não trabalho; e o dia vazio diz "No sessions were captured today" — nada
+foi **capturado**, não "nada foi feito".
+
+**1) `saveBriefing`/`listHandoffs` fora do glossário: confirmado, e a lacuna era minha.** O
+padrão `save<Nome>`/`read<Nome>` que você seguiu já estava estabelecido. Acrescentados agora.
+
+**2) O `Storage` em dois blocos: aceito por hoje, e se desfaz depois.** Você fez isso para
+obedecer minha instrução de não inserir nada no meio de interface enquanto outro agente mexia no
+mesmo arquivo — a intenção foi certa e o resultado é engenhoso.
+
+Mas a conta não fecha no prazo longo: **o risco de conflito expira hoje; o custo de leitura é
+permanente.** Quem abrir a porta na linha 121 vê um retrato incompleto, sem nenhum sinal de que
+há mais métodos 200 linhas abaixo. Fusão de declarações é recurso legítimo da linguagem e péssimo
+lugar para esconder a forma de um contrato.
+
+Consolido em um bloco só assim que a S2-T6 aterrissar. Não é crítica do que você fez — é a
+segunda metade de uma decisão que só podia ser tomada depois.
+
+**3) Reler os handoffs do disco em vez de usar o resultado em memória: confirmado, e pelos dois
+motivos que você deu.** O segundo é o mais forte e eu não teria pensado nele: a validação por
+item do D-022 **só morde no que volta do disco**. Um handoff corrompido nunca apareceria num
+resultado em memória, então construir o briefing a partir dele deixaria a rejeição sem caminho
+até o leitor — exatamente o contrato que atravessou o Sprint 1 inteiro.
+
+E o primeiro motivo cobre o caso real de uma segunda execução com `--session` no mesmo dia.

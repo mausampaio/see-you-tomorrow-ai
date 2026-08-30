@@ -310,6 +310,7 @@ justamente para que quem os implementar não invente nome:
 | notificar (método) | `notify` | S4-T1 |
 | está disponível / suporta ações (métodos) | `isAvailable` / `supportsActions` | S4-T1 |
 | armazenamento | `Storage` | S1-T5 |
+| briefing do dia | `saveBriefing` / `listHandoffs` | S2-T4 |
 | salvar handoff / ler briefing / ler config (métodos) | `saveHandoff` / `readBriefing` / `readConfig` | S1-T5 |
 | dia | `Day` | S1-T5 |
 | estado do dia | `DayState` | S4-T2 |
