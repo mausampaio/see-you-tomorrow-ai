@@ -20,8 +20,12 @@ export interface SessionRow {
  * no normalization here, same convention `core/eligibility.ts`'s `ignoredCwds` already follows. A
  * `cwd` the policy doesn't mention at all defaults to `canTerminate: false` (D-002: termination is
  * opt-in, silence means "not opted in").
+ *
+ * Exported (S2-T5): `cli/format-end-day.ts` needs the exact same resolution to describe, during a
+ * `--dry-run` preview, which captured sessions the config WOULD have terminated — reusing this
+ * instead of a second copy (AGENTS.md: "nada de duplicação").
  */
-function resolveCanTerminate(cwd: string, config: Config): boolean {
+export function resolveCanTerminate(cwd: string, config: Config): boolean {
   return config.projectPolicy[cwd]?.canTerminate ?? false;
 }
 

@@ -12,7 +12,11 @@ import type { Config } from '../core/types.js';
 import { processControl as realProcessControl } from '../adapters/process/index.js';
 import { systemClock } from '../adapters/clock/index.js';
 import { StorageAdapter } from '../adapters/storage/index.js';
-import { DiscoverySessionProvider } from '../adapters/discovery/index.js';
+import { DiscoverySessionProvider, DiscoveryForkCleanup } from '../adapters/discovery/index.js';
+import { TranscriptFileReader } from '../adapters/transcript/index.js';
+import { GitAdapter } from '../adapters/git/index.js';
+import { LeanHandoffGenerator, DeepHandoffGenerator } from '../adapters/generation/index.js';
+import type { EndDayDeps } from '../application/types.js';
 
 export interface CliHome {
   readonly claudeHome: string;
@@ -76,4 +80,56 @@ export async function buildCliContext(homeDir: string = os.homedir()): Promise<C
     config.relevanceHours,
   );
   return { sessionProvider, config, clock };
+}
+
+export interface EndDayContext {
+  readonly deps: EndDayDeps;
+  readonly config: Config;
+}
+
+/**
+ * `seeya end-day`'s own composition (S2-T5): every port `application/endDay` orchestrates, wired
+ * to its real adapter. Two pieces this task is the one to switch on, both built and ready since
+ * earlier sprints (S2-T2's generators, S2-T6's `ForkCleanup`) but never named by `cli/` until now
+ * — D-020 means nothing outside this file was allowed to instantiate them first.
+ *
+ * `leanGenerator`/`deepGenerator` are both always built, never chosen here: `captureSession`
+ * (`application/capture-session.ts`) picks between them per session, since that decision needs
+ * `session.hasTranscript`, only known at capture time (see `EndDayDeps`'s own docstring).
+ */
+export async function buildEndDayContext(homeDir: string = os.homedir()): Promise<EndDayContext> {
+  const home = resolveCliHome(homeDir);
+  const clock = systemClock;
+  const storage = buildStorage(home);
+  const config = await storage.readConfig();
+  const sessionProvider = buildSessionProvider(
+    home,
+    clock,
+    realProcessControl,
+    config.relevanceHours,
+  );
+  const generatorOptions = {
+    model: config.captureModel,
+    budgetPerSessionUsd: config.budgetPerSessionUsd,
+  };
+  const deps: EndDayDeps = {
+    sessionProvider,
+    transcriptReader: new TranscriptFileReader({ claudeHome: home.claudeHome }),
+    gitReader: new GitAdapter({ clock }),
+    leanGenerator: new LeanHandoffGenerator(generatorOptions),
+    deepGenerator: new DeepHandoffGenerator({
+      ...generatorOptions,
+      seeyaHome: home.seeyaHome,
+      clock,
+    }),
+    storage,
+    processControl: realProcessControl,
+    clock,
+    forkCleanup: new DiscoveryForkCleanup({
+      claudeHome: home.claudeHome,
+      seeyaHome: home.seeyaHome,
+      clock,
+    }),
+  };
+  return { deps, config };
 }

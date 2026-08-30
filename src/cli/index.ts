@@ -15,9 +15,10 @@
 import { Command } from 'commander';
 import { z } from 'zod';
 import packageJson from '../../package.json' with { type: 'json' };
-import { buildCliContext } from './composition.js';
+import { buildCliContext, buildEndDayContext } from './composition.js';
 import { runSessionsCommand } from './sessions-command.js';
 import { runStatusCommand } from './status-command.js';
+import { runEndDayCommand } from './end-day-command.js';
 
 const PackageJsonSchema = z.object({
   version: z.string(),
@@ -53,6 +54,30 @@ program
   .action(async () => {
     const context = await buildCliContext();
     console.log(await runStatusCommand(context));
+  });
+
+program
+  .command('end-day')
+  .description(
+    'Run the end-of-day capture: gathers evidence for every eligible session, writes a handoff ' +
+      'and the daily briefing, and terminates opted-in sessions once their handoff is verified ' +
+      'on disk. A generation failure never aborts the day (D-003) — this command exits ' +
+      'successfully even when the model call fails for every session.',
+  )
+  .option(
+    '--dry-run',
+    'Run the same pipeline but stop before writing or terminating anything; show what would happen.',
+  )
+  .option('--session <idOrCwd>', 'Limit end-day to a single session, matched by sessionId or cwd.')
+  .action(async (options: { dryRun?: boolean; session?: string }) => {
+    const { deps, config } = await buildEndDayContext();
+    console.log(
+      await runEndDayCommand(deps, config, {
+        dryRun: options.dryRun ?? false,
+        // `exactOptionalPropertyTypes`: only set `session` when commander actually parsed one.
+        ...(options.session !== undefined ? { session: options.session } : {}),
+      }),
+    );
   });
 
 program.parseAsync(process.argv).catch((error: unknown) => {
