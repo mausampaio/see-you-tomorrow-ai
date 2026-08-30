@@ -265,6 +265,19 @@ describe('runStartDayCommand — interactive picker (a TTY, no flags)', () => {
     expect(resumer.calls.map((call) => call.sessionId)).toEqual(['beta-id']);
   });
 
+  // S3-T6: the first real run printed the plan and the picker question back to back, with no
+  // visual break — one wall of text. A blank line between them is the fix.
+  it('prints a blank line between the plan and the picker question', async () => {
+    const storage = new FakeStorage(DEFAULT_TEST_CONFIG);
+    await storage.saveHandoff('2026-08-15', createHandoff({ name: 'alpha', pendingItems: ['x'] }));
+    const context = makeContext({ storage });
+    const { io, output } = makeIo({ isTTY: true, answer: '' });
+
+    await runStartDayCommand(context, { all: false }, io);
+
+    expect(output()).toContain('\n\nWhich sessions do you want to resume?');
+  });
+
   it('"all" typed at the prompt resumes every candidate', async () => {
     const storage = new FakeStorage(DEFAULT_TEST_CONFIG);
     await storage.saveHandoff(
@@ -309,6 +322,24 @@ describe('runStartDayCommand — interactive picker (a TTY, no flags)', () => {
 
     expect(exitCode).toBe(0);
     expect(output()).toContain('"banana"');
+    expect(resumer.calls).toHaveLength(0);
+  });
+
+  // Maintainer follow-up on the same run: the reason alone ("expected a number from...") left
+  // implicit that nothing happened as a result, and that --all/--session would have skipped the
+  // question entirely. Both stated now, without re-litigating the "no retry loop" choice (S3-T3).
+  it('an invalid answer also states nothing was resumed, and points at --help', async () => {
+    const storage = new FakeStorage(DEFAULT_TEST_CONFIG);
+    await storage.saveHandoff('2026-08-15', createHandoff({ pendingItems: ['x'] }));
+    const resumer = throwingResumer('should never be called');
+    const context = makeContext({ storage, sessionResumer: resumer });
+    const { io, output } = makeIo({ isTTY: true, answer: 'banana' });
+
+    const exitCode = await runStartDayCommand(context, { all: false }, io);
+
+    expect(exitCode).toBe(0);
+    expect(output()).toContain('Nothing was resumed');
+    expect(output()).toContain('seeya start-day --help');
     expect(resumer.calls).toHaveLength(0);
   });
 

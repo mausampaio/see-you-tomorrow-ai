@@ -58,12 +58,25 @@ export function renderRelativeAge(daysAgo: number): string {
   return `${weeks} ${weeks === 1 ? 'week' : 'weeks'} ago`;
 }
 
+/** S3-T6: `pendingItems`/`tomorrowPlan` are lists, and the first real terminal read of this
+ * output showed why that matters — `join('; ')` turned five items into one run-on line nobody
+ * could parse at a glance. One item per line, indented under its own `label:` line, the same
+ * shape `renderPickerQuestion` already uses for its own numbered list. */
+function renderItemList(label: string, items: readonly string[]): string {
+  return [`    ${label}:`, ...items.map((item) => `      - ${item}`)].join('\n');
+}
+
 /** D-025: a `source !== "model"` handoff never had its pending status actually evaluated — this
  * says so plainly instead of printing an empty "Pending: " that would read as "confirmed clean".
  * A handoff already resumed (S3-T3) is called out first, before either of those checks: once
- * resumed, whether the model ever ran or what it reported stops being the interesting fact. */
+ * resumed, whether the model ever ran or what it reported stops being the interesting fact.
+ *
+ * **No markdown (S3-T6).** This text is read by a human in a terminal, never rendered — a `cwd`
+ * wrapped in backticks the way `core/briefing.ts` (a markdown file writer) would do it shows up
+ * as two literal backtick characters on screen. Plain parentheses instead, same as
+ * `format-start-day.ts` already uses for every other `name (cwd)` pair. */
 function renderSessionPlanLine(handoff: Handoff, resumedSessionIds: ReadonlySet<string>): string {
-  const header = `- ${handoff.name} (\`${handoff.cwd}\`)`;
+  const header = `- ${handoff.name} (${handoff.cwd})`;
   if (resumedSessionIds.has(handoff.sessionId)) {
     return `${header}\n    already resumed today`;
   }
@@ -73,11 +86,11 @@ function renderSessionPlanLine(handoff: Handoff, resumedSessionIds: ReadonlySet<
   if (!handoffStillPending(handoff, resumedSessionIds)) {
     return `${header}\n    nothing pending recorded`;
   }
-  const lines = [
-    handoff.pendingItems.length > 0 ? `pending: ${handoff.pendingItems.join('; ')}` : '',
-    handoff.tomorrowPlan.length > 0 ? `plan: ${handoff.tomorrowPlan.join('; ')}` : '',
-  ].filter((line) => line !== '');
-  return [header, ...lines.map((line) => `    ${line}`)].join('\n');
+  const blocks = [
+    handoff.pendingItems.length > 0 ? renderItemList('pending', handoff.pendingItems) : '',
+    handoff.tomorrowPlan.length > 0 ? renderItemList('plan', handoff.tomorrowPlan) : '',
+  ].filter((block) => block !== '');
+  return [header, ...blocks].join('\n');
 }
 
 /** Q-026: yesterday is the ordinary case and gets no extra note; anything else (including today,
