@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  formatInvalidSelection,
   formatNoPendingBriefing,
   formatNoSessionMatch,
   formatNoTtyInstructions,
@@ -34,6 +35,40 @@ describe('formatNoTtyInstructions', () => {
 describe('formatNoSessionMatch', () => {
   it('names the value that did not match', () => {
     expect(formatNoSessionMatch('nothing-like-this')).toContain('"nothing-like-this"');
+  });
+
+  it('says nothing extra when no normalized value is given', () => {
+    expect(formatNoSessionMatch('nothing-like-this')).not.toContain('matched against');
+  });
+
+  // Seam for S3-T5's path normalization (docs/PLANO-DE-ENTREGA.md): once a caller has both the
+  // raw `--session` value and what it actually compared against handoffs, showing both reveals a
+  // value a shell silently mangled (e.g. Git Bash eating backslashes out of a Windows path)
+  // instead of a bare "no match" that looks like an ordinary typo.
+  it('also shows what it was matched against, when that differs from the received value', () => {
+    const message = formatNoSessionMatch('C:Usersmausa', 'c:usersmausa');
+    expect(message).toContain('"C:Usersmausa"');
+    expect(message).toContain('matched against "c:usersmausa"');
+  });
+
+  it('does not repeat the value when the normalized form is identical to what was received', () => {
+    const message = formatNoSessionMatch('nothing-like-this', 'nothing-like-this');
+    expect(message).not.toContain('matched against');
+  });
+});
+
+describe('formatInvalidSelection', () => {
+  it('carries the original reason, and states plainly that nothing was resumed', () => {
+    const message = formatInvalidSelection(
+      '"banana" is not a valid option (expected a number from 1 to 2, "all", or blank for none)',
+    );
+    expect(message).toContain('"banana" is not a valid option');
+    expect(message).toContain('Nothing was resumed');
+  });
+
+  it('points at --help instead of duplicating --all/--session syntax inline', () => {
+    const message = formatInvalidSelection('bad input');
+    expect(message).toContain('seeya start-day --help');
   });
 });
 

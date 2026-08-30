@@ -26,7 +26,7 @@ describe('renderConsolidatedPlan — content (daysAgo: 1, the ordinary case)', (
     expect(renderConsolidatedPlan(briefing, 1)).toContain('Plan for 2026-08-16 (2 sessions)');
   });
 
-  it('lists pending items and plan for a session with real work left', () => {
+  it('lists pending items and plan for a session with real work left, one item per line', () => {
     const briefing: Briefing = {
       day: '2026-08-16',
       handoffs: [
@@ -40,10 +40,41 @@ describe('renderConsolidatedPlan — content (daysAgo: 1, the ordinary case)', (
       rejected: [],
     };
     const plan = renderConsolidatedPlan(briefing, 1);
-    expect(plan).toContain('projeto-a');
-    expect(plan).toContain('c:\\code\\a');
-    expect(plan).toContain('pending: fix the flaky test');
-    expect(plan).toContain('plan: ship the release');
+    // No backticks anywhere in this header (S3-T6): this is terminal text, not markdown.
+    expect(plan).toContain('- projeto-a (c:\\code\\a)');
+    expect(plan).toContain('    pending:\n      - fix the flaky test');
+    expect(plan).toContain('    plan:\n      - ship the release');
+  });
+
+  // S3-T6: the wall-of-text bug from the first real run — `join('; ')` turned five pending items
+  // and four plan items into two run-on lines. Single-item lists (the case above) never exposed
+  // this, because a list of one reads fine either way.
+  it('renders every pending item and every plan item on its own line, not joined into a paragraph', () => {
+    const pendingItems = [
+      'Confirm whether the todo list markdown file was actually created',
+      'If not created, create the .md file with a short list of simple sample tasks',
+      'Determine which tasks the user wants completed vs left open',
+      'Mark selected tasks as done and leave others explicitly open in the file',
+      'Verify final file state shows a realistic mix of completed and pending tasks',
+    ];
+    const tomorrowPlan = [
+      'Check for an existing todo list markdown file from this session',
+      'If missing, create it with a short list of simple tasks as originally requested',
+      'Get from the user which specific tasks to complete now vs. leave pending',
+      'Update the markdown file, checking off completed tasks and keeping others unchecked',
+    ];
+    const briefing: Briefing = {
+      day: '2026-08-16',
+      handoffs: [createHandoff({ pendingItems, tomorrowPlan })],
+      rejected: [],
+    };
+    const plan = renderConsolidatedPlan(briefing, 1);
+    for (const item of [...pendingItems, ...tomorrowPlan]) {
+      expect(plan).toContain(`      - ${item}`);
+    }
+    // The old bug, named explicitly so it can't come back quietly: no semicolon-joined run-on.
+    expect(plan).not.toContain('; ');
+    expect(plan).not.toContain('`');
   });
 
   it('shows only "pending" when there is no plan for today yet', () => {
@@ -53,7 +84,7 @@ describe('renderConsolidatedPlan — content (daysAgo: 1, the ordinary case)', (
       rejected: [],
     };
     const plan = renderConsolidatedPlan(briefing, 1);
-    expect(plan).toContain('pending: fix the flaky test');
+    expect(plan).toContain('pending:\n      - fix the flaky test');
     expect(plan).not.toContain('plan:');
   });
 
@@ -65,7 +96,7 @@ describe('renderConsolidatedPlan — content (daysAgo: 1, the ordinary case)', (
     };
     const plan = renderConsolidatedPlan(briefing, 1);
     expect(plan).not.toContain('pending:');
-    expect(plan).toContain('plan: ship the release');
+    expect(plan).toContain('plan:\n      - ship the release');
   });
 
   it('says plainly when a model-confirmed session has nothing pending (D-025)', () => {
@@ -128,7 +159,7 @@ describe('renderConsolidatedPlan — resumedSessionIds (S3-T3)', () => {
     const briefing: Briefing = { day: '2026-08-16', handoffs: [resumed, untouched], rejected: [] };
     const plan = renderConsolidatedPlan(briefing, 1, new Set([resumed.sessionId]));
     expect(plan).toContain('already resumed today');
-    expect(plan).toContain('pending: still needs a look');
+    expect(plan).toContain('pending:\n      - still needs a look');
   });
 
   it('defaults to an empty resumed set when omitted (back-compat with existing call sites)', () => {

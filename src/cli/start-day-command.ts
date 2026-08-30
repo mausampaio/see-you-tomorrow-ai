@@ -36,6 +36,7 @@ import {
   resolveSelectionMode,
 } from './start-day-selection.js';
 import {
+  formatInvalidSelection,
   formatNoPendingBriefing,
   formatNoSessionMatch,
   formatNoTtyInstructions,
@@ -77,13 +78,15 @@ async function askInteractively(
   const rl = createInterface({ input: io.stdin, output: io.stdout });
   let answer: string;
   try {
-    answer = await rl.question(renderPickerQuestion(candidates));
+    // S3-T6: a blank line before the question — without it, this printed right after the plan
+    // with no visual break, and the two ran together into one wall of text.
+    answer = await rl.question(`\n${renderPickerQuestion(candidates)}`);
   } finally {
     rl.close();
   }
   const parsed = parseInteractiveSelection(answer, candidates);
   if (parsed.kind === 'invalid') {
-    return { kind: 'blocked', message: parsed.reason };
+    return { kind: 'blocked', message: formatInvalidSelection(parsed.reason) };
   }
   return { kind: 'chosen', handoffs: parsed.kind === 'none' ? [] : parsed.handoffs };
 }

@@ -921,7 +921,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       reprovou no macOS e no Windows. A mensagem de "não casou" deve mostrar o valor recebido
       quando ele diferir do digitado.
 
-- [ ] **S3-T6 — Formatação da saída do `start-day`.** Aprovada pelo mantenedor em 2026-08-30
+- [~] **S3-T6 — Formatação da saída do `start-day`.** Aprovada pelo mantenedor em 2026-08-30
       ("achei confuso demais"), com a saída real do primeiro uso como evidência. **Não é o
       PowerShell — é o nosso formatador**, em `core/consolidated-plan.ts`:
       (1) `pendingItems` e `tomorrowPlan` são **listas** e viram uma linha corrida só, coladas
@@ -934,6 +934,12 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       do modelo, não do formatador, e tende a diminuir sozinha quando a D-011 for reavaliada sob
       a D-031 (captura profunda dá ao modelo a conversa inteira, em vez de dez prompts do
       usuário). Não vale remendar no formatador o que é escassez de evidência na captura.
+
+      **Acréscimo do mantenedor, mesma tarefa, 2026-08-30:** resposta inválida no seletor
+      interativo agora diz também que nada foi retomado e aponta `seeya start-day --help` para
+      `--all`/`--session` — as duas informações que `parsed.reason`
+      (`start-day-selection.ts`) deixava implícitas. Sem laço de nova tentativa (mantido de
+      S3-T3); código de saída continua 0. Escolhas registradas em `docs/QUESTOES.md` Q-031.
 
 ---
 

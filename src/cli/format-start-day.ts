@@ -29,8 +29,48 @@ export function formatNoTtyInstructions(): string {
   );
 }
 
-export function formatNoSessionMatch(sessionOrCwd: string): string {
-  return `No session in this briefing matches "${sessionOrCwd}" (checked against sessionId and cwd).`;
+/**
+ * `received` is the `--session` value exactly as this process got it — after whatever the
+ * shell already did to it, which this code has no way to undo or even detect on its own
+ * (docs/PLANO-DE-ENTREGA.md S3-T5: a maintainer typed a backslash-heavy Windows path in Git
+ * Bash, the shell ate the backslashes, and the value that reached `seeya` was silently
+ * different from what was typed — with no way for this function, by itself, to tell).
+ *
+ * **`matchedAgainst` is the seam left for that fix.** S3-T5 owns `start-day-selection.ts` and
+ * is adding path normalization there, but it isn't allowed to touch this file (S3-T6 owns it).
+ * Once a caller has both the raw value and whatever normalized form it actually compared
+ * against handoffs, passing both here shows the reader exactly what was tried — instead of a
+ * bare "no match" that hides a mangled value behind a string that still looks plausible. Until
+ * a caller has a normalized form to offer, this parameter stays absent (D-025: no fabricated
+ * second value), and the message is exactly what it was before.
+ */
+export function formatNoSessionMatch(received: string, matchedAgainst?: string): string {
+  const alsoTried =
+    matchedAgainst !== undefined && matchedAgainst !== received
+      ? ` (matched against "${matchedAgainst}")`
+      : '';
+  return `No session in this briefing matches "${received}"${alsoTried} (checked against sessionId and cwd).`;
+}
+
+/**
+ * Wraps `parseInteractiveSelection`'s `reason` (`start-day-selection.ts`) with the two things it
+ * leaves implicit — raised by the maintainer after the first real run. `reason` alone explains
+ * only the expected format ("expected a number from 1 to 3, ..."); a reader who just watched a
+ * list of sessions scroll by and typed something wrong still doesn't know **what happened as a
+ * result**. Confirmed with the maintainer: still no retry loop (S3-T3's "run it again" choice
+ * stands) and exit code 0 (same convention as `--session` matching nothing — "did nothing" is
+ * one outcome in this command, not a distinct error).
+ *
+ * The `--help` pointer is here instead of longer syntax help inline: `--all`/`--session` would
+ * have let this person skip the picker's question format entirely, and that's a better answer
+ * than getting the typed syntax right — but the full explanation of both flags already lives in
+ * one place (commander's own `--help`), so it's pointed to rather than duplicated.
+ */
+export function formatInvalidSelection(reason: string): string {
+  return (
+    `Invalid answer: ${reason}. Nothing was resumed — run "seeya start-day" again. ` +
+    'See "seeya start-day --help" for --all/--session, which skip this question entirely.'
+  );
 }
 
 export function renderPickerQuestion(candidates: readonly Handoff[]): string {
