@@ -15,10 +15,11 @@
 import { Command } from 'commander';
 import { z } from 'zod';
 import packageJson from '../../package.json' with { type: 'json' };
-import { buildCliContext, buildEndDayContext } from './composition.js';
+import { buildCliContext, buildEndDayContext, buildStartDayContext } from './composition.js';
 import { runSessionsCommand } from './sessions-command.js';
 import { runStatusCommand } from './status-command.js';
 import { runEndDayCommand } from './end-day-command.js';
+import { runStartDayCommand } from './start-day-command.js';
 
 const PackageJsonSchema = z.object({
   version: z.string(),
@@ -78,6 +79,30 @@ program
         ...(options.session !== undefined ? { session: options.session } : {}),
       }),
     );
+  });
+
+program
+  .command('start-day')
+  .description(
+    'Read the most recent still-pending briefing, show its consolidated plan, and resume the ' +
+      'chosen sessions where they left off, one at a time (D-004).',
+  )
+  .option('--all', 'Resume every still-unresumed session in the found briefing.')
+  .option('--session <id>', 'Resume only the session matching this sessionId or cwd.')
+  .action(async (options: { all?: boolean; session?: string }) => {
+    const context = await buildStartDayContext();
+    const exitCode = await runStartDayCommand(
+      context,
+      {
+        all: options.all ?? false,
+        // `exactOptionalPropertyTypes`: only set `session` when commander actually parsed one.
+        ...(options.session !== undefined ? { session: options.session } : {}),
+      },
+      { stdin: process.stdin, stdout: process.stdout, isTTY: process.stdin.isTTY === true },
+    );
+    if (exitCode !== 0) {
+      process.exitCode = exitCode;
+    }
   });
 
 program.parseAsync(process.argv).catch((error: unknown) => {

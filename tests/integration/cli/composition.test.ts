@@ -13,6 +13,7 @@ import path from 'node:path';
 import {
   buildCliContext,
   buildEndDayContext,
+  buildStartDayContext,
   resolveCliHome,
 } from '../../../src/cli/composition.js';
 import { captureObservedProcStart } from '../../../src/adapters/process/proc-start.js';
@@ -174,5 +175,27 @@ describe('buildEndDayContext', () => {
     const result = await deps.forkCleanup.cleanup(config.forkCleanupDays);
 
     expect(result).toEqual({ outcomes: [], rejected: [] });
+  });
+});
+
+/**
+ * `buildStartDayContext` (S3-T3): proves the wiring, not the command — `Storage` and
+ * `SessionResumer` really are the real adapters, reading/writing under the injected root, and
+ * `SessionProvider`/git/generation are correctly absent (`seeya start-day` never re-discovers
+ * sessions, D-004). No `claude` is spawned here: that full round trip is
+ * `tests/e2e/start-day.test.ts`'s job.
+ */
+describe('buildStartDayContext', () => {
+  it('wires a Storage that reads/writes under the injected root, and a SessionResumer', async () => {
+    fixture = await createDiscoveryFixture();
+
+    const context = await buildStartDayContext(fixture.root);
+    expect(context.sessionResumer).toBeDefined();
+    expect(context.clock).toBeDefined();
+
+    // Real StorageAdapter, not a stub: a write really lands under fixture.root and reads back.
+    await context.storage.saveResumedSessionIds('2026-08-16', new Set(['session-1']));
+    const reread = await context.storage.readResumedSessionIds('2026-08-16');
+    expect([...reread]).toEqual(['session-1']);
   });
 });
