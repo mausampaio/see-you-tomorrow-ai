@@ -567,22 +567,31 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       pipeline — uma sessão que lança nunca derruba as outras (provado em
       `tests/unit/application/end-day.test.ts`). `sources[]` reflete exatamente quem respondeu
       (`registry` ⟺ `hasPid`; `git` ⟺ `hasGit`; `transcript` ⟺ `hasTranscript` e a leitura não
-      lançou), nunca "tentou". Falha de geração produz `source: "deterministic"` com os fatos
-      (D-003); sessão sem transcript produz `source: "noTranscript"` mesmo quando a geração
-      enxuta (nunca a profunda, D-018) tem sucesso — ver Q-021 item 1 para o raciocínio.
+      lançou), nunca "tentou". `source` descreve procedência da camada de entendimento, não a
+      evidência de entrada (revisado no review, Q-021 item 1): `"model"` no sucesso da geração
+      e `"deterministic"` na falha (D-003), **em qualquer um dos dois casos com ou sem
+      transcript** — sessão sem transcript ainda roteia para o gerador enxuto (nunca o profundo,
+      D-018), e um sucesso dessa chamada é `"model"` como qualquer outro; `sources[]` é quem
+      registra a ausência de transcript, não `source`. `"noTranscript"` continua no enum para o
+      estado em que o modelo **não é chamado** — não produzido por este código hoje.
       Anti-duplicidade (D-026) reconstrói a assinatura do `facts` já persistido em vez de
-      inventar um campo novo em disco (Q-021 item 3); `Storage` ganhou `saveHandoff`/`readHandoff`
-      além do esboço de `ARQUITETURA.md` (Q-021 item 4). D-002: `saveHandoff` → `readHandoff` de
-      verificação → só então `terminateGracefully`; falha no save ou verificação que volta `null`
-      aborta a terminação sem exceção vazando (provado em
+      inventar um campo novo em disco (Q-021 item 3, com o risco da reconstrução — mudança de
+      forma dos fatos comparando em silêncio contra regras antigas — escrito em
+      `core/evidence.ts#buildEvidenceSignature`); `Storage` ganhou `saveHandoff`/`readHandoff`,
+      já incorporado ao esboço de `ARQUITETURA.md` pelo mantenedor (Q-021 item 4) — não
+      conveniência, é o método que verifica o handoff em disco antes de terminar o processo.
+      D-002: `saveHandoff` → `readHandoff` de verificação → só então `terminateGracefully`; falha
+      no save ou verificação que volta `null` aborta a terminação sem exceção vazando (provado em
       `tests/unit/application/capture-session.test.ts`, incluindo a ordem exata das chamadas).
       Q-007: `terminateGracefully` devolvendo `false` com o processo vivo gera um
       `TerminationNotice` nomeado (`sessionId`/`cwd`/`name`/motivo) em
       `EndDayResult.terminationNotices`, nunca silencioso. `EndDayDeps` recebe `leanGenerator` E
       `deepGenerator` (não um só) porque a escolha por sessão depende de `hasTranscript`, só
-      conhecido em runtime — Q-021 item 2. Cinco escolhas sem resposta literal na spec registradas
-      em Q-021. `npm run verificar` e `npm run verificar:linux` verdes; `application/` em 100%
-      linhas/statements, 98% branches.
+      conhecido em runtime — Q-021 item 2. `knownForks` sempre vazio em `endDay`, com o risco de
+      segunda ordem (se a exclusão rio acima falhar, o filtro para sem nada quebrar) escrito em
+      `application/eligibility-assembly.ts#NO_KNOWN_FORKS` (Q-021 item 5). Q-021 fechada:
+      confirmado nos itens 2 a 5, item 1 corrigido. `npm run verificar` e `npm run
+      verificar:linux` verdes; `application/` em 100% linhas/statements, 98% branches.
 - [ ] **S2-T6 — Limpeza de forks.** Apaga forks próprios com mais de `forkCleanupDays`.
       *Aceite:* apaga apenas IDs presentes em `forks.json`; um teste prova que nenhum outro
       arquivo de `~/.claude/projects/` é tocado.

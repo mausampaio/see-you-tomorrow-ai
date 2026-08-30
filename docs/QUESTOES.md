@@ -1424,4 +1424,53 @@ disco, como toda chave nova (AGENTS.md). 4) manter `readHandoff` fora do esboço
 `docs/ARQUITETURA.md` diretamente (exige o PO, por "Ordem de autoridade"). 5) manter vazio,
 documentado; ou fazer `endDay` ler `forks.json` mesmo assim, por simetria com o resto do código,
 mesmo sendo I/O comprovadamente inútil.
-**Resposta:** (a preencher pelo PO)
+**Resposta:** **FECHADA — item 1 muda, os outros quatro ficam confirmados, com dois comentários
+pedidos.** Decisão do mantenedor.
+
+**Item 1 — o argumento contra estava no campo vizinho.** `source` e `sources[]` convivem no mesmo
+handoff, e `sources[]` **já** registra que o transcript não respondeu. Rotular `"noTranscript"`
+uma captura em que o modelo produziu entendimento de verdade não acrescenta informação — apaga: um
+leitor perguntando "este handoff tem entendimento escrito pelo modelo?" pularia um que tem, só
+porque a evidência de entrada era mais fraca. O enum passa a descrever **procedência da camada de
+entendimento**, não a qualidade da evidência que a alimentou:
+
+- `model` — o modelo produziu, com ou sem transcript.
+- `deterministic` — o modelo foi tentado e falhou; caiu para os fatos (D-003), com ou sem
+  transcript.
+- `noTranscript` — o modelo **não foi chamado**, e o motivo foi ausência de transcript.
+
+Consequência aceita de olhos abertos: hoje `generateUnderstanding` sempre tenta o gerador enxuto
+quando a sessão é elegível, então o terceiro valor não é produzido por este código — fica correto
+mesmo assim, porque descreve um estado real que a spec já nomeia, e existir sem produtor ainda é
+melhor que existir mentindo sobre os outros dois. Corrigido em
+`application/generation-policy.ts` (`successOutcome`/`deterministicOutcome` não recebem mais
+`hasTranscript`) e no docstring de `HandoffSource`/`Handoff.generationError` em `core/types.ts`.
+Testes atualizados e um novo adicionado, provando exatamente o caso que motivou a mudança: sessão
+sem transcript com geração bem-sucedida sai como `"model"` (`tests/unit/application/
+generation-policy.test.ts`, `tests/unit/application/capture-session.test.ts`).
+
+**Item 2, 3 e 5 — confirmados como estão.** Os dois geradores em `EndDayDeps` continuam (D-020
+preservado, a escolha por sessão depende de `hasTranscript` em runtime). A reconstrução da
+assinatura de evidência a partir de `facts` persistido continua, em vez de um campo novo em disco.
+`knownForks` continua sempre vazio em `endDay`, apoiado na exclusão que já acontece rio acima em
+`adapters/discovery/`.
+
+**Item 3, comentário pedido e escrito:** o docstring de `core/evidence.ts#buildEvidenceSignature`
+agora avisa que isso amarra a anti-duplicidade à estabilidade da própria reconstrução — se
+`HandoffFacts` ou a seleção de campos de `gitToken` mudarem de forma um dia (um campo renomeado,
+uma fonte nova), um handoff antigo relido pela versão nova da função pode comparar contra uma
+assinatura construída por regras diferentes das que valiam na captura, **em silêncio**:
+`sameEvidence` continua devolvendo uma resposta, só que possivelmente errada, sem erro e sem sinal
+visível. A saída, se isso um dia virar uma restrição real, é persistir a assinatura como campo
+próprio versionado, em vez de reconstruir.
+
+**Item 5, comentário pedido e escrito:** `application/eligibility-assembly.ts` ganhou a constante
+`NO_KNOWN_FORKS`, com o docstring nomeando o risco de segunda ordem: se uma estratégia de
+descoberta um dia parar de excluir forks — um refactor que derruba o check de `forks.json`, uma
+terceira estratégia nova que esquece — a elegibilidade deixa de filtrar forks **sem nada falhar**,
+porque este arquivo nunca lê `forks.json` para confirmar que a garantia upstream ainda vale. O
+filtro vive rio acima, não aqui, e agora isso está escrito onde o conjunto é montado.
+
+**Item 4 — já resolvido pelo mantenedor.** `readHandoff` entrou no esboço de
+`docs/ARQUITETURA.md` § "Portas". Registrado ali como o método que verifica o handoff em disco
+antes de terminar o processo (D-002) — não conveniência.

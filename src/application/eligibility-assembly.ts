@@ -19,6 +19,21 @@ const EMPTY_SIGNATURE: EvidenceSignature = {};
 
 const DEFAULT_PROJECT_POLICY: ProjectPolicy = { canTerminate: false, deepCapture: false };
 
+/**
+ * Always empty, on purpose (docs/QUESTOES.md Q-021, item 5) — see `evaluateCheapEligibility`'s
+ * docstring for why: both discovery strategies (S1-T3, S1-T8) already exclude `forks.json`'s
+ * sessions before a fork ever reaches `endDay`.
+ *
+ * **Second-order risk this hides, written down for whoever touches discovery next.** This
+ * constant is what makes `ownSeeyaFork` structurally unreachable from `endDay` TODAY, based on an
+ * invariant that lives entirely upstream, in `adapters/discovery/`. If a future change to either
+ * discovery strategy stops excluding forks — a refactor that drops the `forks.json` check, a new
+ * third strategy that forgets it — eligibility filtering for forks does not fail loudly: it just
+ * stops happening, silently, because this constant never queries `forks.json` to find out whether
+ * the invariant still holds. The filter lives upstream of this file, not in it.
+ */
+const NO_KNOWN_FORKS: ReadonlySet<string> = new Set();
+
 /** `config.projectPolicy[cwd]`, defaulted the same opt-in way `config-schema.ts#resolveProjectPolicy`
  * already fills a policy that mentions only one of the two flags (D-002/D-011: silence means
  * "not opted in"), extended to a `cwd` the config doesn't mention at all. */
@@ -31,12 +46,14 @@ export function projectPolicyFor(config: Config, cwd: string): ProjectPolicy {
  * (docs/ESPECIFICACAO.md § "Elegibilidade"'s first four) — no I/O, so a session an ignore-list
  * entry or a stale `lastActivity` already disqualifies never costs a git/transcript read.
  *
- * `knownForks` is always empty: both discovery strategies (S1-T3, S1-T8) already exclude
- * `forks.json`'s sessions before `SessionProvider.list()` ever returns them (D-012). The pure rule
- * still has its own `ownSeeyaFork` check (exercised directly by `core/eligibility.ts`'s own unit
- * tests) — from `endDay`'s side, that condition is structurally unreachable, so re-reading
- * `forks.json` here to populate a set that could never change the outcome would be I/O spent
- * proving something discovery already guarantees.
+ * `knownForks` is `NO_KNOWN_FORKS` (always empty) — both discovery strategies (S1-T3, S1-T8)
+ * already exclude `forks.json`'s sessions before `SessionProvider.list()` ever returns them
+ * (D-012). The pure rule still has its own `ownSeeyaFork` check (exercised directly by
+ * `core/eligibility.ts`'s own unit tests) — from `endDay`'s side, that condition is structurally
+ * unreachable, so re-reading `forks.json` here to populate a set that could never change the
+ * outcome would be I/O spent proving something discovery already guarantees. See
+ * `NO_KNOWN_FORKS`'s own docstring for the risk this carries if that upstream guarantee ever
+ * breaks.
  */
 export function evaluateCheapEligibility(
   session: DiscoveredSession,
@@ -47,7 +64,7 @@ export function evaluateCheapEligibility(
     now,
     relevanceHours: config.relevanceHours,
     ignoredCwds: new Set(config.ignore),
-    knownForks: new Set(),
+    knownForks: NO_KNOWN_FORKS,
     previousCaptureToday: null,
     currentSignature: EMPTY_SIGNATURE,
   });
@@ -74,7 +91,7 @@ export async function evaluateFullEligibility(
     now,
     relevanceHours: config.relevanceHours,
     ignoredCwds: new Set(config.ignore),
-    knownForks: new Set(),
+    knownForks: NO_KNOWN_FORKS,
     previousCaptureToday:
       previousHandoff === null
         ? null

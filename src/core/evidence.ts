@@ -93,6 +93,19 @@ function gitToken(git: GitFacts | null): string | null {
  * the exact format to whoever implemented S2-T3); reconstructing it from `facts` avoids inventing
  * a disk key the spec doesn't already have.
  *
+ * **This ties D-026's anti-duplication to the STABILITY of this reconstruction, not just to
+ * `facts` themselves (docs/QUESTOES.md Q-021, item 3).** `sameEvidence` has no way to know
+ * whether the two signatures it's comparing were built by the same rules — it only sees strings.
+ * If `HandoffFacts` or this function's own field selection ever changes shape (a field renamed,
+ * `gitToken`'s field list edited, a new source added) in a way that changes what a given set of
+ * facts maps to, an OLD persisted handoff's facts run back through the NEW version of this
+ * function would silently compare against a signature built by different rules than the one it
+ * was captured with — `sameEvidence` would still return an answer, just possibly the wrong one,
+ * with no error and no visible sign anything changed. The fix, if that ever becomes a real
+ * constraint (a schema migration touches `facts`, for instance), is to persist the signature as
+ * its own versioned disk field instead of reconstructing it — the same tradeoff `schemaVersion`
+ * already exists to manage for the rest of the document.
+ *
  * @example
  * const signature = buildEvidenceSignature(handoff.facts); // { transcript: "...", git: "..." }
  */
