@@ -552,12 +552,37 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       não reduz o piso, aumenta — ver a questão). `HandoffGenerator.generate()` precisou do
       `DiscoveredSession` inteiro, não só `SessionFacts` — ver Q-019. `npm run verificar` e
       `npm run verificar:linux` verdes.
-- [ ] **S2-T3 — Caso de uso `endDay`.** Coleta multi-fonte com `sources[]` (D-013),
+- [~] **S2-T3 — Caso de uso `endDay`.** Coleta multi-fonte com `sources[]` (D-013),
       concorrência limitada, isolamento de falha por sessão, fallback determinístico,
       anti-duplicidade, guarda de turno ativo. Handoff válido com qualquer fonte respondendo.
       **Q-007:** `terminateGracefully` devolvendo `false` com o processo ainda vivo não é erro e
       não aborta nada, mas **precisa aparecer no resultado do dia**, nomeando a sessão e o motivo.
       Silêncio aqui faz quem marcou `canTerminate: true` acreditar que a sessão fechou.
+      **Implementado em 2026-08-29:** `src/application/{end-day,capture-session,
+      evidence-gathering,generation-policy,eligibility-assembly,concurrency,types}.ts`.
+      `endDay` lê a config, descobre sessões, filtra por elegibilidade em dois estágios (barato,
+      sem I/O, para quatro das cinco condições; completo, com evidência fresca, só para
+      anti-duplicidade D-026) e captura cada sessão elegível sob `mapWithConcurrencyLimit`
+      (`captureConcurrency`, default 3), isolando falha por sessão num `try`/`catch` por
+      pipeline — uma sessão que lança nunca derruba as outras (provado em
+      `tests/unit/application/end-day.test.ts`). `sources[]` reflete exatamente quem respondeu
+      (`registry` ⟺ `hasPid`; `git` ⟺ `hasGit`; `transcript` ⟺ `hasTranscript` e a leitura não
+      lançou), nunca "tentou". Falha de geração produz `source: "deterministic"` com os fatos
+      (D-003); sessão sem transcript produz `source: "noTranscript"` mesmo quando a geração
+      enxuta (nunca a profunda, D-018) tem sucesso — ver Q-021 item 1 para o raciocínio.
+      Anti-duplicidade (D-026) reconstrói a assinatura do `facts` já persistido em vez de
+      inventar um campo novo em disco (Q-021 item 3); `Storage` ganhou `saveHandoff`/`readHandoff`
+      além do esboço de `ARQUITETURA.md` (Q-021 item 4). D-002: `saveHandoff` → `readHandoff` de
+      verificação → só então `terminateGracefully`; falha no save ou verificação que volta `null`
+      aborta a terminação sem exceção vazando (provado em
+      `tests/unit/application/capture-session.test.ts`, incluindo a ordem exata das chamadas).
+      Q-007: `terminateGracefully` devolvendo `false` com o processo vivo gera um
+      `TerminationNotice` nomeado (`sessionId`/`cwd`/`name`/motivo) em
+      `EndDayResult.terminationNotices`, nunca silencioso. `EndDayDeps` recebe `leanGenerator` E
+      `deepGenerator` (não um só) porque a escolha por sessão depende de `hasTranscript`, só
+      conhecido em runtime — Q-021 item 2. Cinco escolhas sem resposta literal na spec registradas
+      em Q-021. `npm run verificar` e `npm run verificar:linux` verdes; `application/` em 100%
+      linhas/statements, 98% branches.
 - [ ] **S2-T6 — Limpeza de forks.** Apaga forks próprios com mais de `forkCleanupDays`.
       *Aceite:* apaga apenas IDs presentes em `forks.json`; um teste prova que nenhum outro
       arquivo de `~/.claude/projects/` é tocado.
