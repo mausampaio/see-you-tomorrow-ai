@@ -8,7 +8,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Storage } from '../../core/ports.js';
-import type { Config, EarlyWarningState } from '../../core/types.js';
+import type { Config, Day, EarlyWarningState, Handoff } from '../../core/types.js';
 import { EMPTY_EARLY_WARNING_STATE } from '../../core/early-warnings.js';
 import { isEnoent } from './fs-errors.js';
 import { CONFIG_SCHEMA_VERSION, DEFAULT_CONFIG, parseConfigDocument } from './config-schema.js';
@@ -17,6 +17,11 @@ import {
   parseEarlyWarningDocument,
   serializeEarlyWarningState,
 } from './early-warning-schema.js';
+import {
+  HANDOFF_SCHEMA_VERSION,
+  parseHandoffDocument,
+  serializeHandoff,
+} from './handoff-schema.js';
 import { resolveSchemaVersion } from './schema-version.js';
 import { writeFileAtomic } from './atomic-write.js';
 
@@ -92,5 +97,29 @@ export class StorageAdapter implements Storage {
   async saveEarlyWarningState(state: EarlyWarningState): Promise<void> {
     const filePath = path.join(this.seeyaHome, 'early-warnings.json');
     await writeFileAtomic(filePath, JSON.stringify(serializeEarlyWarningState(state)));
+  }
+
+  /** `~/.seeya/days/<day>/sessions/<sessionId>.json` (docs/ESPECIFICACAO.md § "Formato do
+   * handoff") — `node:path` throughout, never a literal `/`/`\` join (AGENTS.md § "Sistema de
+   * arquivos"). */
+  private handoffPath(day: Day, sessionId: string): string {
+    return path.join(this.seeyaHome, 'days', day, 'sessions', `${sessionId}.json`);
+  }
+
+  async saveHandoff(day: Day, handoff: Handoff): Promise<void> {
+    await writeFileAtomic(
+      this.handoffPath(day, handoff.sessionId),
+      JSON.stringify(serializeHandoff(handoff)),
+    );
+  }
+
+  async readHandoff(day: Day, sessionId: string): Promise<Handoff | null> {
+    const filePath = this.handoffPath(day, sessionId);
+    const resolved = await readVersionedDocument(filePath, HANDOFF_SCHEMA_VERSION);
+    if (resolved === null) {
+      // No capture made today for this session yet (D-025): normal, not an error.
+      return null;
+    }
+    return parseHandoffDocument(resolved);
   }
 }
