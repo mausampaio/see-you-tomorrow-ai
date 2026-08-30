@@ -5,11 +5,18 @@
  * `removeE2eHome` in its own `afterEach` (same convention as
  * `tests/integration/discovery/_fixtures.ts`).
  */
-import { chmod, mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  createFakeClaudeFixture,
+  removeFakeClaudeFixture,
+  readCapturedClaudeCall,
+  type CapturedClaudeCall,
+  type FakeClaudeFixture,
+} from '../integration/generation/_fixtures.js';
 
 export interface E2eHome {
   readonly root: string;
@@ -19,22 +26,23 @@ export interface E2eHome {
   readonly sessionsDir: string;
   readonly projectsDir: string;
   readonly fakeClaudeDir: string;
+  /** The fake `claude` fixture itself (`tests/integration/generation/_fixtures.ts`, reused rather
+   * than a second, weaker fake — see this file's own comment on `createFakeClaude` below). S2-T5
+   * onward controls its behavior per-test through `FAKE_CLAUDE_*` env vars passed to `runSeeya`. */
+  readonly claudeFixture: FakeClaudeFixture;
 }
 
 /**
- * A `claude` on PATH that does nothing but exit 0. docs/TESTES.md's e2e harness always sets one
- * up, even though `seeya sessions`/`status` (S1-T6) never invoke it — later e2e tasks (S2-T5
- * onward, which need canned `claude -p` output) are expected to grow this into something with
- * real behavior. Inventing that behavior now, before any command needs it, isn't this task's job.
+ * Puts a REAL fake `claude` on PATH — not the do-nothing stub S1-T6 (`seeya sessions`/`status`)
+ * got away with, since neither of those commands ever spawns `claude` at all. S2-T5 (`end-day`)
+ * does, so this harness now reuses `tests/integration/generation/_fixtures.ts`'s
+ * `createFakeClaudeFixture()` instead of inventing a second, weaker fake: same script
+ * (`fake-claude.mjs`), same Windows-native-`.exe`-shim workaround (a `.cmd` on PATH would lose to a
+ * REAL `claude.exe` elsewhere on the developer's own PATH — measured in that file's own comment),
+ * controlled the same way, via `FAKE_CLAUDE_MODE`/`FAKE_CLAUDE_STDOUT`/`FAKE_CLAUDE_EXIT_CODE`.
  */
-async function createFakeClaude(dir: string): Promise<void> {
-  if (process.platform === 'win32') {
-    await writeFile(path.join(dir, 'claude.cmd'), '@echo off\r\nexit /b 0\r\n', 'utf8');
-    return;
-  }
-  const scriptPath = path.join(dir, 'claude');
-  await writeFile(scriptPath, '#!/bin/sh\nexit 0\n', 'utf8');
-  await chmod(scriptPath, 0o755);
+async function createFakeClaude(): Promise<FakeClaudeFixture> {
+  return createFakeClaudeFixture();
 }
 
 export async function createE2eHome(): Promise<E2eHome> {
@@ -44,17 +52,48 @@ export async function createE2eHome(): Promise<E2eHome> {
   const seeyaHome = path.join(homeDir, '.seeya');
   const sessionsDir = path.join(claudeHome, 'sessions');
   const projectsDir = path.join(claudeHome, 'projects');
-  const fakeClaudeDir = path.join(root, 'fake-claude');
   await mkdir(sessionsDir, { recursive: true });
   await mkdir(projectsDir, { recursive: true });
   await mkdir(seeyaHome, { recursive: true });
-  await mkdir(fakeClaudeDir, { recursive: true });
-  await createFakeClaude(fakeClaudeDir);
-  return { root, homeDir, claudeHome, seeyaHome, sessionsDir, projectsDir, fakeClaudeDir };
+  const claudeFixture = await createFakeClaude();
+  // **NOT `claudeFixture.dir`.** On Windows, `createFakeClaudeFixture()`'s `binaryPath` lives in
+  // its OWN separate compiled-shim directory (`getWindowsShimBinary()`, shared/memoized across the
+  // whole worker process) — `dir` only ever holds `capture.json`, never the `.exe` itself. Every
+  // existing caller of this fixture (`tests/integration/generation/*.test.ts`) passes
+  // `binaryPath` straight to `claudeBinary`, sidestepping PATH entirely; THIS harness is the first
+  // caller that needs a directory to prepend to `PATH` for a bare `claude` lookup, and
+  // `claudeFixture.dir` is the wrong one to use for that (measured: without this fix, `PATH`
+  // resolution silently fell through to a REAL `claude.exe` elsewhere on this machine's PATH).
+  const fakeClaudeDir = path.dirname(claudeFixture.binaryPath);
+  return {
+    root,
+    homeDir,
+    claudeHome,
+    seeyaHome,
+    sessionsDir,
+    projectsDir,
+    fakeClaudeDir,
+    claudeFixture,
+  };
 }
 
 export async function removeE2eHome(home: E2eHome): Promise<void> {
-  await rm(home.root, { recursive: true, force: true });
+  await removeFakeClaudeFixture(home.claudeFixture);
+  // S2-T5's own end-day journeys spawn a real fake `claude` INSIDE a project directory under
+  // `home.root` (its `cwd`) — on Windows, the OS can hold a directory handle open for a few
+  // milliseconds after the spawned process's `close` event already fired (observed here, not
+  // theoretical: `EBUSY` on this exact `rm` without the retry). `maxRetries`/`retryDelay` is
+  // `fs.rm`'s own documented mechanism for this Windows behavior — never a hand-rolled sleep loop
+  // (D-019 forbids `setTimeout` outside `adapters/clock/`, and this is test-only cleanup, not
+  // production code, but there is no reason to reinvent what `fs.rm` already offers).
+  await rm(home.root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+}
+
+/** Reads back what the fake `claude` process actually received on its LAST invocation this test
+ * made — the same proof instrument `tests/integration/generation/_fixtures.ts` gives its own
+ * suite, reused here instead of a second copy. */
+export function readLastClaudeCall(home: E2eHome): Promise<CapturedClaudeCall> {
+  return readCapturedClaudeCall(home.claudeFixture);
 }
 
 export async function writeSessionRecord(
@@ -108,12 +147,24 @@ export interface SeeyaResult {
  * project has already been bitten once by a build gap invisible from source: `tsconfig.build.json`
  * compiled without `@types/node` for a while, and nothing caught it because nothing ran the
  * output (AGENTS.md's "erro clássico" is a different bug, but the same shape of gap).
+ *
+ * `extraEnv` (S2-T5) is how a test controls the fake `claude` this run's `seeya end-day` spawns —
+ * `FAKE_CLAUDE_MODE`/`FAKE_CLAUDE_STDOUT`/`FAKE_CLAUDE_EXIT_CODE`/`FAKE_CLAUDE_CAPTURE_FILE`
+ * (`tests/fixtures/generation/fake-claude.mjs`) all pass straight through: `seeya` spawns `claude`
+ * from ITS OWN `process.env` (`adapters/generation/env.ts#buildGenerationEnv`), which is exactly
+ * the env this harness gives the `seeya` process here, and none of these four names are in
+ * D-017's stripped list, so they survive the sanitization untouched.
  */
-export function runSeeya(home: E2eHome, args: readonly string[]): Promise<SeeyaResult> {
+export function runSeeya(
+  home: E2eHome,
+  args: readonly string[],
+  extraEnv: Readonly<Record<string, string>> = {},
+): Promise<SeeyaResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [DIST_CLI_PATH, ...args], {
       env: {
         ...process.env,
+        ...extraEnv,
         HOME: home.homeDir,
         USERPROFILE: home.homeDir,
         PATH: `${home.fakeClaudeDir}${path.delimiter}${process.env.PATH ?? ''}`,
