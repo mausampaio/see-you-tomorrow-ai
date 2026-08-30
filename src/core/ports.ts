@@ -216,6 +216,19 @@ export interface Storage {
    * domínio": "termo novo entra aqui antes de entrar no código".
    */
   saveBriefing(day: Day, markdown: string): Promise<void>;
+
+  /**
+   * Reads `day`'s consolidated `Briefing` — every handoff captured for `day`, exactly as
+   * `listHandoffs(day)` already returns them, with `day` attached; no second read path and no new
+   * on-disk format. `null` when there is truly nothing for that day at all (no `sessions/`
+   * directory, nothing ever captured) — D-025: absence of any capture is a different,
+   * less-specific state than "a day with zero pending work", and this method doesn't blur the
+   * two. A day where every handoff on file failed validation (`handoffs: []`, `rejected`
+   * non-empty) is NOT the same as "nothing happened" and still comes back as a `Briefing`, not
+   * `null` — silently hiding a day of unreadable files would be exactly the omission D-022 exists
+   * to prevent.
+   */
+  readBriefing(day: Day): Promise<Briefing | null>;
 }
 
 /**
@@ -404,12 +417,6 @@ export interface ForkCleanup {
   cleanup(forkCleanupDays: number): Promise<ForkCleanupResult>;
 }
 
-// Own block at the end of the file on purpose (S3-T1), same pattern this file's own history
-// already established for S2-T4/S2-T6 (see the `GitFacts` import comment and the `ForkCleanup`
-// block above): a second in-flight task (S3-T2) touches this same file's earlier interfaces, and
-// D-022/D-025 already established keeping an addition self-contained, appended after everything
-// that exists already, instead of inserting mid-file or editing the `Storage` body above.
-
 /**
  * The day's consolidated document (docs/ESPECIFICACAO.md § "Glossário": "Documento consolidado do
  * dia, com todos os handoffs, lido no dia seguinte") — `Storage.readBriefing()`'s return shape
@@ -423,6 +430,13 @@ export interface ForkCleanup {
  * Q-021 item 4). Built directly on top of `Storage.listHandoffs(day)`, which already does the
  * real work — this is that same `{ handoffs, rejected }` shape with `day` attached, not a second
  * read path or a second on-disk format.
+ *
+ * Declared after `Storage` on purpose: `Storage.readBriefing` above references it, and nothing in
+ * TypeScript requires a type to appear before an interface member that uses it — moving this
+ * wouldn't change what either declares. (Was briefly a second `export interface Storage {}` block
+ * here too, merged back into the single interface above — see docs/FLUXO-DE-AGENTES.md's note on
+ * why "aditivo no fim do arquivo" produced that split for a method added to an EXISTING interface,
+ * and docs/PLANO-DE-ENTREGA.md S3-T3 for the consolidation.)
  */
 export interface Briefing {
   readonly day: Day;
@@ -430,34 +444,8 @@ export interface Briefing {
   readonly rejected: readonly RejectedDiscoveryRecord[];
 }
 
-/**
- * Grown as a second `Storage` block — merged by TypeScript with the interface declared above,
- * without editing its body — for the same reason Q-022 item 2 recorded for `saveBriefing`/
- * `listHandoffs`: a second in-flight task (S3-T2) touches this same file at the same time, and
- * this file's own history already shows a merge break from a cut landing mid-interface. Merging
- * declarations keeps this addition entirely at the end, untouched by whatever S3-T2 inserts into
- * the interfaces above.
- */
-export interface Storage {
-  /**
-   * Reads `day`'s consolidated `Briefing` — every handoff captured for `day`, exactly as
-   * `listHandoffs(day)` already returns them, with `day` attached; no second read path and no new
-   * on-disk format. `null` when there is truly nothing for that day at all (no `sessions/`
-   * directory, nothing ever captured) — D-025: absence of any capture is a different,
-   * less-specific state than "a day with zero pending work", and this method doesn't blur the
-   * two. A day where every handoff on file failed validation (`handoffs: []`, `rejected`
-   * non-empty) is NOT the same as "nothing happened" and still comes back as a `Briefing`, not
-   * `null` — silently hiding a day of unreadable files would be exactly the omission D-022 exists
-   * to prevent.
-   */
-  readBriefing(day: Day): Promise<Briefing | null>;
-}
-
-// Own import line and own block at the end of the file on purpose (S3-T2), same pattern the
-// `GitFacts` import and the `ForkCleanupOutcome` block above already established: a second
-// in-flight task (S3-T1) touches this same file's earlier interfaces for Sprint 3's other half
-// (reading the pending briefing, assembling the per-session prompt), so this stays self-contained
-// and appended, never inserted mid-file.
+// Own import line on purpose (S3-T2), same pattern the `GitFacts` import above already
+// established: keeps this addition self-contained instead of folding into the top import block.
 import type { ResumeOutcome } from './types.js';
 
 /**
