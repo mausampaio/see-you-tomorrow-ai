@@ -403,3 +403,33 @@ export interface ForkCleanupResult {
 export interface ForkCleanup {
   cleanup(forkCleanupDays: number): Promise<ForkCleanupResult>;
 }
+
+// Own import line and own block at the end of the file on purpose (S3-T2), same pattern the
+// `GitFacts` import and the `ForkCleanupOutcome` block above already established: a second
+// in-flight task (S3-T1) touches this same file's earlier interfaces for Sprint 3's other half
+// (reading the pending briefing, assembling the per-session prompt), so this stays self-contained
+// and appended, never inserted mid-file.
+import type { ResumeOutcome } from './types.js';
+
+/**
+ * Resumes one session interactively, or falls back to a fresh one (D-004). Implemented in
+ * `adapters/resumption/` (S3-T2) — spawns `claude` with the child's stdio **inherited** from
+ * `seeya`'s own process, never piped. docs/spikes/H-retomada-interativa.md measured that without a
+ * real terminal attached, "interactive" `claude` silently degrades into a single non-interactive
+ * reply and exits — never a resumable session at all — so a genuine continuation is only possible
+ * by handing the child the user's actual terminal.
+ *
+ * That's also why `resume()` only resolves once the user's own interactive session ends (`/exit`,
+ * Ctrl+D, closing the window): there is no event that fires any sooner, and this port never gets
+ * the child's stdout/stderr to inspect — they went straight to the same real screen the user is
+ * already looking at, not to a pipe `seeya` could read.
+ *
+ * `prompt` is `seeya`'s already-assembled first message for this session — S3-T1's job (reading
+ * the pending briefing, building the per-session text). This port doesn't know or care what a
+ * `Handoff`/`Briefing` looks like; it only ever receives a plain string, which keeps this
+ * adapter's one technical concern (how to get variable-length text into an interactive `claude`
+ * process, D-015) separate from what that text says.
+ */
+export interface SessionResumer {
+  resume(sessionId: string, cwd: string, prompt: string): Promise<ResumeOutcome>;
+}

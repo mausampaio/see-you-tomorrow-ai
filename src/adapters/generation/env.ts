@@ -12,8 +12,10 @@
  */
 
 /** D-017's exact list — session-identity variables a parent Claude Code process sets that a
- * spawned `claude` must never inherit. */
-const INHERITED_SESSION_VARS = [
+ * spawned `claude` must never inherit. Exported (S3-T2): `adapters/resumption/env.ts` spawns
+ * `claude` too and needs the exact same list — re-declaring it there would let the two drift
+ * apart on the next edit to D-017's table. */
+export const INHERITED_SESSION_VARS = [
   'CLAUDE_CODE_CHILD_SESSION',
   'CLAUDE_CODE_SESSION_ID',
   'CLAUDE_CODE_ENTRYPOINT',

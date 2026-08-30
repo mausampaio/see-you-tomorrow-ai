@@ -436,3 +436,47 @@ export interface GeneratedUnderstanding {
   /** Suggested plan for the next session, same "empty means empty" rule as `pendingItems`. */
   readonly tomorrowPlan: readonly string[];
 }
+
+// Own block at the end of the file on purpose (S3-T2), same reasoning as the `ForkCleanupOutcome`
+// block above (S2-T6): a second in-flight task (S3-T1) touches this same file for the briefing-
+// reading/prompt-assembly side of Sprint 3, so this addition stays self-contained at the end
+// instead of inserting mid-file.
+
+/**
+ * Why a `--resume` attempt fell back to a fresh session instead of attaching to the original one
+ * (S3-T2, D-004 — corrected by docs/spikes/H-retomada-interativa.md's measurement, see D-015). A
+ * discriminated union (D-024): the two causes are told apart for the user, and nothing else is
+ * representable.
+ *
+ * - `resumeFailed` — `claude --resume` itself exited non-zero, and did so fast (before
+ *   `adapters/resumption/spawn-interactive.ts`'s grace period, which a real interactive session
+ *   always clears). D-025 governs the shape here on purpose: this names only what's known (the
+ *   attempt failed, with this exit code) — it never invents WHICH of D-004's named causes (an
+ *   expired session, a project that moved) explained it, because a bare exit code can't say, and
+ *   `seeya` never got the real terminal's stderr to look at (it went straight to the user's
+ *   screen, not to a pipe this port could read).
+ * - `promptTooLarge` — the prompt is longer than the positional-argument size threshold Spike H
+ *   measured, so `--resume` was never attempted with it as an argument at all: better to know the
+ *   ceiling in advance than to find it by failing (D-015's corrected text).
+ */
+export type ResumeFallbackReason =
+  | { readonly kind: 'resumeFailed'; readonly exitCode: number }
+  | {
+      readonly kind: 'promptTooLarge';
+      readonly promptLength: number;
+      readonly limitChars: number;
+    };
+
+/**
+ * One session's resumption outcome (S3-T2). `sessionId`/`cwd` name which session this is about —
+ * `seeya start-day --all` (S3-T3) resumes several sessions one at a time and needs to report each
+ * by name, never just "something fell back".
+ */
+export interface ResumeOutcome {
+  readonly sessionId: string;
+  readonly cwd: string;
+  /** `false` when `--resume` attached to the original session — a real interactive continuation.
+   * Otherwise names why a fresh session opened instead: D-004's single fallback mechanism,
+   * reused for both triggers above, never a second one. */
+  readonly fellBack: false | ResumeFallbackReason;
+}
