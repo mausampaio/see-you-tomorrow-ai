@@ -824,6 +824,22 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
 ---
 
+- [ ] **S3-T4 — Teste de contrato para `--append-system-prompt-file`.** Aprovado pelo mantenedor
+      em 2026-08-30 ao fechar a Q-027 item 3. O fallback da retomada (D-004) entrega o plano por
+      `--append-system-prompt-file`, escolhido em vez de `--system-prompt-file` porque o primeiro
+      **acrescenta** ao prompt de sistema e o segundo **substitui** o do Claude Code inteiro — o
+      `seeya` não tem por que decidir remover comportamento que a pessoa espera de qualquer
+      sessão. O problema: **nenhum dos dois aparece no `--help`**; foram achados varrendo strings
+      do binário (Spike H). A semântica está medida na 2.1.235 e pode mudar numa versão sem
+      aviso, e hoje nenhuma suíte cobre isso.
+      *Escopo:* teste em `tests/contract/` (`npm run test:contrato`, a suíte que existe justamente
+      para casar suposição nossa com binário real) que confirme "append, não replace" contra o
+      `claude` instalado — isto é, que o prompt de sistema padrão **continua valendo** quando o
+      flag é usado, não só que o texto extra chega. Se a distinção não for observável de fora,
+      esse próprio achado é o resultado: registrar em QUESTOES o que dá e o que não dá para
+      provar, sem inventar uma garantia que o teste não sustenta (D-025).
+      *Fora de escopo:* trocar o flag, ou construir fallback para o caso de ele sumir — só
+      quando e se a medição mostrar que sumiu.
 ## Sprint 4 — Automatizar
 
 - [ ] **S4-T1 — `adapters/notification`** conforme o Spike B, com a cadeia de fallback e o

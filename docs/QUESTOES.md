@@ -1990,4 +1990,66 @@ versões sem aviso — vale um teste de contrato (`npm run test:contrato`) que c
 para o item 4, se algum dia `seeya` capturar stderr por outro canal (por exemplo, um modo
 `--dry-run` de retomada que não herda TTY), reconsiderar se um terceiro `ResumeFallbackReason` mais
 específico vale a pena então — não antes, para não guardar código especulativo.
-**Resposta:** _(em aberto)_
+**Resposta:** **FECHADA — 2, 5 e 6 confirmadas como estão; 3 confirmada com teste de contrato
+a fazer; 4 confirmada e só reavaliada se algum dia fizer sentido; 1 confirmada, com uma decisão
+nova escrita por trás dela (D-030).**
+
+**3) `--append-system-prompt-file`: confirmado, e pelo motivo que você deu.** O comportamento
+padrão do Claude Code é mantido e o plano só **acrescenta** informação. Substituir o prompt de
+sistema inteiro seria o `seeya` decidindo, sem pedir, que a sessão de fallback abre sem o
+comportamento que a pessoa espera de qualquer sessão.
+
+**O teste de contrato entra.** Os dois flags foram achados varrendo strings do binário e
+**nenhum aparece no `--help`** — a semântica está medida hoje, na 2.1.235, e pode mudar numa
+versão sem aviso nenhum. Entra no plano como tarefa própria (S3-T4), na suíte de contrato, que é
+exatamente a suíte que existe para casar suposição nossa com binário real.
+
+**Escopo do que o fallback é, porque isso define o alcance do item 3.** O fallback dispara em
+**duas** situações: prompt acima do teto (`promptTooLarge` — o `--resume` nem é tentado) e
+`--resume` que fechou dentro dos 5s de graça com código ≠ 0 (`resumeFailed`). Nos dois casos ele
+é o **mesmo** mecanismo: sessão nova no mesmo `cwd`, sem histórico, com o plano viajando por
+arquivo. O item 3 só toca esse caminho.
+
+**4) Não distinguir a causa do `resumeFailed`: confirmado, e revisitado só se fizer sentido.** A
+evidência disponível é código de saída e tempo; nomear "sessão expirada" ou "projeto movido"
+seria precisão inventada (D-025). Se algum dia existir um canal que leia o stderr de verdade,
+a conversa se reabre — não antes, para não guardar código especulativo.
+
+**1) `ClaudeSessionResumer`: o nome fica, e a razão é que a costura agnóstica já existe — ela é
+a porta, não o nome da classe.**
+
+`core/ports.ts` declara `SessionResumer` sem citar claude em lugar nenhum. `ClaudeSessionResumer`
+é o **adaptador**, nomeado pelo que ele de fato amarra. Esse é o padrão hexagonal já aplicado, e
+é o mesmo dos outros cinco adaptadores do projeto.
+
+**Renomear para `HarnessSessionResumer` deixaria o nome menos exato, não mais agnóstico:** a
+classe spawna `claude --resume`, usa `--append-system-prompt-file` e depende de flags achados
+varrendo o binário. Chamar isso de "Harness" esconderia justamente o que ela é.
+
+**E uma classe-base `HarnessResumer` com uma subclasse só é a abstração que eu recusaria** — e
+não só por ser especulativa: é provavelmente a **costura errada**. O que muda entre harnesses
+não é um algoritmo comum com dois ganchos; é se `--resume` existe, como sessão é identificada, se
+dá para reatar sessão. Um segundo harness não compartilharia quase nada com este — exceto a
+assinatura da porta, que ele já ganha de graça implementando `SessionResumer`. Quando o segundo
+chegar, o movimento é **um segundo adaptador escolhido no `cli/`** (D-020), não herança.
+
+**Mas o seu ponto de fundo está certo, e fui ver onde ele morde de verdade.** Auditei
+`src/core/` atrás de vazamento de harness. O vocabulário de tipos já é neutro
+(`SessionProvider`, `TranscriptReader`, `HandoffGenerator`, `SessionResumer`, `ProcessControl`,
+`Storage`). Só **dois** pontos citam claude no núcleo, e os dois em **texto para humano**, nunca
+em tipo, ramo de decisão ou caminho de arquivo:
+
+- `core/early-warnings.ts` — conselho que nomeia `CLAUDE_CODE_SKIP_PROMPT_HISTORY` e
+  `CLAUDE_CODE_FORCE_SESSION_PERSISTENCE`;
+- `core/resume-notice.ts` — "the original session could not be resumed (claude exited with...)".
+
+Ficam como estão: são texto de aviso, e hoje existe exatamente um harness. O que **não** pode
+ficar implícito é a fronteira — por isso escrevi a **D-030**, que registra onde está a costura,
+o que o núcleo pode e não pode citar, e que a chegada de um segundo harness é um adaptador novo,
+não uma hierarquia. Sem isso escrito, alguém renomeia o adaptador "para ficar genérico" daqui a
+três meses e a costura some.
+
+**2, 5 e 6: confirmadas como estão.** Teto como constante e não config (limite de SO, não
+preferência de produto — mesmo raciocínio que a Q-025 acabou de usar para o orçamento de teste);
+falha rápida do próprio fallback lança em vez de mentir que abriu sessão; um período de graça só,
+porque não há medição que sustente dois.
