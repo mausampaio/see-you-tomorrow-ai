@@ -153,3 +153,57 @@ describe('findPendingBriefing — MAX_BRIEFING_SCAN_DAYS is an I/O bound, not a 
     expect(result).toEqual({ found: false, daysSearched: 2 });
   });
 });
+
+describe('findPendingBriefing — resumed sessions (S3-T3): nothing disappears without being resumed', () => {
+  it('a day with two pending handoffs, one resumed, is STILL found as pending — the other one does not vanish', async () => {
+    const storage = new FakeStorage(DEFAULT_TEST_CONFIG);
+    const resumedAlready = createHandoff({
+      sessionId: '11111111-1111-4111-8111-111111111111',
+      pendingItems: ['already resumed by hand'],
+    });
+    const stillUntouched = createHandoff({
+      sessionId: '22222222-2222-4222-8222-222222222222',
+      pendingItems: ['nobody looked at this yet'],
+    });
+    await storage.saveHandoff(dayOffset(1), resumedAlready);
+    await storage.saveHandoff(dayOffset(1), stillUntouched);
+    await storage.saveResumedSessionIds(dayOffset(1), new Set([resumedAlready.sessionId]));
+    const clock = new FakeClock(TODAY);
+
+    const result = await findPendingBriefing(storage, clock);
+    expect(result.found).toBe(true);
+    if (result.found) {
+      expect(result.briefing.day).toBe(dayOffset(1));
+      expect([...result.resumedSessionIds]).toEqual([resumedAlready.sessionId]);
+    }
+  });
+
+  it('a day where every handoff has been resumed is no longer pending — the search keeps walking back', async () => {
+    const storage = new FakeStorage(DEFAULT_TEST_CONFIG);
+    const onlyHandoff = createHandoff({ pendingItems: ['finish it'] });
+    await storage.saveHandoff(dayOffset(0), onlyHandoff);
+    await storage.saveResumedSessionIds(dayOffset(0), new Set([onlyHandoff.sessionId]));
+    const olderPending = createHandoff({
+      sessionId: '22222222-2222-4222-8222-222222222222',
+      pendingItems: ['further back, still open'],
+    });
+    await storage.saveHandoff(dayOffset(2), olderPending);
+    const clock = new FakeClock(TODAY);
+
+    const result = await findPendingBriefing(storage, clock);
+    expect(result.found).toBe(true);
+    if (result.found) {
+      expect(result.briefing.day).toBe(dayOffset(2));
+    }
+  });
+
+  it('a resumed, model-confirmed-clean handoff does not resurrect a day that has nothing else pending', async () => {
+    const storage = new FakeStorage(DEFAULT_TEST_CONFIG);
+    const clean = createHandoff({ pendingItems: [], tomorrowPlan: [] });
+    await storage.saveHandoff(dayOffset(0), clean);
+    const clock = new FakeClock(TODAY);
+
+    const result = await findPendingBriefing(storage, clock);
+    expect(result).toEqual({ found: false, daysSearched: MAX_BRIEFING_SCAN_DAYS + 1 });
+  });
+});

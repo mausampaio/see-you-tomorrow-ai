@@ -7,7 +7,13 @@
  */
 import os from 'node:os';
 import path from 'node:path';
-import type { Clock, ProcessControl, SessionProvider, Storage } from '../core/ports.js';
+import type {
+  Clock,
+  ProcessControl,
+  SessionProvider,
+  SessionResumer,
+  Storage,
+} from '../core/ports.js';
 import type { Config } from '../core/types.js';
 import { processControl as realProcessControl } from '../adapters/process/index.js';
 import { systemClock } from '../adapters/clock/index.js';
@@ -16,6 +22,7 @@ import { DiscoverySessionProvider, DiscoveryForkCleanup } from '../adapters/disc
 import { TranscriptFileReader } from '../adapters/transcript/index.js';
 import { GitAdapter } from '../adapters/git/index.js';
 import { LeanHandoffGenerator, DeepHandoffGenerator } from '../adapters/generation/index.js';
+import { ClaudeSessionResumer } from '../adapters/resumption/index.js';
 import type { EndDayDeps } from '../application/types.js';
 
 export interface CliHome {
@@ -132,4 +139,29 @@ export async function buildEndDayContext(homeDir: string = os.homedir()): Promis
     }),
   };
   return { deps, config };
+}
+
+export interface StartDayContext {
+  readonly storage: Storage;
+  readonly clock: Clock;
+  readonly sessionResumer: SessionResumer;
+}
+
+/**
+ * `seeya start-day`'s own composition (S3-T3): the two ports its five steps need
+ * (docs/ESPECIFICACAO.md § `seeya start-day`) — `Storage` for the briefing and the per-session
+ * resumed bookkeeping (step 5), `SessionResumer` for steps 4-5's actual resume. No
+ * `SessionProvider`/git/generation here: unlike `end-day`, this command never re-discovers
+ * sessions from `~/.claude/` — it works entirely from what `end-day` already persisted (D-004).
+ */
+export function buildStartDayContext(homeDir: string = os.homedir()): Promise<StartDayContext> {
+  const home = resolveCliHome(homeDir);
+  const clock = systemClock;
+  const storage = buildStorage(home);
+  const sessionResumer = new ClaudeSessionResumer({ seeyaHome: home.seeyaHome });
+  // No `await`: unlike `buildCliContext`/`buildEndDayContext`, this command never reads
+  // `config.json` (it doesn't need `relevanceHours` or any other config field) — but the return
+  // type stays `Promise<StartDayContext>` for the same reason those two are async, so `index.ts`
+  // can `await` every `build*Context` call uniformly without caring which ones actually do I/O.
+  return Promise.resolve({ storage, clock, sessionResumer });
 }

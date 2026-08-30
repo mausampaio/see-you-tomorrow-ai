@@ -3,9 +3,9 @@
  * recente que ainda tem pendências." Walks backward one local calendar day at a time from
  * `clock.now()` (D-019: the instant comes from the injected `Clock`, never read here), stopping
  * at the first day whose `Briefing` (`Storage.readBriefing`, S3-T1) has at least one handoff
- * `core/pending-briefing.ts#briefingStillPending` calls pending — see that module's own docstring
- * for why the check is content-based rather than an "already resumed" flag (nothing persists that
- * yet, docs/QUESTOES.md Q-026).
+ * `core/pending-briefing.ts#briefingStillPending` calls pending — that check weighs both content
+ * AND `Storage.readResumedSessionIds(day)` (S3-T3); see that module's own docstring for the full
+ * rule and why it's per session, not per day.
  *
  * **No product-level age cutoff (docs/QUESTOES.md Q-026, revised on review).** An earlier version
  * of this module refused to look back more than a week, reasoning by analogy with
@@ -50,17 +50,26 @@ export const MAX_BRIEFING_SCAN_DAYS = 30;
  * `daysAgo` on the `found: true` case is how many local calendar days back the briefing sits
  * relative to `clock.now()` (`0` = today, `1` = yesterday, …) — the raw number `seeya start-day`
  * needs to tell the user plainly when the plan they're about to see is NOT from yesterday (Q-026).
+ *
+ * `resumedSessionIds` is the same set this function already read to decide the day counts as
+ * pending — handed back so `seeya start-day` (S3-T3) doesn't read it a second time to build the
+ * resumable candidate list (`core/pending-briefing.ts#unresumedHandoffs`).
  */
 export type PendingBriefingLookup =
-  | { readonly found: true; readonly briefing: Briefing; readonly daysAgo: number }
+  | {
+      readonly found: true;
+      readonly briefing: Briefing;
+      readonly daysAgo: number;
+      readonly resumedSessionIds: ReadonlySet<string>;
+    }
   | { readonly found: false; readonly daysSearched: number };
 
 /**
  * @example
  * const lookup = await findPendingBriefing(storage, clock);
  * if (lookup.found) {
- *   const plan = renderConsolidatedPlan(lookup.briefing, lookup.daysAgo); // core/consolidated-plan.js
- *   const prompts = buildResumePrompts(lookup.briefing); // core/resume-prompt.js
+ *   const plan = renderConsolidatedPlan(lookup.briefing, lookup.daysAgo, lookup.resumedSessionIds);
+ *   const candidates = unresumedHandoffs(lookup.briefing, lookup.resumedSessionIds);
  * }
  */
 export async function findPendingBriefing(
@@ -72,8 +81,12 @@ export async function findPendingBriefing(
   for (let offset = 0; offset <= maxScanDays; offset += 1) {
     const day = localDayString(subtractLocalDays(today, offset));
     const briefing = await storage.readBriefing(day);
-    if (briefing !== null && briefingStillPending(briefing)) {
-      return { found: true, briefing, daysAgo: offset };
+    if (briefing === null) {
+      continue;
+    }
+    const resumedSessionIds = await storage.readResumedSessionIds(day);
+    if (briefingStillPending(briefing, resumedSessionIds)) {
+      return { found: true, briefing, daysAgo: offset, resumedSessionIds };
     }
   }
   return { found: false, daysSearched: maxScanDays + 1 };

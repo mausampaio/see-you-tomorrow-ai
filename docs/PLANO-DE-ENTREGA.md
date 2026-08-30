@@ -819,8 +819,59 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       que falhou (D-025 — `seeya` não lê o stderr real, que foi para a tela do usuário via
       `stdio: 'inherit'`). Seis escolhas sem resposta literal em D-004/D-015 registradas em
       Q-027 (renumerada no merge: a S3-T1 já tinha tomado o Q-026 em paralelo). `npm run verificar` e `npm run verificar:linux` verdes.
-- [ ] **S3-T3 — `seeya start-day`** com seleção interativa e `--all`.
+- [~] **S3-T3 — `seeya start-day`** com seleção interativa e `--all`.
       *Aceite do sprint:* e2e 5 passa; retomada real de uma sessão de ontem funciona à mão.
+      **Implementado em 2026-08-30.** Os cinco passos: `application/find-pending-briefing.ts`
+      (passo 1, já existia) → `core/consolidated-plan.ts#renderConsolidatedPlan` (passo 2, já
+      existia) → `cli/start-day-selection.ts` decide o modo (`--session` vence `--all`; sem
+      nenhuma flag e sem TTY, `noTtyNoFlag` — imprime o plano e as duas flags, sai 0, nunca trava
+      esperando resposta) → `application/start-day.ts#resumeSessions` (passos 4-5, sequencial, um
+      `SessionResumer.resume()` por vez, com progresso impresso entre uma sessão e outra) →
+      marcação por sessão gravada **depois** de cada `resume()` completar, nunca antes ou em lote
+      no fim (D-002 aplicado a bookkeeping em vez de terminação de processo). `resumeSessions`
+      lançando (fallback também falhou rápido, Q-027 item 5) para o laço no meio, sem tentar as
+      sessões seguintes; `cli/start-day-command.ts` relata quem foi retomado e quem não foi, e sai
+      com código 1.
+      **Storage ganhou `readResumedSessionIds`/`saveResumedSessionIds`** (`core/ports.ts`, dentro
+      da interface já consolidada — ver a nota abaixo), persistidos em
+      `~/.seeya/days/<day>/resumed.json` (`{ schemaVersion, sessionIds }`,
+      `adapters/storage/resumed-sessions-schema.ts`) — por **sessão**, não por dia inteiro: um dia
+      com três handoffs e um retomado continua "pendente" para as outras duas, nunca some da busca
+      do passo 1. `core/pending-briefing.ts#handoffStillPending`/`briefingStillPending` passaram a
+      receber esse conjunto e checá-lo primeiro; o docstring do módulo, que descrevia a regra como
+      **interina** (Q-026), foi reescrito para descrever a regra real: "pendente" agora é "não
+      retomado E com conteúdo". `unresumedHandoffs` (novo, mesmo arquivo) é o filtro **diferente**
+      que os passos 3 usam para montar a lista de candidatos — todo handoff ainda não retomado,
+      mesmo um que o modelo já confirmou limpo, porque é uma escolha real ainda não feita, não
+      "pendência" no sentido de conteúdo.
+      **Seleção interativa por `node:readline/promises`**, sem dependência nova
+      (`cli/start-day-command.ts#askInteractively` + `cli/start-day-selection.ts#parseInteractiveSelection`):
+      aceita números separados por vírgula, `all`, ou vazio para nada; resposta inválida reporta o
+      problema e não retoma nada — sem laço de nova tentativa (escolha mínima, registrada abaixo).
+      **`--session <id|cwd>`** casa contra **todos** os handoffs do briefing (não só os ainda não
+      retomados) — intenção explícita tem precedência sobre o filtro de conveniência, mesmo
+      convenção de `end-day --session`; sem match, mensagem e saída 0 (consistente com
+      `end-day --session`, não um erro).
+      **Consolidação de `Storage` em commit separado** (instrução do mantenedor): os dois blocos
+      `export interface Storage {}` que existiam desde S2-T4/S3-T1 foram fundidos num só, sem
+      mudança de comportamento, antes de qualquer código novo desta tarefa.
+      **`core/consolidated-plan.ts` ganhou reconhecimento de retomada:** uma sessão já marcada
+      resumida aparece como "already resumed today" em vez do seu `pendingItems`/`tomorrowPlan`
+      (potencialmente obsoletos) — mesma disciplina de "não afirmar além do que se sabe" que o
+      módulo já aplicava a handoff `source !== "model"`.
+      Uma escolha sem resposta literal na spec registrada em `docs/QUESTOES.md` Q-028 (formato de
+      `resumed.json`, ainda fora da tabela de identificadores em disco do `AGENTS.md`).
+      **Aceite do sprint cumprido por e2e nº5** (`tests/e2e/start-day.test.ts`): handoff pendente
+      escrito diretamente em disco (sem rodar `end-day`, já que `start-day` nunca redescobre
+      sessões — D-004), `seeya start-day --all` invoca o `claude` falso com
+      `['--resume', sessionId, prompt]`, e `resumed.json` reflete a sessão marcada. Um segundo
+      e2e prova o caminho sem TTY (stdin `'ignore'` do harness já não é TTY, de graça): plano
+      impresso, `--all`/`--session` sugeridos, `claude` nunca invocado, saída 0.
+      *Retomada real feita à mão pelo agente*: não foi possível dentro deste ambiente sandboxed
+      (sem sessão Claude Code real de "ontem" para retomar) — o mantenedor deve validar essa parte
+      do aceite manualmente antes de aprovar.
+      `npm run verificar` e `npm run verificar:linux` verdes; `core/` 100%, `application/` 100%,
+      `cli/` 100% (linhas/statements) nos dois sistemas.
 
 ---
 

@@ -2053,3 +2053,50 @@ três meses e a costura some.
 preferência de produto — mesmo raciocínio que a Q-025 acabou de usar para o orçamento de teste);
 falha rápida do próprio fallback lança em vez de mentir que abriu sessão; um período de graça só,
 porque não há medição que sustente dois.
+
+---
+
+## Q-028 — Cinco escolhas feitas fazendo S3-T3 (`seeya start-day`), registradas para confirmação
+**Tarefa:** S3-T3
+**Bloqueia:** não — a tarefa foi entregue com a solução mínima em cada ponto; registro no mesmo
+padrão de Q-017/Q-021/Q-022/Q-023/Q-027.
+**Contexto:** a especificação e as decisões que o mantenedor passou para esta tarefa (passo 5 por
+sessão, seleção interativa por `node:readline/promises`, laço para no primeiro `resume()` que
+lança) dão a forma geral, mas várias escolhas de nome e de comportamento não têm resposta literal.
+
+**1) Formato de `~/.seeya/days/<day>/resumed.json`: `{ schemaVersion, sessionIds: string[] }`.**
+Nome novo em disco (`resumed.json`, `sessionIds`), ainda fora da tabela "Identificadores que vão
+para disco" de `AGENTS.md` § Idioma — mesmo padrão não-bloqueante que Q-005/Q-013 já usaram para
+`deepCapture`/`forkCleanupDays`, e que S1-T7 usou para `early-warnings.json`. Escolhido em vez de
+(a) um campo dentro do próprio handoff — o handoff é escrito uma vez, no `end-day`, por um comando
+diferente, e reabrir/reescrever cada um dos arquivos de um dia só para marcar uma sessão tocaria
+documentos que `start-day` não tem outro motivo para escrever — e em vez de (b) um arquivo por
+sessão — um conjunto pequeno, lido e regravado inteiro, é mais simples que N arquivos pequenos para
+o que é, no máximo, um punhado de sessões por dia.
+
+**2) `saveResumedSessionIds` grava o conjunto INTEIRO, não incrementa.** Mesmo desenho de
+`saveEarlyWarningState`: quem decide o que é novo e quando persistir é `application/start-day.ts`
+(lê o conjunto atual, acrescenta o `sessionId` que acabou de terminar, grava o conjunto todo) — a
+porta `Storage` não tem lógica de diff, só persiste o que recebe.
+
+**3) `--session` casa contra TODOS os handoffs do briefing, não só os ainda não retomados.** Uma
+sessão já marcada resumida pode ser re-selecionada explicitamente por `--session <id>` — intenção
+explícita vence o filtro de conveniência que `--all`/a seleção interativa usam por padrão, mesma
+convenção que `end-day --session` já segue (pode recapturar uma sessão já capturada hoje). Um
+`--session` sem match sai com código 0 e mensagem, não erro — consistência com
+`end-day-command.ts#formatNoMatchMessage`, não uma leitura literal de nenhum documento.
+
+**4) `--session` vence `--all` quando os dois são passados juntos.** O `commander` não impede
+digitar as duas flags ao mesmo tempo; escolhida a interpretação "pedido mais específico vence",
+sem outra base documentada.
+
+**5) Resposta inválida no seletor interativo não tenta de novo — reporta o problema e não retoma
+nada.** Alternativa descartada: um laço de nova pergunta até receber algo válido. Escolhida a
+solução mínima porque a spec não menciona novas tentativas, e um laço de I/O interativo é mais uma
+coisa para testar sem ganho óbvio na v1 — a pessoa só roda `seeya start-day` de novo.
+
+**Opções que enxergo:** A) confirmar as cinco como estão. B) para o item 1, se `resumed.json`
+ganhar leitor fora deste projeto algum dia, reconsiderar o par `save<Nome>`/`read<Nome>` — não
+antes. C) para o item 5, se um retorno real de usuários mostrar que digitar errado é comum, um
+laço de nova tentativa vira tarefa própria.
+**Resposta:** (preenchida pelo PO)

@@ -216,6 +216,64 @@ export interface Storage {
    * domínio": "termo novo entra aqui antes de entrar no código".
    */
   saveBriefing(day: Day, markdown: string): Promise<void>;
+
+  /**
+   * Reads `day`'s consolidated `Briefing` — every handoff captured for `day`, exactly as
+   * `listHandoffs(day)` already returns them, with `day` attached; no second read path and no new
+   * on-disk format. `null` when there is truly nothing for that day at all (no `sessions/`
+   * directory, nothing ever captured) — D-025: absence of any capture is a different,
+   * less-specific state than "a day with zero pending work", and this method doesn't blur the
+   * two. A day where every handoff on file failed validation (`handoffs: []`, `rejected`
+   * non-empty) is NOT the same as "nothing happened" and still comes back as a `Briefing`, not
+   * `null` — silently hiding a day of unreadable files would be exactly the omission D-022 exists
+   * to prevent.
+   */
+  readBriefing(day: Day): Promise<Briefing | null>;
+
+  /**
+   * Reads which `sessionId`s have already been resumed for `day` — `seeya start-day`'s step 5
+   * (docs/ESPECIFICACAO.md § `seeya start-day`: "Marca o briefing como retomado"), decided in
+   * S3-T3 to be per-SESSION rather than per-day (docs/QUESTOES.md, and see
+   * `core/pending-briefing.ts`'s docstring for the full reasoning: marking a whole day resumed
+   * after only one of its several sessions actually got resumed would make the others silently
+   * vanish from "pending", which is D-025's mistake aimed at a person's whole day of work instead
+   * of one field). A day with nothing resumed yet — including a day that was never captured at
+   * all — comes back as an empty set (D-025: absence, not an error).
+   *
+   * Named to match the `read<Noun>`/`save<Noun>` pair this port already uses elsewhere
+   * (`readEarlyWarningState`/`saveEarlyWarningState`, `readHandoff`/`saveHandoff`) rather than an
+   * "append" verb: the append/diff logic (which id is new, when to persist) belongs to
+   * `application/start-day.ts#resumeSessions`, the same split `core/early-warnings.ts` already
+   * draws between "decide what changed" (pure) and "persist it" (this port).
+   */
+  readResumedSessionIds(day: Day): Promise<ReadonlySet<string>>;
+
+  /**
+   * Persists the full set of resumed `sessionId`s for `day` — not an increment. Same shape as
+   * `saveEarlyWarningState`: the caller (`application/start-day.ts#resumeSessions`) reads the
+   * current set, adds the one `sessionId` that JUST finished resuming, and calls this with the
+   * whole updated set — one write per session, right after that session's `SessionResumer.resume()`
+   * call actually returned, never before (D-002's "fact, then mark" ordering, applied here to
+   * bookkeeping instead of process termination) and never batched at the end, so a crash midway
+   * through `--all` still leaves every session resumed BEFORE the crash correctly marked.
+   *
+   * A `SessionResumer.resume()` call that fell back to a fresh session (D-004) still counts as
+   * resumed here — the person got the plan and a session to work in either way, just not a
+   * continuation of the original conversation. Only a `resume()` that THROWS (the fallback itself
+   * also failing fast) is never marked, because nothing happened for that session at all.
+   *
+   * Persisted at `~/.seeya/days/<day>/resumed.json` — `{ schemaVersion, sessionIds: string[] }` —
+   * a new on-disk identifier not yet in AGENTS.md § "Idioma"'s "Identificadores que vão para
+   * disco" table, flagged in docs/QUESTOES.md for the PO to fold in, same non-blocking pattern
+   * S1-T7 already used for `early-warnings.json`. Chosen over folding this into the handoff itself
+   * (`Handoff` is written once, at capture time, by a different command entirely — `seeya
+   * end-day` — and re-opening/rewriting every one of a day's handoff files just to flip one field
+   * would touch documents `start-day` has no other reason to write) and over one file per session
+   * (a single small set, read and rewritten whole, is simpler than N small files for what is at
+   * most a handful of sessions per day — D-027: the key is cheap to pick now, so pick the simpler
+   * shape).
+   */
+  saveResumedSessionIds(day: Day, sessionIds: ReadonlySet<string>): Promise<void>;
 }
 
 /**
@@ -404,12 +462,6 @@ export interface ForkCleanup {
   cleanup(forkCleanupDays: number): Promise<ForkCleanupResult>;
 }
 
-// Own block at the end of the file on purpose (S3-T1), same pattern this file's own history
-// already established for S2-T4/S2-T6 (see the `GitFacts` import comment and the `ForkCleanup`
-// block above): a second in-flight task (S3-T2) touches this same file's earlier interfaces, and
-// D-022/D-025 already established keeping an addition self-contained, appended after everything
-// that exists already, instead of inserting mid-file or editing the `Storage` body above.
-
 /**
  * The day's consolidated document (docs/ESPECIFICACAO.md § "Glossário": "Documento consolidado do
  * dia, com todos os handoffs, lido no dia seguinte") — `Storage.readBriefing()`'s return shape
@@ -423,6 +475,13 @@ export interface ForkCleanup {
  * Q-021 item 4). Built directly on top of `Storage.listHandoffs(day)`, which already does the
  * real work — this is that same `{ handoffs, rejected }` shape with `day` attached, not a second
  * read path or a second on-disk format.
+ *
+ * Declared after `Storage` on purpose: `Storage.readBriefing` above references it, and nothing in
+ * TypeScript requires a type to appear before an interface member that uses it — moving this
+ * wouldn't change what either declares. (Was briefly a second `export interface Storage {}` block
+ * here too, merged back into the single interface above — see docs/FLUXO-DE-AGENTES.md's note on
+ * why "aditivo no fim do arquivo" produced that split for a method added to an EXISTING interface,
+ * and docs/PLANO-DE-ENTREGA.md S3-T3 for the consolidation.)
  */
 export interface Briefing {
   readonly day: Day;
@@ -430,34 +489,8 @@ export interface Briefing {
   readonly rejected: readonly RejectedDiscoveryRecord[];
 }
 
-/**
- * Grown as a second `Storage` block — merged by TypeScript with the interface declared above,
- * without editing its body — for the same reason Q-022 item 2 recorded for `saveBriefing`/
- * `listHandoffs`: a second in-flight task (S3-T2) touches this same file at the same time, and
- * this file's own history already shows a merge break from a cut landing mid-interface. Merging
- * declarations keeps this addition entirely at the end, untouched by whatever S3-T2 inserts into
- * the interfaces above.
- */
-export interface Storage {
-  /**
-   * Reads `day`'s consolidated `Briefing` — every handoff captured for `day`, exactly as
-   * `listHandoffs(day)` already returns them, with `day` attached; no second read path and no new
-   * on-disk format. `null` when there is truly nothing for that day at all (no `sessions/`
-   * directory, nothing ever captured) — D-025: absence of any capture is a different,
-   * less-specific state than "a day with zero pending work", and this method doesn't blur the
-   * two. A day where every handoff on file failed validation (`handoffs: []`, `rejected`
-   * non-empty) is NOT the same as "nothing happened" and still comes back as a `Briefing`, not
-   * `null` — silently hiding a day of unreadable files would be exactly the omission D-022 exists
-   * to prevent.
-   */
-  readBriefing(day: Day): Promise<Briefing | null>;
-}
-
-// Own import line and own block at the end of the file on purpose (S3-T2), same pattern the
-// `GitFacts` import and the `ForkCleanupOutcome` block above already established: a second
-// in-flight task (S3-T1) touches this same file's earlier interfaces for Sprint 3's other half
-// (reading the pending briefing, assembling the per-session prompt), so this stays self-contained
-// and appended, never inserted mid-file.
+// Own import line on purpose (S3-T2), same pattern the `GitFacts` import above already
+// established: keeps this addition self-contained instead of folding into the top import block.
 import type { ResumeOutcome } from './types.js';
 
 /**

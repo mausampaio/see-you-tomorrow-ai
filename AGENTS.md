@@ -354,6 +354,7 @@ usa. Fixados em S1-T0g, antes de qualquer um deles existir em código.
 | plano de amanhã | `tomorrowPlan` | handoff |
 | erro na geração | `generationError` | handoff |
 | dias / sessões / resumo | `days/` / `sessions/` / `summary.md` | layout |
+| sessões já retomadas | `resumed.json` / `sessionIds` | `days/<day>/` (S3-T3) |
 
 Valores de enum seguem a mesma regra: `alive` / `idle` / `ended` / `unknown` (já em
 `src/core/types.ts`), `model` / `deterministic` / `noTranscript`, `lean` / `deep`, e

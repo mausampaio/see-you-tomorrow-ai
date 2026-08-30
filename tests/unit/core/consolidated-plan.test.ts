@@ -107,6 +107,36 @@ describe('renderConsolidatedPlan — content (daysAgo: 1, the ordinary case)', (
   });
 });
 
+describe('renderConsolidatedPlan — resumedSessionIds (S3-T3)', () => {
+  it('marks an already-resumed session distinctly, instead of showing its (stale) pending content', () => {
+    const handoff = createHandoff({ pendingItems: ['still on the handoff, but already handled'] });
+    const briefing: Briefing = { day: '2026-08-16', handoffs: [handoff], rejected: [] };
+    const plan = renderConsolidatedPlan(briefing, 1, new Set([handoff.sessionId]));
+    expect(plan).toContain('already resumed today');
+    expect(plan).not.toContain('still on the handoff');
+  });
+
+  it('a session NOT in the resumed set still shows its real pending content', () => {
+    const resumed = createHandoff({
+      sessionId: '11111111-1111-4111-8111-111111111111',
+      pendingItems: ['done already'],
+    });
+    const untouched = createHandoff({
+      sessionId: '22222222-2222-4222-8222-222222222222',
+      pendingItems: ['still needs a look'],
+    });
+    const briefing: Briefing = { day: '2026-08-16', handoffs: [resumed, untouched], rejected: [] };
+    const plan = renderConsolidatedPlan(briefing, 1, new Set([resumed.sessionId]));
+    expect(plan).toContain('already resumed today');
+    expect(plan).toContain('pending: still needs a look');
+  });
+
+  it('defaults to an empty resumed set when omitted (back-compat with existing call sites)', () => {
+    const briefing: Briefing = { day: '2026-08-16', handoffs: [createHandoff()], rejected: [] };
+    expect(renderConsolidatedPlan(briefing, 1)).not.toContain('already resumed');
+  });
+});
+
 describe('renderRelativeAge', () => {
   it('names today and yesterday specially', () => {
     expect(renderRelativeAge(0)).toBe('today');

@@ -10,6 +10,7 @@ import type {
   ProcessControl,
   RejectedDiscoveryRecord,
   SessionProvider,
+  SessionResumer,
   Storage,
   TranscriptReader,
   TranscriptReadResult,
@@ -20,6 +21,7 @@ import type {
   EarlyWarningState,
   GeneratedUnderstanding,
   Handoff,
+  ResumeOutcome,
   SessionFacts,
 } from '../../../src/core/types.js';
 
@@ -182,6 +184,53 @@ export class FakeStorage implements Storage {
     }
     return { day, handoffs, rejected };
   }
+
+  /** Keyed by `day`. A day never saved to comes back empty (D-025) — same convention the real
+   * `StorageAdapter` follows for a missing `resumed.json` (S3-T3). */
+  readonly resumedSessionIdsByDay = new Map<string, Set<string>>();
+
+  readResumedSessionIds(day: string): Promise<ReadonlySet<string>> {
+    return Promise.resolve(this.resumedSessionIdsByDay.get(day) ?? new Set());
+  }
+
+  saveResumedSessionIds(day: string, sessionIds: ReadonlySet<string>): Promise<void> {
+    this.resumedSessionIdsByDay.set(day, new Set(sessionIds));
+    return Promise.resolve();
+  }
+}
+
+/** Named double for `SessionResumer` (S3-T3, docs/TESTES.md: "duplo de I/O é classe/objeto
+ * nomeado implementando a porta"). Records every call, in order, so a test can assert both the
+ * outcome AND the exact sequence `application/start-day.ts#resumeSessions` produced. */
+export class FakeSessionResumer implements SessionResumer {
+  readonly calls: { readonly sessionId: string; readonly cwd: string; readonly prompt: string }[] =
+    [];
+
+  constructor(
+    private readonly impl: (
+      sessionId: string,
+      cwd: string,
+      prompt: string,
+    ) => Promise<ResumeOutcome>,
+  ) {}
+
+  resume(sessionId: string, cwd: string, prompt: string): Promise<ResumeOutcome> {
+    this.calls.push({ sessionId, cwd, prompt });
+    return this.impl(sessionId, cwd, prompt);
+  }
+}
+
+/** A `SessionResumer` whose every call attaches cleanly (`fellBack: false`). */
+export function cleanlyResumingResumer(): FakeSessionResumer {
+  return new FakeSessionResumer((sessionId, cwd) =>
+    Promise.resolve({ sessionId, cwd, fellBack: false }),
+  );
+}
+
+/** A `SessionResumer` whose every call throws — the "fallback also failed fast" case
+ * (docs/QUESTOES.md Q-027 item 5) `resumeSessions`'s stop-the-loop behavior is tested against. */
+export function throwingResumer(message: string): FakeSessionResumer {
+  return new FakeSessionResumer(() => Promise.reject(new Error(message)));
 }
 
 /** A `Storage` whose `listHandoffs` always reports one extra unreadable entry alongside whatever

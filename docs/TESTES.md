@@ -51,6 +51,12 @@ O que precisa estar coberto com rigor, porque é onde os bugs vão doer:
   quando o processo do `seeya` os tem. Modo enxuto passa `--no-session-persistence`; modo
   profundo define `CLAUDE_CODE_FORCE_SESSION_PERSISTENCE=1`. Este teste é o que impede o modo
   profundo de falhar em silêncio quando o daemon sobe de dentro de uma sessão Claude.
+- **Marcação de retomada por sessão, não por dia (S3-T3)**: um dia com dois handoffs pendentes,
+  um retomado, continua "pendente" — o outro não pode sumir de `findPendingBriefing` só porque
+  algum irmão dele foi retomado. É o teste que garante que o defeito que a decisão evita não volta
+  como regressão silenciosa. `resumeSessions` (`application/start-day.ts`) grava a marca **depois**
+  de cada `resume()` completar, nunca em lote no fim; um `resume()` que lança para o laço e não
+  marca a sessão que falhou.
 
 Cobertura mínima: **`core/` 95%**, demais diretórios de produção **80%**. Configurado por
 diretório no vitest, e o CI falha abaixo disso.
@@ -68,6 +74,9 @@ Cada adapter contra o mundo real, mas num mundo de mentira controlado.
   escrevendo enquanto lemos).
 - **`storage/`**: `tmpdir` real. Testar atomicidade — matar no meio da escrita não pode
   deixar arquivo pela metade; ler documento de `schemaVersion` antiga aciona migração.
+  `resumed.json` (S3-T3, por `day`): arquivo ausente é conjunto vazio (D-025), JSON inválido e
+  `schemaVersion` desconhecida rejeitam de forma visível, e uma segunda escrita substitui o
+  conjunto inteiro (não incrementa) — mesmo padrão de `early-warnings.json`.
 - **`generation/`**: um script falso de `claude` colocado no PATH do teste, que devolve JSON
   canned, JSON inválido, código de saída != 0, e um que trava (para testar o timeout).
   **Nenhum teste da suíte chama a API de verdade.** Obrigatório: um teste que passa contexto com
@@ -100,6 +109,11 @@ Rodam o binário `seeya` compilado, com `HOME`/`USERPROFILE` apontando para `tmp
 3. `seeya end-day` gera handoffs + briefing com o conteúdo esperado.
 4. `seeya end-day` com o `claude` falso falhando gera handoffs determinísticos e sai com
    sucesso.
+5. `seeya start-day --all` invoca `claude --resume` com os argumentos certos (S3-T3,
+   `tests/e2e/start-day.test.ts`) — o handoff pendente é escrito direto em disco (`start-day`
+   nunca redescobre sessões, D-004), então este teste não depende de rodar `end-day` primeiro. Um
+   segundo teste, sem flag e sem TTY (o `stdin` do harness já não é um, de graça), prova a
+   decisão de não travar: plano impresso, `--all`/`--session` sugeridos, `claude` nunca invocado.
 5. `seeya start-day --all` invoca `claude --resume` com os argumentos certos.
 6. Daemon, com relógio injetado, dispara aviso prévio e depois o encerramento.
 7. `seeya snooze +30m` empurra o disparo; `seeya skip-today` cancela.
