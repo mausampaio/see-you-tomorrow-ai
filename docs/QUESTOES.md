@@ -2099,4 +2099,47 @@ coisa para testar sem ganho óbvio na v1 — a pessoa só roda `seeya start-day`
 ganhar leitor fora deste projeto algum dia, reconsiderar o par `save<Nome>`/`read<Nome>` — não
 antes. C) para o item 5, se um retorno real de usuários mostrar que digitar errado é comum, um
 laço de nova tentativa vira tarefa própria.
-**Resposta:** (preenchida pelo PO)
+**Resposta:** **FECHADA — 1, 2, 3 e 4 confirmadas como estão. A 5 muda: sem laço, mas a saída
+precisa dizer que abortou.**
+
+**1) O formato do `resumed.json`:** confirmado, e as duas alternativas foram descartadas pelos
+motivos certos. Um campo dentro do handoff faria o `start-day` reabrir e reescrever documentos
+que ele não tem outro motivo para tocar — o handoff é escrito uma vez, por outro comando. E um
+arquivo por sessão seria N arquivos para o que é, no máximo, um punhado por dia. Os nomes novos
+já foram dobrados na tabela de identificadores de disco do `AGENTS.md`.
+
+**2) Gravar o conjunto inteiro em vez de incrementar:** confirmado. Mantém a porta `Storage` sem
+lógica de diff, igual ao `saveEarlyWarningState`. Quem decide o que mudou é a camada de
+aplicação, que é onde essa decisão pode ser testada sem disco.
+
+**3) `--session` casando contra todos os handoffs, inclusive já retomados:** confirmado.
+Intenção explícita vencendo filtro de conveniência é a regra certa, e é a mesma que o
+`end-day --session` já segue. E sim, sem match sai com 0 — não é erro, é um pedido que não
+encontrou alvo.
+
+**4) `--session` vencendo `--all`:** confirmado. Pedido mais específico vence o mais amplo.
+
+**5) Resposta inválida no seletor: sem laço, mas a mensagem muda.** O mantenedor confirmou que
+**não quer retentativa** — a pessoa roda `seeya start-day` de novo. Mas pediu, com as palavras
+dele, que a saída diga **explicitamente que a resposta foi inválida e que o comando foi
+abortado**.
+
+O que falta hoje é a **segunda metade**. A mensagem atual explica o formato esperado
+(`"x" is not a valid option (expected a number from 1 to 3, "all", or blank for none)`) e não diz
+a consequência. Para quem acabou de ver uma lista de sessões na tela e digitou algo, **"nada foi
+retomado" não é óbvio** — dá para ficar em dúvida se o comando seguiu com alguma escolha parcial.
+Duas informações, não uma: não entendi, e por isso não retomei nada.
+
+**E uma terceira, sugerida por ele: apontar o `--help`.** É barato e explicativo — quem errou a
+resposta do seletor provavelmente também não sabe que `--all` e `--session` existem e evitariam
+a pergunta inteira. Melhor que repetir a sintaxe aceita numa mensagem de erro cada vez mais
+longa: a mensagem diz o que houve, e o `--help` carrega o resto, que já é mantido em um lugar só.
+
+**O código de saída continua 0, e essa parte é decisão minha, não pedido dele.** É o mesmo que o
+`--session` sem match devolve (item 3 acima); um código diferente aqui criaria duas convenções
+para "não fiz nada" dentro do mesmo comando. O argumento contrário — abortar não é o mesmo que
+concluir sem trabalho — é legítimo, e fica registrado aqui em vez de descartado: se aparecer
+razão concreta, muda numa tarefa própria.
+
+Encaminhado à **S3-T6**, que é dona de `cli/start-day-command.ts` e `cli/format-start-day.ts` —
+a mudança é de texto de saída, e a S3-T5 foi instruída a não tocar nesses arquivos.

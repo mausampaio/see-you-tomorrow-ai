@@ -874,10 +874,40 @@ mais serve. Só a saída graciosa é decisão dela.
 
 **A sessão fechada aparece no briefing como listagem, nunca como captura.** E a listagem só se
 justifica se identificar a sessão **para um humano**: "code-6d, fechada 17h" não diz nada a
-ninguém. O que identifica é **o que a pessoa estava pedindo** — o último prompt dela, que já é
-extraído (`SessionFacts.lastPrompts`) e custa **zero chamada de modelo**. Uma linha por sessão
-fechada, com horário e o último prompt, resolve o "qual das 40 era aquela" sem pagar captura por
-nenhuma delas.
+ninguém.
+
+**Medido em 2026-08-30, depois de o mantenedor perguntar de onde vem o "recap" que ele usa para
+reconhecer as próprias sessões.** O recap longo que ele mostrou **não está em disco**: varredura
+de todo o `~/.claude` atrás das frases dele achou só a mensagem em que ele próprio o citou
+(`history.jsonl` e o transcript da sessão). É gerado para exibição, não persistido.
+
+**Mas duas entradas do transcript servem, e saem de graça:**
+
+| entrada | forma | nesta sessão |
+|---|---|---|
+| `ai-title` | `{ type, aiTitle, sessionId }` | 388 ocorrências — regravada conforme a sessão evolui |
+| `last-prompt` | `{ type, lastPrompt, leafUuid, sessionId }` | 387 ocorrências |
+
+O `aiTitle` desta sessão, no momento da medição: *"Planejar desenvolvimento do app
+see-you-tomorrow"*. Não é o recap rico — é bem mais curto. Mas as 388 ocorrências mostram que ele
+**acompanha o assunto ao longo do dia** em vez de congelar no começo. E o `last-prompt` mostra que
+o Claude Code **já persiste o último prompt sozinho**, sem precisarmos derivá-lo de
+`SessionFacts.lastPrompts`.
+
+**A linha da listagem passa a ser título + último prompt**: o título diz do que a sessão trata, o
+prompt diz onde ela parou. Nenhum dos dois custa chamada de modelo — o Claude Code já pagou por
+eles. Isso resolve o "qual das 40 era aquela" sem pagar captura por nenhuma.
+
+**E encaixa exatamente na população certa:** o `aiTitle` mora no **transcript**, não no registro.
+O registro some na saída graciosa (Spike E); o transcript não. Ou seja, ele sobrevive justamente
+nas sessões para as quais esta listagem existe.
+
+**Ressalva, mesma classe de risco do `--append-system-prompt-file`:** `ai-title` é entrada
+interna não documentada. Ela já está catalogada em `KNOWN_ENTRY_TYPES`
+(`adapters/transcript/schemas.ts`) — o projeto sabe que ela existe e hoje **não a lê**, porque só
+`user` e `assistant` têm schema estrutural. Se a listagem depender dela, ela merece teste de
+contrato como o do flag. E o D-025 se aplica: entrada ausente vira **listagem sem título**, nunca
+título inventado.
 
 **O que isto custa, dito na cara.** O varrimento de transcript (segunda estratégia da D-016) não
 enxerga só as fechadas com carinho: é também o que encontra **sessões vivas que não se
