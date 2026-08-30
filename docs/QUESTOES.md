@@ -2143,3 +2143,66 @@ razão concreta, muda numa tarefa própria.
 
 Encaminhado à **S3-T6**, que é dona de `cli/start-day-command.ts` e `cli/format-start-day.ts` —
 a mudança é de texto de saída, e a S3-T5 foi instruída a não tocar nesses arquivos.
+
+---
+
+## Q-032 — Na v2, com o `seeya` sendo dono das sessões, a captura pega carona no cache?
+
+**Tarefa:** nenhuma — pergunta do mantenedor em 2026-08-30, ao ler o Spike I.
+**Bloqueia:** não. É desenho de v2; registro agora porque a resposta muda o formato do Sprint 4.
+
+**A pergunta.** Se numa v2 o `seeya` "abraçar" o Claude Code — lançando e sendo dono das sessões
+—, teríamos acesso a um cache que tornasse a captura mais barata?
+
+**Primeiro, desfazer o enquadramento.** Não existe "ter acesso ao cache". Cache de prompt é
+**endereçado por prefixo**: você não recebe permissão, você recebe acerto quando o começo da sua
+chamada bate, token a token, com algo cacheado recentemente. Pelo preço público, leitura de cache
+sai por volta de **10% do preço de entrada**; escrita sai **mais caro** que entrada normal. (Números
+a reconferir antes de decidir qualquer coisa — não medi.)
+
+**Por que a nossa captura erra o cache hoje, e é por desenho.** O modo profundo chama
+`claude -p --resume <id> --fork-session` com o **nosso** prompt de sistema curto, `--tools ""` e
+`--json-schema` (D-011). Cada um desses muda o prefixo. A conversa é a mesma, mas o começo da
+chamada não é — então não há acerto, e os ~82k tokens são **escritos** no cache, não lidos. O
+"reescritos no cache" que a D-011 registra é consistente com escrita.
+
+**E aqui está a tensão que precisa ficar escrita:** as otimizações que derrubam o piso de tokens
+(`--tools ""`, prompt de sistema próprio) são **exatamente** o que quebra a identidade de prefixo.
+Barato por um caminho, caro pelo outro. Não dá para ter os dois sem medir qual pesa mais.
+
+**O corte que provavelmente decide, e não é o prefixo: é o relógio.** A validade do cache é de
+minutos a uma hora, não de horas. Uma captura às 19h sobre uma sessão parada desde as 10h acha
+cache frio **independentemente** de prefixo. Isso não é detalhe de implementação — é o que
+inutiliza a ideia inteira no desenho atual.
+
+**A consequência interessante, e é a razão de registrar isto agora.** Se o cache é a alavanca,
+então a resposta não é "captura mais barata às 19h" — é **capturar enquanto está quente**, em
+passagens ao longo do dia, quando a sessão fica ociosa.
+
+E há evidência de que esse é o desenho certo: **o Claude Code já resolve o mesmo problema assim.**
+O away summary do Spike I dispara por **ociosidade de 5 minutos**, não por horário. Ele é barato
+porque roda quando o contexto ainda está quente, não porque alguém achou um prompt esperto.
+
+Isso reformula o **Sprint 4**. O daemon, hoje, é "acorda no horário e captura tudo". A alternativa
+é "acompanha as sessões e captura cada uma quando ela esfria", com o encerramento do dia virando
+**consolidação do que já foi capturado** em vez de uma passada cara. Não estou propondo a troca —
+estou registrando que a pergunta do cache aponta para lá, e que decidir o daemon sem responder isto
+seria construir a forma cara por omissão.
+
+**Proximidade perigosa com a D-001.** Reproduzir o prefixo da sessão viva para acertar o cache é
+chegar perto de "gerar por dentro". A D-001 continua valendo pelos motivos que sobrevivem — não
+gastar o contexto da sessão viva, não interromper o turno. Qualquer desenho que persiga o cache
+precisa mostrar que não faz nenhuma das duas coisas.
+
+**O que mediria, antes de desenhar qualquer coisa:**
+
+1. O custo real de uma captura profunda **logo depois** de um turno da sessão, contra a mesma
+   captura horas depois — isolando o efeito do relógio.
+2. Se remover `--tools ""`/`--json-schema` (recuperando identidade de prefixo) paga por si, contra
+   o piso que a correção medida da D-011 já mostrou serem eles que derrubam.
+3. Qual é a validade efetiva na prática, não na documentação.
+
+**Opções que enxergo:** A) responder no Sprint 4, antes de fixar a forma do daemon — é onde a
+resposta muda o desenho. B) deixar para a v2 e aceitar que o Sprint 4 nasça com a passada cara,
+sabendo que vai ser refeita. C) medir só o item 1, que é barato e sozinho já diz se vale continuar.
+**Resposta:** _(em aberto)_
