@@ -2100,3 +2100,63 @@ ganhar leitor fora deste projeto algum dia, reconsiderar o par `save<Nome>`/`rea
 antes. C) para o item 5, se um retorno real de usuários mostrar que digitar errado é comum, um
 laço de nova tentativa vira tarefa própria.
 **Resposta:** (preenchida pelo PO)
+
+---
+
+## Q-031 — S3-T6: legibilidade do `start-day`, a costura para S3-T5, e escolhas sem resposta literal
+
+**Tarefa:** S3-T6
+**Bloqueia:** não — as três correções pedidas (item por linha, sem markdown, respiro antes da
+pergunta) e o acréscimo do mantenedor (resposta inválida diz o que houve) foram entregues com a
+solução mínima em cada ponto; registro no mesmo padrão de Q-021/Q-022/Q-023/Q-027/Q-028.
+
+**1) Formato da lista item-por-linha: `label:` numa linha, cada item em `      - item` (6
+espaços).** A tarefa pediu "item por linha" sem fixar indentação. Escolhido 4 espaços para
+`pending:`/`plan:` (mesmo nível que as linhas de status já usavam, ex.: `already resumed today`)
+e mais 2 para o marcador `- ` de cada item — um nível visual a mais que sinaliza "isto está
+dentro do rótulo acima", sem inventar um quarto nível de aninhamento. Nenhuma outra convenção do
+projeto fixava isto (a saída de `end-day` é markdown, `core/briefing.ts`, e não serve de
+precedente para texto puro de terminal).
+
+**2) A costura para S3-T5 em `formatNoSessionMatch` ficou só a assinatura, sem dado real.**
+`formatNoSessionMatch(received, matchedAgainst?)` mostra os dois valores quando divergem, mas
+hoje `start-day-command.ts` só chama com um argumento — não existe, ainda, nenhuma normalização
+de caminho produzindo um segundo valor para oferecer (D-025: não fabricar o valor que falta). A
+função está pronta para o momento em que S3-T5 (ou uma tarefa seguinte) tiver um valor
+normalizado para passar; até lá, a mensagem é exatamente a de antes. **Não sei se `start-day-
+command.ts` é o arquivo certo para essa fiação** quando o normalizador existir — ele não está na
+lista de arquivos que S3-T5 mexe, mas também não foi declarado como reservado para S3-T6 além
+desta tarefa. Se isso gerar disputa de arquivo entre tarefas futuras, é uma decisão de escopo, não
+uma que eu deva antecipar aqui.
+
+**3) Resposta inválida no seletor: novo formatador (`formatInvalidSelection`) em vez de mudar
+`parsed.reason` em `start-day-selection.ts`.** O mantenedor pediu duas informações adicionais (nada
+foi retomado; ver `--help`) sem dizer onde. Escolhido um formatador novo em `format-start-day.ts`
+que envolve o `reason` já produzido por `start-day-selection.ts` (arquivo da S3-T5, que não pode
+tocar nos meus) em vez de alterar a string na origem — mantém a mensagem "formato esperado" como
+responsabilidade de quem parseia a resposta, e a mensagem "o que isso significa para o comando"
+como responsabilidade de quem orquestra o comando. Código de saída continua 0, confirmado pelo
+mantenedor; não implementei laço de nova tentativa (também confirmado).
+
+**4) O texto de `--help` de `start-day` não foi alterado.** Rodei
+`seeya start-day --help` e as descrições atuais de `--all`
+("Resume every still-unresumed session in the found briefing.") e `--session`
+("Resume only the session matching this sessionId or cwd.") já dizem, na minha leitura, o
+suficiente para sustentar o ponteiro "veja --help" que a resposta inválida agora imprime — dão a
+entender que as duas flags substituem a pergunta interativa. Julgamento meu, não medição; se o
+mantenedor achar as descrições insuficientes lendo a saída real, ajustá-las cai no mesmo escopo
+("saída do mesmo comando") e não precisa de tarefa nova.
+
+**5) Nenhuma ideia boa sobre a redundância `pending`/`plan` (D-011, fora de escopo por decisão do
+plano).** Considerei e descartei: deduplicar frases parecidas no formatador esconderia o sintoma
+que a reavaliação da D-011 sob a D-031 precisa ver. Não tenho proposta melhor que a já registrada
+no plano de entrega (mais evidência na captura, não menos texto na exibição) — registrando aqui só
+para não parecer que a omissão foi esquecimento.
+
+**Opções que enxergo:** A) confirmar as quatro primeiras escolhas como estão. B) para o item 2, se
+uma tarefa futura de normalização de caminho preferir fiar `matchedAgainst` em outro arquivo que
+não `start-day-command.ts`, mover a chamada não quebra a assinatura de `formatNoSessionMatch` —
+só avisando aqui para não ser surpresa. C) para o item 4, medir com o mantenedor se o texto de
+`--help` precisa mesmo dizer explicitamente "skips the interactive picker" em vez de deixar
+implícito.
+**Resposta:** (preenchida pelo PO)
