@@ -17,6 +17,15 @@
  * non-`model` handoff always counts as still pending, no matter how empty its lists look. Only a
  * `source: "model"` handoff — where the model was actually asked and explicitly answered — can
  * count as resolved, and only when it explicitly reported nothing pending.
+ *
+ * **This rule is interim, and carries the whole weight alone only because step 5 doesn't exist
+ * yet (docs/QUESTOES.md Q-026, PO review).** Once something persists "this session was resumed"
+ * (S3-T3's job), "pending" should become **not yet resumed AND has content** — this module's
+ * content check would then be one half of that condition, not the only guard. Until that lands, a
+ * `source !== "model"` handoff (or a `source: "model"` one with real `pendingItems`/
+ * `tomorrowPlan`) stays "pending" forever, even after a human resumed it by hand and finished the
+ * work — acceptable for now (there is no other signal to use), and it becomes a real defect if
+ * whoever builds the resumed-marker forgets to fold it in here.
  */
 import type { Briefing } from './ports.js';
 import type { Handoff } from './types.js';

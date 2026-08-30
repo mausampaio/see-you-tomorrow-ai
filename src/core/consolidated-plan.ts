@@ -12,6 +12,12 @@
  * answers that question belongs: what's pending, not everything the day recorded.
  * `core/briefing.ts`'s "no false affirmation" discipline (D-025) still applies at this shorter
  * length — see `renderSessionPlanLine` below.
+ *
+ * **`daysAgo` (docs/QUESTOES.md Q-026, revised on review).** `application/find-pending-briefing.ts`
+ * no longer refuses an old pending briefing — the age is information for the human, not a
+ * cutoff this code applies on their behalf. When the found day isn't yesterday (`daysAgo !== 1`),
+ * the title says so plainly ("3 weeks ago") instead of presenting a two-week-old plan as if it
+ * were fresh.
  */
 import { handoffStillPending } from './pending-briefing.js';
 import type { Briefing } from './ports.js';
@@ -19,6 +25,30 @@ import type { Handoff } from './types.js';
 
 function pluralize(count: number, singular: string, plural: string): string {
   return `${count} ${count === 1 ? singular : plural}`;
+}
+
+/**
+ * A human-readable age for a day that's `daysAgo` local calendar days in the past. Not called for
+ * `daysAgo === 1` today (`renderConsolidatedPlan` treats "yesterday" as the unremarkable, expected
+ * case and says nothing extra) — but total over every non-negative input, in case a future caller
+ * wants it directly.
+ *
+ * @example
+ * renderRelativeAge(0)  // "today"
+ * renderRelativeAge(21) // "3 weeks ago"
+ */
+export function renderRelativeAge(daysAgo: number): string {
+  if (daysAgo === 0) {
+    return 'today';
+  }
+  if (daysAgo === 1) {
+    return 'yesterday';
+  }
+  if (daysAgo < 7) {
+    return `${daysAgo} days ago`;
+  }
+  const weeks = Math.round(daysAgo / 7);
+  return `${weeks} ${weeks === 1 ? 'week' : 'weeks'} ago`;
 }
 
 /** D-025: a `source !== "model"` handoff never had its pending status actually evaluated — this
@@ -38,13 +68,23 @@ function renderSessionPlanLine(handoff: Handoff): string {
   return [header, ...lines.map((line) => `    ${line}`)].join('\n');
 }
 
+/** Q-026: yesterday is the ordinary case and gets no extra note; anything else (including today,
+ * captured earlier the same day) is called out so nobody mistakes an old plan for a fresh one. */
+function renderTitle(briefing: Briefing, daysAgo: number): string {
+  const count = `(${pluralize(briefing.handoffs.length, 'session', 'sessions')})`;
+  const age = daysAgo === 1 ? '' : ` — ${renderRelativeAge(daysAgo)}`;
+  return `Plan for ${briefing.day} ${count}${age}`;
+}
+
 /**
  * @example
- * renderConsolidatedPlan({ day: '2026-08-16', handoffs: [h1, h2], rejected: [] })
+ * renderConsolidatedPlan({ day: '2026-08-16', handoffs: [h1, h2], rejected: [] }, 1)
  * // "Plan for 2026-08-16 (2 sessions)\n\n- ...\n- ..."
+ * renderConsolidatedPlan({ day: '2026-07-26', handoffs: [h1], rejected: [] }, 21)
+ * // "Plan for 2026-07-26 (1 session) — 3 weeks ago\n\n- ..."
  */
-export function renderConsolidatedPlan(briefing: Briefing): string {
-  const title = `Plan for ${briefing.day} (${pluralize(briefing.handoffs.length, 'session', 'sessions')})`;
+export function renderConsolidatedPlan(briefing: Briefing, daysAgo: number): string {
+  const title = renderTitle(briefing, daysAgo);
   if (briefing.handoffs.length === 0) {
     // D-022/D-025: `readBriefing` only ever returns a `Briefing` with zero handoffs when
     // `rejected` is non-empty (otherwise it returns `null`, S3-T1) — so this state is always
