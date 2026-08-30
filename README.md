@@ -15,9 +15,10 @@ seeya end-day     # captures everything and plans tomorrow
 seeya start-day   # resumes where you left off
 ```
 
-> **Status: early development (Sprint 0 — foundation).** No business command exists yet; today
-> there's only the project scaffold and `seeya --version`. The commands above are the target, not
-> the present. Follow along in [`docs/PLANO-DE-ENTREGA.md`](docs/PLANO-DE-ENTREGA.md).
+> **Status: early development (Sprint 3 done).** `sessions`, `status`, `end-day` and
+> `start-day` work. The daemon, notifications and `snooze`/`skip-today` are Sprint 4 and don't
+> exist yet, so today the two day commands are run by hand. Nothing has been published to npm —
+> see Install below. Follow along in [`docs/PLANO-DE-ENTREGA.md`](docs/PLANO-DE-ENTREGA.md).
 
 ## How it works
 
@@ -38,6 +39,35 @@ inside `~/.claude/`.
 
 - Node.js >= 22
 - Claude Code installed and authenticated
+
+## Install
+
+**Not published to npm yet.** Until it is, install from a clone:
+
+```bash
+git clone https://github.com/<owner>/see-you-tomorrow-ai.git
+cd see-you-tomorrow-ai
+npm ci
+npm run build
+npm link
+```
+
+`npm link` puts a global `seeya` on your PATH pointing at this checkout, so a later
+`npm run build` takes effect without linking again. Check it:
+
+```bash
+seeya --version
+seeya sessions
+```
+
+To remove it: `npm unlink -g see-you-tomorrow-ai`.
+
+If you'd rather install nothing, run the compiled entry point directly — `node dist/cli/index.js
+sessions` does the same thing.
+
+**On PATH.** `npm link` writes into npm's global prefix (`npm config get prefix`). If `seeya`
+isn't found afterwards, that directory isn't on your PATH — add it, or use the `node dist/...`
+form above.
 
 ## Development
 

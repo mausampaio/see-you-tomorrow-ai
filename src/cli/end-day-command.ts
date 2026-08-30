@@ -39,9 +39,10 @@ function buildSessionFilter(
  * no hint of why.
  */
 function formatNoMatchMessage(session: string, discoveredCount: number): string {
+  const discovered = `${discoveredCount} ${discoveredCount === 1 ? 'session was' : 'sessions were'}`;
   return (
     `No discovered session matches "${session}" (checked against sessionId and cwd). ` +
-    `${discoveredCount} session(s) were discovered in total — see "seeya sessions" to list them.`
+    `${discovered} discovered in total — see "seeya sessions" to list them.`
   );
 }
 

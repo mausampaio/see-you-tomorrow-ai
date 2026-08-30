@@ -106,8 +106,23 @@ describe('runEndDayCommand — --session (S2-T5)', () => {
     });
     expect(report).toBe(
       'No discovered session matches "nothing-matches-this" (checked against sessionId and cwd). ' +
-        '1 session(s) were discovered in total — see "seeya sessions" to list them.',
+        '1 session was discovered in total — see "seeya sessions" to list them.',
     );
+  });
+
+  // The count above is 1, so it only ever exercised the singular. Pairing it with a two-session
+  // run is what actually covers the agreement — the message used to dodge the question with
+  // "session(s)", and a test that never sees a plural would let that come back unnoticed.
+  it('agrees with a plural count when more than one session was discovered', async () => {
+    const { alpha, beta } = twoSessions();
+    const deps = buildDeps({
+      sessionProvider: new FakeSessionProvider({ sessions: [alpha, beta], rejected: [] }),
+    });
+    const report = await runEndDayCommand(deps, DEFAULT_TEST_CONFIG, {
+      dryRun: false,
+      session: 'nothing-matches-this',
+    });
+    expect(report).toContain('2 sessions were discovered in total');
   });
 
   it('never calls endDay in a way that captures the excluded session (dry-run branch too)', async () => {

@@ -12,7 +12,14 @@ import { createHandoff } from '../core/_fixtures.js';
 
 describe('formatNoPendingBriefing', () => {
   it('names how many days were scanned', () => {
-    expect(formatNoPendingBriefing(31)).toContain('31');
+    expect(formatNoPendingBriefing(31)).toContain('31 days scanned');
+  });
+
+  // The scan bound is 30 today, so this branch never shows up in real output — but "1 day" is the
+  // only reading that is correct if it ever does, and the message used to sidestep the question
+  // entirely with "day(s)".
+  it('agrees with a singular count', () => {
+    expect(formatNoPendingBriefing(1)).toContain('1 day scanned');
   });
 });
 

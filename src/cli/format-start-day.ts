@@ -7,9 +7,16 @@ import { formatResumeNotice } from '../core/resume-notice.js';
 import type { Handoff } from '../core/types.js';
 import type { ResumeProgressEvent, ResumeSessionsResult } from '../application/start-day.js';
 
+/** Same shape as `format-end-day.ts`/`core/briefing.ts`'s own local helpers — user-facing
+ * counts read as English, never as "day(s)". */
+function pluralize(count: number, singular: string, plural: string): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
 export function formatNoPendingBriefing(daysSearched: number): string {
   return (
-    `No pending briefing found in the last ${daysSearched} day(s) scanned. Nothing to resume — ` +
+    `No pending briefing found in the last ${pluralize(daysSearched, 'day', 'days')} scanned. ` +
+    'Nothing to resume — ' +
     'either nothing has been captured yet ("seeya end-day"), or everything already resumed.'
   );
 }
