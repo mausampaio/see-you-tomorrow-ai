@@ -658,9 +658,44 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       - a folga vem de medição, não de chute (mesma disciplina da S1-T13)
       *Aceite:* um filho que estoura o próprio orçamento produz falha **do filho**, com motivo
       legível, e não "Test timed out". Provado por execução.
-- [ ] **S2-T5 — `seeya end-day` com `--dry-run` e `--session`.**
+- [~] **S2-T5 — `seeya end-day` com `--dry-run` e `--session`.**
       *Aceite do sprint:* e2e 2, 3 e 4 passam. Encerramento com o modelo indisponível ainda
       produz handoffs úteis.
+      **Implementado em 2026-08-30:** `src/cli/{end-day-command,format-end-day}.ts` +
+      `composition.ts#buildEndDayContext` — a raiz de composição (D-020) finalmente nomeia os
+      adapters de S2-T2 (`LeanHandoffGenerator`/`DeepHandoffGenerator`) e S2-T6
+      (`DiscoveryForkCleanup`), prontos e desligados até aqui. `application/end-day.ts` ganhou
+      `EndDayOptions` (`dryRun`/`sessionFilter`, ambos opcionais — nenhum call site anterior
+      quebrou) em vez de um caminho paralelo: `--dry-run` percorre o mesmo pipeline real
+      (descoberta, elegibilidade, evidência, geração) e só para exatamente no primeiro ponto de
+      escrita (`capture-session.ts#persistAndMaybeTerminate`, a limpeza de forks e
+      `application/briefing.ts#previewDailyBriefing`, que reaproveita `generateBriefingMarkdown`
+      sem gravar). A única exceção deliberada: geração **profunda** nunca roda de verdade num
+      dry-run — `--fork-session` escreveria um fork real em `~/.claude/projects/` por conta
+      própria, fora do controle deste código, e isso violaria a regra inegociável de nunca
+      escrever em `~/.claude/`; `generation-policy.ts#previewDeepCaptureOutcome` documenta o
+      porquê e substitui só esse caso, sem tocar a geração enxuta (sem rodapé em disco, D-017).
+      Prova de "escreve nada" por instantâneo da árvore inteira (conteúdo + mtime), mesmo
+      instrumento do S2-T1/S2-T6 — `tests/e2e/end-day.test.ts`. `--session` (id ou `cwd`, string
+      exata) filtra em `cli/`, não em `application/`: `endDay` recebe um predicado genérico
+      (`sessionFilter`), nunca o conceito da flag. `EndDayResult` cresceu `dryRun`,
+      `briefingPreview`, `sessionsInScope`, `forkCleanup`, `forkCleanupError` — todos aditivos.
+      **Duas peças desligadas, uma ligada aqui:** limpeza de forks (D-012) entrou em
+      `EndDayDeps.forkCleanup`, chamada como passo próprio de `endDay` (isolada como uma falha de
+      captura, nunca aborta o resto); avisos precoces (D-018/S1-T7) foram decididos como
+      pertencentes a `seeya sessions`, não a `end-day` — D-018 fala em "assim que a sessão é
+      vista", que é a descoberta, não a rotina diária —, mas a fiação em si **não** foi feita
+      nesta tarefa, para não alterar o contrato de um comando já aprovado (S1-T6) e sua suíte, fora
+      do escopo orçado aqui. Argumento completo em `docs/QUESTOES.md` Q-024, junto com a segunda
+      decisão (limpeza de forks nunca pré-visualizada em `--dry-run`, só pulada — `ForkCleanup` não
+      tem hoje um modo somente-leitura). `tests/e2e/_harness.ts` passou a montar um `claude` falso
+      de verdade no PATH (reaproveitando `tests/integration/generation/_fixtures.ts`, inclusive o
+      shim `.exe` do Windows) — a versão anterior (S1-T6) nunca precisava disso, já que nenhum
+      comando existente chamava `claude`. Achado no caminho: o diretório certo para o PATH é
+      `path.dirname(fixture.binaryPath)`, não `fixture.dir` — no Windows os dois divergem (o `.exe`
+      compilado vive num diretório de shim próprio, memoizado por processo), e usar o errado faz a
+      resolução de PATH cair silenciosamente no `claude` real da máquina. `npm run verificar` e
+      `npm run verificar:linux` verdes; `cli/` e `application/` em 100% de linhas nos dois.
 
 ---
 
