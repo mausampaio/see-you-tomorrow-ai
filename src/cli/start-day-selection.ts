@@ -5,6 +5,11 @@
  * only decides what either one means.
  */
 import type { Handoff } from '../core/types.js';
+import {
+  resolveSessionReference,
+  type SessionReference,
+  type SessionReferenceMatch,
+} from './session-reference.js';
 
 export type SelectionMode =
   | { readonly kind: 'session'; readonly sessionOrCwd: string }
@@ -36,18 +41,29 @@ export function resolveSelectionMode(
   return { kind: 'interactive' };
 }
 
-/** `--session <id|cwd>`'s match rule — same "exact string, sessionId or cwd" convention
- * `end-day-command.ts#buildSessionFilter` already uses, applied against every handoff in the
- * found briefing (not just the still-unresumed candidates): an explicit `--session` is allowed to
- * re-target a session already marked resumed, same as `end-day --session` can re-capture one
- * already captured today. */
-export function findHandoffBySessionOrCwd(
+function toSessionReference(handoff: Handoff): SessionReference {
+  return { sessionId: handoff.sessionId, cwd: handoff.cwd, name: handoff.name };
+}
+
+/**
+ * `--session <value>`'s match rule (S3-T5: full `sessionId`, a `sessionId` prefix, the display
+ * `name`, or a path-normalized `cwd` — `cli/session-reference.ts`, the same resolver
+ * `end-day-command.ts` uses), applied against every handoff in the found briefing (not just the
+ * still-unresumed candidates): an explicit `--session` is allowed to re-target a session already
+ * marked resumed, same as `end-day --session` can re-capture one already captured today.
+ *
+ * **Before S3-T5** this matched only exact `sessionId`/`cwd` string equality via `Array#find`,
+ * which silently returns the FIRST handoff when more than one shares a `cwd` — exactly the kind
+ * of silent wrong pick `resolveSessionReference`'s ambiguity handling exists to rule out.
+ * `start-day-command.ts` treats `'ambiguous'` the same as `'notFound'` — a session is never
+ * resumed as a guess — pending a distinguishable ambiguous message here (out of this task's reach:
+ * that text lives in `format-start-day.ts`, owned by S3-T6; see docs/QUESTOES.md Q-030).
+ */
+export function findHandoffBySessionReference(
   handoffs: readonly Handoff[],
   sessionOrCwd: string,
-): Handoff | undefined {
-  return handoffs.find(
-    (handoff) => handoff.sessionId === sessionOrCwd || handoff.cwd === sessionOrCwd,
-  );
+): SessionReferenceMatch<Handoff> {
+  return resolveSessionReference(handoffs, toSessionReference, sessionOrCwd);
 }
 
 export type ParsedSelection =
