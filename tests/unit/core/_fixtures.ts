@@ -1,4 +1,4 @@
-import type { SessionWithPid, SessionWithoutPid } from '../../../src/core/types.js';
+import type { Handoff, SessionWithPid, SessionWithoutPid } from '../../../src/core/types.js';
 
 /**
  * Factories for `DiscoveredSession` for the `core/` tests (S1-T1). Synthetic values — UUIDs with
@@ -44,5 +44,40 @@ export function createSessionWithoutPid(
     lastActivity: new Date('2026-08-16T20:00:00.000Z'),
     ...overrides,
     hasPid: false,
+  };
+}
+
+/**
+ * Minimal, complete `Handoff` — every field a caller doesn't override comes from a plain,
+ * unremarkable "everything went fine, model ran, nothing pending" session. Synthetic UUID only
+ * (CLAUDE.md § "Este projeto é de código aberto").
+ *
+ * Lifted out of `briefing.test.ts` (S2-T4) into this shared file when S3-T1's own tests
+ * (`pending-briefing.test.ts`, `resume-prompt.test.ts`, `consolidated-plan.test.ts`) needed the
+ * exact same factory — three copies of the same object literal would have been the duplication
+ * AGENTS.md § "Estilo de código" rules out.
+ */
+export function createHandoff(overrides: Partial<Handoff> = {}): Handoff {
+  return {
+    sessionId: '11111111-1111-4111-8111-111111111111',
+    cwd: 'c:\\code\\projeto',
+    name: 'projeto-01',
+    capturedAt: new Date('2026-08-16T21:00:00.000Z'),
+    sessionState: 'ended',
+    capturedDuringActiveTurn: false,
+    source: 'model',
+    captureMode: 'lean',
+    sources: ['git', 'transcript', 'registry'],
+    facts: {
+      lastActivity: new Date('2026-08-16T20:45:00.000Z'),
+      lastPrompts: [],
+      touchedFiles: [],
+      git: null,
+    },
+    understanding: 'Refactored the parser.',
+    pendingItems: [],
+    tomorrowPlan: [],
+    generationError: null,
+    ...overrides,
   };
 }

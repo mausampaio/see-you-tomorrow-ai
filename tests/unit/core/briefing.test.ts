@@ -1,37 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { generateBriefingMarkdown } from '../../../src/core/briefing.js';
 import type { RejectedDiscoveryRecord } from '../../../src/core/ports.js';
-import type { Handoff } from '../../../src/core/types.js';
+import { createHandoff } from './_fixtures.js';
 
 const GENERATED_AT = new Date('2026-08-16T21:05:00.000Z');
-
-/** Minimal, complete `Handoff` — every field a caller doesn't override comes from a plain,
- * unremarkable "everything went fine" session, same spirit as `core/_fixtures.ts`'s session
- * factories. Synthetic UUID only (CLAUDE.md § "Este projeto é de código aberto"). */
-function createHandoff(overrides: Partial<Handoff> = {}): Handoff {
-  return {
-    sessionId: '11111111-1111-4111-8111-111111111111',
-    cwd: 'c:\\code\\projeto',
-    name: 'projeto-01',
-    capturedAt: new Date('2026-08-16T21:00:00.000Z'),
-    sessionState: 'ended',
-    capturedDuringActiveTurn: false,
-    source: 'model',
-    captureMode: 'lean',
-    sources: ['git', 'transcript', 'registry'],
-    facts: {
-      lastActivity: new Date('2026-08-16T20:45:00.000Z'),
-      lastPrompts: [],
-      touchedFiles: [],
-      git: null,
-    },
-    understanding: 'Refactored the parser.',
-    pendingItems: [],
-    tomorrowPlan: [],
-    generationError: null,
-    ...overrides,
-  };
-}
 
 describe('generateBriefingMarkdown — the empty day (aceite #5)', () => {
   it('says plainly that nothing was captured, without inventing work', () => {

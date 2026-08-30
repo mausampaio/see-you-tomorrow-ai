@@ -1,4 +1,5 @@
 import type {
+  Briefing,
   Clock,
   DiscoveryResult,
   ForkCleanup,
@@ -170,6 +171,16 @@ export class FakeStorage implements Storage {
   saveBriefing(day: string, markdown: string): Promise<void> {
     this.savedBriefings.set(day, markdown);
     return Promise.resolve();
+  }
+
+  /** Same "no second read path" rule the real `StorageAdapter#readBriefing` follows (S3-T1):
+   * built on this fake's own `listHandoffs`, `null` only when there's nothing at all for `day`. */
+  async readBriefing(day: string): Promise<Briefing | null> {
+    const { handoffs, rejected } = await this.listHandoffs(day);
+    if (handoffs.length === 0 && rejected.length === 0) {
+      return null;
+    }
+    return { day, handoffs, rejected };
   }
 }
 

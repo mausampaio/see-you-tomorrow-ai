@@ -1770,3 +1770,62 @@ lento. C) mover o aquecimento para fora do projeto `integration` (por exemplo, u
 raiz do `vitest.config.ts`, compartilhado por `unit`/`guards` também), caso apareça um quarto
 consumidor de `powershell.exe` fora de `tests/integration/`.
 **Resposta:** _(em aberto)_
+
+---
+
+## Q-026 — S3-T1: o que "briefing mais recente que ainda tem pendências" significa, sem estado de "retomado"
+
+**Tarefa:** S3-T1
+**Bloqueia:** não — segui com a solução mínima documentada abaixo (AGENTS.md: "abra a questão e
+siga com a solução mínima"), mas as duas escolhas são behaviorais (não só nomes de disco) e a
+tarefa pediu explicitamente para registrar o raciocínio aqui.
+
+**Contexto.** `docs/ESPECIFICACAO.md` § `seeya start-day` diz, sem definir: "Lê o briefing mais
+recente que ainda tem pendências." A própria tarefa levantou duas perguntas sem resposta literal:
+
+1. "Mais recente" é o mais recente que existe, ou o mais recente **ainda não retomado**? O passo
+   5 ("marca o briefing como retomado") sugere que existe estado de retomada — mas esse estado
+   **não existe em lugar nenhum hoje**. Nada persiste "este dia já foi retomado": `DayState`
+   (S4-T2) ainda não existe, e implementar essa marcação é o passo 5, fora do escopo desta
+   tarefa (S3-T2/S3-T3 seguem no plano). Inventar uma chave nova em disco só para viabilizar essa
+   distinção agora seria exatamente o risco que D-027 pede para evitar ("chave que vai para disco
+   é barata agora e cara depois") — e faria esta tarefa decidir sozinha um formato que pertence à
+   tarefa que de fato vai gravá-lo.
+2. Um briefing de três semanas atrás ainda é "pendente"? Retomar um handoff tão velho como se
+   fosse de ontem pode ser pior que não retomar (`cwd` pode ter mudado, branch pode ter sumido).
+
+**Decisão 1 — "ainda tem pendências" é uma pergunta sobre CONTEÚDO, não sobre bookkeeping.**
+`core/pending-briefing.ts#handoffStillPending`: um handoff com `source !== "model"`
+(`"deterministic"` ou `"noTranscript"`) **sempre** conta como pendente, não importa quão vazios
+estejam `pendingItems`/`tomorrowPlan` — porque esses campos vêm vazios por *falha* nesse caso
+(`application/generation-policy.ts`), não por um veredito real do modelo. Só um handoff
+`source: "model"` — onde o modelo foi de fato perguntado e respondeu — pode contar como resolvido,
+e só quando ele **explicitamente** não relatou nada pendente. Isso é D-025 aplicado literalmente:
+ausência de veredito não é veredito de "concluído". Consequência prática: reexecutar
+`seeya start-day` no mesmo dia, sem que nada tenha sido marcado como retomado ainda, encontra o
+mesmo briefing de novo — esse é o gap que o passo 5, fora desta tarefa, fecha depois.
+
+**Decisão 2 — a busca é limitada a `MAX_BRIEFING_LOOKBACK_DAYS = 7` dias**
+(`application/find-pending-briefing.ts`), o mesmo número já usado neste projeto para "até quando
+uma evidência velha ainda vale a pena agir em cima" (`Config.forkCleanupDays`, default 7, D-012)
+— em vez de inventar um segundo número não relacionado só para isto. Passado esse horizonte,
+"nenhum briefing pendente" é a resposta (aceite #5: caso normal, não erro), não esticar a busca
+para achar *algo*. `findPendingBriefing` devolve `{ found: false, daysSearched }` — nunca lança,
+e nunca inventa um `Briefing` vazio como sentinela (D-024: união discriminada, não
+`Briefing | null` solto no meio do código de aplicação).
+
+**O que ficou explicitamente ambíguo, sem solução minha:** não sei se 7 dias é o número certo do
+ponto de vista de produto — é uma analogia com `forkCleanupDays`, não uma medição ou uma regra da
+spec. Também não sei se a definição de "pendência" deveria olhar além de
+`pendingItems`/`tomorrowPlan` — por exemplo, um `sessionState` que não é `ended`, ou git sujo sem
+commit — mas isso exigiria inventar uma segunda noção de "pendente" (nível de sessão) além da que
+já existe implicitamente no vocabulário do handoff, e preferi não fazer isso sem confirmação.
+
+**Opções que enxergo:** 1) manter a busca puramente por conteúdo (como está), ou bloquear esta
+tarefa até S4-T2 (`DayState`) existir e usar um flag "retomado" de verdade — mas isso empurraria
+S3-T1 para depois de S4-T2, fora da ordem do plano. 2) manter os 7 dias por analogia com
+`forkCleanupDays`, ou escolher outro número (ex.: 3, alinhado a "um fim de semana normal sem
+rodar `seeya`") — não tenho medição para decidir entre os dois. 3) manter "pendência" só como
+`pendingItems`/`tomorrowPlan`/ausência de veredito do modelo, ou ampliar para considerar
+`sessionState`/git sujo também.
+**Resposta:** _(em aberto)_
