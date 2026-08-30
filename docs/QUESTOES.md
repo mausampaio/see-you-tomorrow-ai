@@ -1355,3 +1355,73 @@ como teto duro.
 
 **O que muda é o texto do D-011**, que passa a registrar a medição em vez de sugerir composição.
 Corrigido junto desta resposta.
+
+---
+
+## Q-021 — Cinco escolhas de S2-T3 (`endDay`) sem resposta literal na spec
+**Tarefa:** S2-T3
+**Bloqueia:** não a entrega desta tarefa — seguida a solução mínima em cada uma, registrando aqui
+para confirmação, no mesmo padrão de Q-012/Q-017/Q-019/Q-020.
+**Contexto:** implementar o caso de uso que finalmente une `discovery`, `transcript`, `git`,
+`generation` e `storage` expôs cinco pontos que a spec e as decisões deixam implícitos ou
+silenciosos. Nenhum bloqueou a tarefa; documento a decisão tomada e o raciocínio, para o PO
+confirmar ou corrigir.
+
+**1) `source: "noTranscript"` prevalece sobre o resultado da geração, não só sobre a tentativa.**
+D-013 diz "Marcação: `source: "noTranscript"`" para sessão sem transcript, e
+`adapters/generation/prompt.ts` já documentava (escrito na S2-T2) que a sessão sem transcript
+"ainda é roteada pelo gerador enxuto quando alguma evidência justifica chamá-lo" — ou seja, o
+modelo **é** chamado, só que nunca com o modo profundo (D-018: `--resume` não encontraria a
+sessão). Isso deixa em aberto o que `source` registra quando essa chamada roteada para o enxuto
+**tem sucesso**: `"model"` (a chamada funcionou) ou `"noTranscript"` (a evidência de entrada
+nunca incluiu o transcript)? Decidi que `"noTranscript"` **sempre** vence, sucesso ou falha —
+`application/generation-policy.ts#generateUnderstanding`. Meu raciocínio: o campo existe para
+dizer ao leitor "que evidência esta captura tinha", não "o modelo respondeu". Se marcasse
+`"model"` num sucesso, dois handoffs idênticos em confiabilidade de entrada (um com transcript
+raso, outro sem transcript algum) ficariam indistinguíveis pelo campo que a spec desenhou
+exatamente para essa distinção.
+**2) `EndDayDeps` recebe os dois geradores (`leanGenerator` e `deepGenerator`), não um só.**
+D-011 diz "a escolha é config, não `if` espalhado", e o comentário do `HandoffGenerator` em
+`core/ports.ts` (escrito na S2-T2) dizia que "`cli/`... é quem escolhe qual implementação a
+política de um projeto usa". Mas a escolha real depende de **dois** fatos: `deepCapture` (config,
+por `cwd`) **e** `session.hasTranscript` (só conhecido em tempo de execução, por sessão) — ver
+ponto 1. `cli/` não tem como pré-resolver isso por sessão antes de descobrir as sessões. Decidi
+que `endDay` recebe os dois geradores já construídos e escolhe por sessão
+(`application/generation-policy.ts#selectCaptureMode`); `cli/` continua sendo a única raiz que
+nomeia `LeanHandoffGenerator`/`DeepHandoffGenerator` (D-020 preservado), só que instancia os dois
+em vez de um. Não editei o comentário do `HandoffGenerator` em `core/ports.ts` para refletir isso
+— mudar a redação de outra tarefa (S2-T2) no meio desta não parecia certo; deixo a nota aqui em
+vez disso, para quem revisar as duas tarefas juntas.
+**3) Assinatura de evidência (D-026) não vira campo novo no disco — é recalculada do `facts`
+persistido.** D-026 deixa o formato exato para "quando houver handoff de verdade", e o exemplo de
+`docs/ESPECIFICACAO.md` § "Formato do handoff" não mostra nenhum campo de assinatura. Somar um
+campo novo (`evidenceSignature`, por exemplo) seria inventar uma chave de disco fora da tabela do
+`AGENTS.md` § Idioma. Decidi que `core/evidence.ts#buildEvidenceSignature(facts)` é chamada duas
+vezes — sobre os fatos recém-coletados e sobre `facts` do handoff de ontem/hoje já persistido — em
+vez de persistir a assinatura em separado. Funciona porque a assinatura é uma função pura dos
+mesmos fatos que já vão para o disco; sobra caro só se alguém precisar comparar assinatura sem
+reconstruir os fatos completos, o que não é o caso hoje.
+**4) `Storage` ganhou `saveHandoff`/`readHandoff`, e `readHandoff` não está no esboço de
+`docs/ARQUITETURA.md` § "Portas".** O esboço só lista `readBriefing(day)` — o `summary.md`
+consolidado (S2-T4), markdown para leitura humana, sem onde extrair de volta os `facts` exatos de
+uma sessão. D-026 exige comparar evidência por sessão, então implementei `readHandoff(day,
+sessionId)` além do que o esboço previa — mesmo padrão de divergência já registrado para
+`DiscoveryResult`/`TranscriptReadResult`/`GitReadResult` (Q-012/Q-014/Q-019).
+**5) `knownForks` sempre vazio em `endDay`.** `core/eligibility.ts#EligibilityCriteria.knownForks`
+existe para a condição `ownSeeyaFork` (D-012), mas as duas estratégias de descoberta (S1-T3,
+S1-T8) já excluem forks de `forks.json` antes de `SessionProvider.list()` devolver qualquer coisa
+— nenhum fork chega até `endDay`. Reler `forks.json` em `endDay` para preencher um conjunto que
+nunca muda o resultado seria I/O gasto provando algo que a descoberta já garante. A regra pura
+continua correta e testada isoladamente (`tests/unit/core/eligibility.test.ts`); só o lado do
+`endDay` nunca a exercita de verdade.
+**Opções que enxergo, por item:** 1) manter como está, ou `source: "model"` no sucesso mesmo sem
+transcript (perde a distinção que a spec pediu). 2) manter os dois geradores em `EndDayDeps`, ou
+mover a decisão lean/deep inteira para dentro de um único `HandoffGenerator` composto que recebe
+os dois por injeção (mais indireção, sem ganho visível). 3) manter a reconstrução, ou persistir a
+assinatura como campo novo (`evidenceSignature`) — exige decisão de nome antes de existir em
+disco, como toda chave nova (AGENTS.md). 4) manter `readHandoff` fora do esboço, com a nota
+"sketch desatualizado" já é o padrão do projeto; ou pedir aprovação para editar
+`docs/ARQUITETURA.md` diretamente (exige o PO, por "Ordem de autoridade"). 5) manter vazio,
+documentado; ou fazer `endDay` ler `forks.json` mesmo assim, por simetria com o resto do código,
+mesmo sendo I/O comprovadamente inútil.
+**Resposta:** (a preencher pelo PO)

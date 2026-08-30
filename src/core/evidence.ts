@@ -1,7 +1,9 @@
 /**
  * Pure comparison of "evidence signature" — what eligibility's anti-duplication uses (D-026,
- * `core/eligibility.ts`).
+ * `core/eligibility.ts`) — plus the pure function that builds one from `HandoffFacts`
+ * (`application/endDay`, S2-T3).
  */
+import type { GitFacts, HandoffFacts } from './types.js';
 
 /**
  * A comparable token per evidence source (D-013: git, transcript, registry). `null` when that
@@ -48,4 +50,55 @@ export function sameEvidence(previous: EvidenceSignature, current: EvidenceSigna
   }
 
   return hasConfirmingSource;
+}
+
+/**
+ * A stable text token for `git`, or `null` when there's no repository at all (`HandoffFacts.git
+ * === null`) — kept as its own `null`, never coerced into a string that would read as "a repo with
+ * nothing going on" (D-025, same distinction `GitReadResult` draws in `core/ports.ts`).
+ *
+ * `JSON.stringify` over a fixed field order is enough for a *comparison* token — it doesn't need
+ * to be a canonical/minimal encoding, only to change whenever the underlying facts do. The one
+ * known source of a false "changed" reading is git returning worktrees/modifiedFiles in a
+ * different order between two reads of an UNCHANGED tree; that only ever produces an unnecessary
+ * re-capture (safe: same direction D-025 already prefers, "say less than you might get away with"
+ * — never a false "unchanged" that would hide the autonomous-agent case D-026 exists for).
+ */
+function gitToken(git: GitFacts | null): string | null {
+  if (git === null) {
+    return null;
+  }
+  return JSON.stringify({
+    branch: git.branch,
+    dirty: git.dirty,
+    modifiedFiles: git.modifiedFiles,
+    commitsToday: git.commitsToday,
+    worktrees: git.worktrees,
+  });
+}
+
+/**
+ * Builds the `EvidenceSignature` D-026's anti-duplication compares — one token per source, from
+ * the same `HandoffFacts` a handoff itself persists (`core/types.ts`). Deliberately covers only
+ * `transcript` and `git`: D-026's own text names exactly these two ("última atividade do
+ * transcript quando existe, e o estado do git"), never `registry` — a live session's registry
+ * facts (`cwd`, `name`, start time) don't change over the course of a day the way transcript
+ * activity or a git tree do, so there is no meaningful "changed since this morning" signal to
+ * compare there.
+ *
+ * Called on both sides of a comparison: on freshly gathered facts (`currentSignature`) and, by
+ * reading a previous handoff's own persisted `facts` back through this same function, on
+ * `previousCaptureToday.signature` — no separate "signature" field is persisted in the handoff
+ * document at all (docs/ESPECIFICACAO.md's "Formato do handoff" doesn't show one, and D-026 left
+ * the exact format to whoever implemented S2-T3); reconstructing it from `facts` avoids inventing
+ * a disk key the spec doesn't already have.
+ *
+ * @example
+ * const signature = buildEvidenceSignature(handoff.facts); // { transcript: "...", git: "..." }
+ */
+export function buildEvidenceSignature(facts: HandoffFacts): EvidenceSignature {
+  return {
+    transcript: facts.lastActivity === null ? null : facts.lastActivity.toISOString(),
+    git: gitToken(facts.git),
+  };
 }

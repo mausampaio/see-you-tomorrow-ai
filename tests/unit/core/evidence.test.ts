@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { sameEvidence } from '../../../src/core/evidence.js';
+import { buildEvidenceSignature, sameEvidence } from '../../../src/core/evidence.js';
+import type { HandoffFacts } from '../../../src/core/types.js';
+
+const NO_EVIDENCE_FACTS: HandoffFacts = {
+  lastActivity: null,
+  lastPrompts: [],
+  touchedFiles: [],
+  git: null,
+};
 
 describe('sameEvidence', () => {
   it('two empty signatures are not "the same evidence" — nothing to confirm (D-025)', () => {
@@ -63,5 +71,62 @@ describe('sameEvidence', () => {
         { transcript: 'abc', git: 'sha-1', registry: 'name-x' },
       ),
     ).toBe(true);
+  });
+});
+
+describe('buildEvidenceSignature (D-026)', () => {
+  it('no evidence at all — both tokens null', () => {
+    expect(buildEvidenceSignature(NO_EVIDENCE_FACTS)).toEqual({ transcript: null, git: null });
+  });
+
+  it('transcript token is the ISO instant of lastActivity when present', () => {
+    const facts: HandoffFacts = {
+      ...NO_EVIDENCE_FACTS,
+      lastActivity: new Date('2026-08-16T20:00:00.000Z'),
+    };
+    expect(buildEvidenceSignature(facts).transcript).toBe('2026-08-16T20:00:00.000Z');
+  });
+
+  it('git token is null when there is no repository at all (hasGit: false)', () => {
+    expect(buildEvidenceSignature(NO_EVIDENCE_FACTS).git).toBeNull();
+  });
+
+  it('git token changes when the git facts change — the autonomous-agent case (D-026)', () => {
+    const before: HandoffFacts = {
+      ...NO_EVIDENCE_FACTS,
+      git: {
+        branch: 'main',
+        dirty: false,
+        modifiedFiles: [],
+        commitsToday: [],
+        worktrees: [],
+      },
+    };
+    const after: HandoffFacts = {
+      ...NO_EVIDENCE_FACTS,
+      git: {
+        branch: 'main',
+        dirty: true,
+        modifiedFiles: ['src/a.ts'],
+        commitsToday: [{ sha: '1b7fd99', title: 'docs: especificação inicial' }],
+        worktrees: [],
+      },
+    };
+    const beforeSignature = buildEvidenceSignature(before);
+    const afterSignature = buildEvidenceSignature(after);
+    expect(beforeSignature.git).not.toBeNull();
+    expect(afterSignature.git).not.toBeNull();
+    expect(beforeSignature.git).not.toBe(afterSignature.git);
+    expect(sameEvidence(beforeSignature, afterSignature)).toBe(false);
+  });
+
+  it('identical git facts produce the identical token — same evidence confirms', () => {
+    const facts: HandoffFacts = {
+      ...NO_EVIDENCE_FACTS,
+      git: { branch: 'main', dirty: false, modifiedFiles: [], commitsToday: [], worktrees: [] },
+    };
+    const first = buildEvidenceSignature(facts);
+    const second = buildEvidenceSignature({ ...facts });
+    expect(sameEvidence(first, second)).toBe(true);
   });
 });
