@@ -725,6 +725,27 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       `npm run verificar:linux` verdes; `cli/` e `application/` em 100% de linhas nos dois.
 
 ---
+- [ ] **S2-T8 — Os orçamentos do Windows não têm folga para o CI.** O CI ficou **vermelho só no
+      Windows** ao fechar o Sprint 2, com Ubuntu e macOS verdes. Duas causas distintas, as duas
+      medidas nesta máquina e nunca no runner:
+      - `tests/integration/process/termination.test.ts` usa `10_000` explícito, número que a
+        S1-T13 mediu **aqui** quando a suíte tinha ~290 testes. Hoje são 714, e a contenção no
+        runner é outra
+      - `Hook timed out in 10000ms` no fixture de geração: é o **padrão do vitest para hooks**,
+        estourado pelo `beforeAll` que compila o shim `.exe` com o `csc`. Num runner frio isso é
+        caro, e o `Cannot convert undefined or null to object` que aparece junto é cascata do
+        fixture ter ficado indefinido
+      **A lição já está no repositório e eu não a apliquei:** a S1-T13 e a S2-T7 estabeleceram que
+      número de orçamento vem de medição. O que faltou dizer é **onde** medir — medir na máquina do
+      desenvolvedor e publicar é o mesmo erro de sempre, com outra roupa. O CI é o ambiente mais
+      lento e mais contido dos três, e é ele que decide.
+      - separe as duas causas: o tempo limite explícito do teste e o do hook
+      - considere se o shim `.exe` precisa ser compilado **por worker** do vitest. Se cada arquivo
+        de teste em um worker próprio recompila, o custo cresce com a suíte — e aí subir o tempo
+        limite trata sintoma
+      *Aceite:* CI verde nos **três** sistemas, conferido por execução (`gh run watch`), não só o
+      portão local. E o número novo com a justificativa da folga escrita ao lado.
+
 
 ## Sprint 3 — Começar o dia
 
