@@ -22,3 +22,30 @@ function pad2(value: number): string {
 export function localDayString(instant: Date): Day {
   return `${instant.getFullYear()}-${pad2(instant.getMonth() + 1)}-${pad2(instant.getDate())}`;
 }
+
+/**
+ * `instant`'s local calendar day, `days` days earlier — a deterministic transformation of an
+ * already-resolved `Date` (D-019: no clock read here), added for
+ * `application/find-pending-briefing.ts` (S3-T1) to walk backward one local day at a time
+ * looking for `seeya start-day`'s "briefing mais recente que ainda tem pendências"
+ * (docs/ESPECIFICACAO.md).
+ *
+ * Built from the local `Y`/`M`/`D` fields, not `instant.getTime() - days * 86_400_000`:
+ * subtracting milliseconds mishandles a daylight-saving transition that falls inside the range (a
+ * local day that isn't 24h long), while handing the `Date` constructor an out-of-range
+ * day-of-month normalizes correctly across month and year boundaries.
+ *
+ * @example
+ * subtractLocalDays(new Date(2026, 0, 1), 1) // 2025-12-31, same local time-of-day
+ */
+export function subtractLocalDays(instant: Date, days: number): Date {
+  return new Date(
+    instant.getFullYear(),
+    instant.getMonth(),
+    instant.getDate() - days,
+    instant.getHours(),
+    instant.getMinutes(),
+    instant.getSeconds(),
+    instant.getMilliseconds(),
+  );
+}
