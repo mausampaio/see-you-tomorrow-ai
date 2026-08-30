@@ -150,8 +150,13 @@ describe.skipIf(process.platform !== 'win32')(
     // ~5.5s of dead air that was actually going on and the fix (resolve on the stdout outcome
     // word, don't wait for the OS to finish tearing the helper down). Post-fix, measured running
     // the full `unit`+`integration`+`guards` suite with coverage (`npm run cobertura`) three times
-    // in a row on this machine: 3891ms, 3149ms, 4115ms for this test alone. 10s keeps real margin
-    // over that worst observed number without pretending a bigger one is still needed.
+    // in a row on this machine: 3891ms, 3149ms, 4115ms for this test alone. S1-T13 set the budget
+    // to 10s from THAT measurement, on a dev machine, with the suite at ~290 tests.
+    // S2-T8: that number was never re-measured on the CI runner, which is slower and more
+    // contended than this machine, and the suite has since grown to 714 tests (more parallel
+    // workers competing for the same CPUs). TEMP: measuring on GitHub Actions windows-latest
+    // before picking a final number — see docs/PLANO-DE-ENTREGA.md S2-T8 for the real figure once
+    // it lands.
     it('the child runs its own shutdown handler to completion before dying', async () => {
       const marker = await markerPath();
       const ready = readyPath();
@@ -166,7 +171,7 @@ describe.skipIf(process.platform !== 'win32')(
       expect(died).toBe(true);
       expect(await markerExists(marker)).toBe(true);
       await expect(processControl.isAlive(pid)).resolves.toBe(false);
-    }, 10_000);
+    }, 30_000); // TEMP measurement budget (S2-T8) — see the comment above the describe block.
 
     it('a session with no console at all cannot be reached, and the answer is an honest false', async () => {
       const marker = await markerPath();
@@ -181,7 +186,7 @@ describe.skipIf(process.platform !== 'win32')(
       expect(died).toBe(false);
       expect(await markerExists(marker)).toBe(false);
       await expect(processControl.isAlive(pid)).resolves.toBe(true);
-    }, 10_000);
+    }, 20_000); // TEMP measurement budget (S2-T8) — see the comment above the describe block.
 
     it('reports true when the process already happens to be dead — that much is still honest', async () => {
       const marker = await markerPath();

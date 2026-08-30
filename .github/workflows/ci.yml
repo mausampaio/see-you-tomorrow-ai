@@ -34,3 +34,9 @@ jobs:
 
       - name: Roda o portão de qualidade (tipos + lint + dependency-cruiser + build + cobertura)
         run: npm run verificar
+
+      # TEMP (S2-T8): reroda só a suíte com cobertura em modo verbose, para medir a duração real de
+      # cada teste no runner antes de fixar um novo orçamento em
+      # tests/integration/process/termination.test.ts. Removido depois de coletar a medição.
+      - name: '[TEMP S2-T8] Medição verbose da suíte'
+        run: npx vitest run --project unit --project integration --project guards --reporter=verbose
