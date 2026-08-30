@@ -18,6 +18,13 @@
  * cutoff this code applies on their behalf. When the found day isn't yesterday (`daysAgo !== 1`),
  * the title says so plainly ("3 weeks ago") instead of presenting a two-week-old plan as if it
  * were fresh.
+ *
+ * **`resumedSessionIds` (S3-T3).** A handoff already marked resumed for this day
+ * (`Storage.readResumedSessionIds`, `core/pending-briefing.ts`) is called out as such instead of
+ * being shown with its (possibly still non-empty) `pendingItems`/`tomorrowPlan` as if nobody had
+ * looked at it yet — the same "don't affirm past what's known" discipline this module already
+ * applies to a non-`model` handoff, aimed here at a session whose real status has moved on since
+ * capture.
  */
 import { handoffStillPending } from './pending-briefing.js';
 import type { Briefing } from './ports.js';
@@ -52,13 +59,18 @@ export function renderRelativeAge(daysAgo: number): string {
 }
 
 /** D-025: a `source !== "model"` handoff never had its pending status actually evaluated — this
- * says so plainly instead of printing an empty "Pending: " that would read as "confirmed clean". */
-function renderSessionPlanLine(handoff: Handoff): string {
+ * says so plainly instead of printing an empty "Pending: " that would read as "confirmed clean".
+ * A handoff already resumed (S3-T3) is called out first, before either of those checks: once
+ * resumed, whether the model ever ran or what it reported stops being the interesting fact. */
+function renderSessionPlanLine(handoff: Handoff, resumedSessionIds: ReadonlySet<string>): string {
   const header = `- ${handoff.name} (\`${handoff.cwd}\`)`;
+  if (resumedSessionIds.has(handoff.sessionId)) {
+    return `${header}\n    already resumed today`;
+  }
   if (handoff.source !== 'model') {
     return `${header}\n    status unknown — the automated capture produced no analysis (source: ${handoff.source})`;
   }
-  if (!handoffStillPending(handoff)) {
+  if (!handoffStillPending(handoff, resumedSessionIds)) {
     return `${header}\n    nothing pending recorded`;
   }
   const lines = [
@@ -78,12 +90,16 @@ function renderTitle(briefing: Briefing, daysAgo: number): string {
 
 /**
  * @example
- * renderConsolidatedPlan({ day: '2026-08-16', handoffs: [h1, h2], rejected: [] }, 1)
+ * renderConsolidatedPlan({ day: '2026-08-16', handoffs: [h1, h2], rejected: [] }, 1, new Set())
  * // "Plan for 2026-08-16 (2 sessions)\n\n- ...\n- ..."
- * renderConsolidatedPlan({ day: '2026-07-26', handoffs: [h1], rejected: [] }, 21)
+ * renderConsolidatedPlan({ day: '2026-07-26', handoffs: [h1], rejected: [] }, 21, new Set())
  * // "Plan for 2026-07-26 (1 session) — 3 weeks ago\n\n- ..."
  */
-export function renderConsolidatedPlan(briefing: Briefing, daysAgo: number): string {
+export function renderConsolidatedPlan(
+  briefing: Briefing,
+  daysAgo: number,
+  resumedSessionIds: ReadonlySet<string> = new Set(),
+): string {
   const title = renderTitle(briefing, daysAgo);
   if (briefing.handoffs.length === 0) {
     // D-022/D-025: `readBriefing` only ever returns a `Briefing` with zero handoffs when
@@ -91,5 +107,8 @@ export function renderConsolidatedPlan(briefing: Briefing, daysAgo: number): str
     // "every handoff on file for the day was unreadable", never a silent "nothing happened".
     return `${title}\n\nNo readable session found for that day (${pluralize(briefing.rejected.length, 'entry', 'entries')} could not be read).`;
   }
-  return [title, '', ...briefing.handoffs.map(renderSessionPlanLine)].join('\n');
+  const lines = briefing.handoffs.map((handoff) =>
+    renderSessionPlanLine(handoff, resumedSessionIds),
+  );
+  return [title, '', ...lines].join('\n');
 }

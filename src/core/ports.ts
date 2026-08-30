@@ -229,6 +229,51 @@ export interface Storage {
    * to prevent.
    */
   readBriefing(day: Day): Promise<Briefing | null>;
+
+  /**
+   * Reads which `sessionId`s have already been resumed for `day` — `seeya start-day`'s step 5
+   * (docs/ESPECIFICACAO.md § `seeya start-day`: "Marca o briefing como retomado"), decided in
+   * S3-T3 to be per-SESSION rather than per-day (docs/QUESTOES.md, and see
+   * `core/pending-briefing.ts`'s docstring for the full reasoning: marking a whole day resumed
+   * after only one of its several sessions actually got resumed would make the others silently
+   * vanish from "pending", which is D-025's mistake aimed at a person's whole day of work instead
+   * of one field). A day with nothing resumed yet — including a day that was never captured at
+   * all — comes back as an empty set (D-025: absence, not an error).
+   *
+   * Named to match the `read<Noun>`/`save<Noun>` pair this port already uses elsewhere
+   * (`readEarlyWarningState`/`saveEarlyWarningState`, `readHandoff`/`saveHandoff`) rather than an
+   * "append" verb: the append/diff logic (which id is new, when to persist) belongs to
+   * `application/start-day.ts#resumeSessions`, the same split `core/early-warnings.ts` already
+   * draws between "decide what changed" (pure) and "persist it" (this port).
+   */
+  readResumedSessionIds(day: Day): Promise<ReadonlySet<string>>;
+
+  /**
+   * Persists the full set of resumed `sessionId`s for `day` — not an increment. Same shape as
+   * `saveEarlyWarningState`: the caller (`application/start-day.ts#resumeSessions`) reads the
+   * current set, adds the one `sessionId` that JUST finished resuming, and calls this with the
+   * whole updated set — one write per session, right after that session's `SessionResumer.resume()`
+   * call actually returned, never before (D-002's "fact, then mark" ordering, applied here to
+   * bookkeeping instead of process termination) and never batched at the end, so a crash midway
+   * through `--all` still leaves every session resumed BEFORE the crash correctly marked.
+   *
+   * A `SessionResumer.resume()` call that fell back to a fresh session (D-004) still counts as
+   * resumed here — the person got the plan and a session to work in either way, just not a
+   * continuation of the original conversation. Only a `resume()` that THROWS (the fallback itself
+   * also failing fast) is never marked, because nothing happened for that session at all.
+   *
+   * Persisted at `~/.seeya/days/<day>/resumed.json` — `{ schemaVersion, sessionIds: string[] }` —
+   * a new on-disk identifier not yet in AGENTS.md § "Idioma"'s "Identificadores que vão para
+   * disco" table, flagged in docs/QUESTOES.md for the PO to fold in, same non-blocking pattern
+   * S1-T7 already used for `early-warnings.json`. Chosen over folding this into the handoff itself
+   * (`Handoff` is written once, at capture time, by a different command entirely — `seeya
+   * end-day` — and re-opening/rewriting every one of a day's handoff files just to flip one field
+   * would touch documents `start-day` has no other reason to write) and over one file per session
+   * (a single small set, read and rewritten whole, is simpler than N small files for what is at
+   * most a handful of sessions per day — D-027: the key is cheap to pick now, so pick the simpler
+   * shape).
+   */
+  saveResumedSessionIds(day: Day, sessionIds: ReadonlySet<string>): Promise<void>;
 }
 
 /**
