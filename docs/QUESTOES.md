@@ -1424,7 +1424,6 @@ disco, como toda chave nova (AGENTS.md). 4) manter `readHandoff` fora do esboço
 `docs/ARQUITETURA.md` diretamente (exige o PO, por "Ordem de autoridade"). 5) manter vazio,
 documentado; ou fazer `endDay` ler `forks.json` mesmo assim, por simetria com o resto do código,
 mesmo sendo I/O comprovadamente inútil.
-**Resposta:** (a preencher pelo PO)
 
 
 **Resposta:** **FECHADA — quatro confirmados, o primeiro muda.**

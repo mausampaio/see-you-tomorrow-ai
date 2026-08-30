@@ -86,7 +86,7 @@ describe('captureSession — handoff assembly', () => {
         capturedAt: NOW,
         sessionState: 'alive',
         capturedDuringActiveTurn: false,
-        source: 'noTranscript',
+        source: 'model',
         captureMode: 'lean',
         sources: ['git'],
         facts,
@@ -154,8 +154,9 @@ describe('captureSession — handoff assembly', () => {
   });
 
   it(
-    'a session with no transcript uses lean even with deepCapture: true, and source is ' +
-      '"noTranscript" (D-013/D-018)',
+    'a session with no transcript uses lean even with deepCapture: true, and a successful ' +
+      'result is still source: "model" (D-013/D-018, Q-021 item 1) — sources[] is what says ' +
+      'the transcript was missing, not source',
     async () => {
       const session = createSessionWithPid({ hasTranscript: false, lastActivity: NOW });
       const config = {
@@ -173,7 +174,9 @@ describe('captureSession — handoff assembly', () => {
       const outcome = await captureSession({ deps, session, config, now: NOW, day: DAY });
       if (outcome.kind !== 'captured') throw new Error('expected captured');
       expect(outcome.handoff.captureMode).toBe('lean');
-      expect(outcome.handoff.source).toBe('noTranscript');
+      expect(outcome.handoff.source).toBe('model');
+      expect(outcome.handoff.understanding).toBe('from lean');
+      expect(outcome.handoff.sources).not.toContain('transcript');
     },
   );
 

@@ -35,11 +35,22 @@ export interface GenerationOutcome {
   readonly generationError: string | null;
 }
 
-/** D-003's failure fallback: the facts alone, no fabricated understanding (D-025 — an empty
- * string/list here is "nothing to say", never invented content standing in for a real answer). */
-function deterministicOutcome(hasTranscript: boolean, message: string): GenerationOutcome {
+/**
+ * D-003's failure fallback: the facts alone, no fabricated understanding (D-025 — an empty
+ * string/list here is "nothing to say", never invented content standing in for a real answer).
+ *
+ * **Always `"deterministic"`, never `"noTranscript"` — `HandoffSource`'s three values describe
+ * where the `understanding` layer came from, not the quality of the evidence that was available
+ * (docs/QUESTOES.md Q-021, item 1, revised on review).** `sources[]` already says whether
+ * transcript evidence existed; `source` answers a different, narrower question a reader asks
+ * first — "did the model produce this, and if not, why not". A session with no transcript still
+ * has the lean generator called on it (D-013's own `adapters/generation/prompt.ts` routes it
+ * there when other evidence justifies the call) — if that call fails, the reason is the same as
+ * any other failed call (network, quota, timeout), not the absence of a transcript.
+ */
+function deterministicOutcome(message: string): GenerationOutcome {
   return {
-    source: hasTranscript ? 'deterministic' : 'noTranscript',
+    source: 'deterministic',
     understanding: '',
     pendingItems: [],
     tomorrowPlan: [],
@@ -47,9 +58,15 @@ function deterministicOutcome(hasTranscript: boolean, message: string): Generati
   };
 }
 
-function successOutcome(hasTranscript: boolean, result: GeneratedUnderstanding): GenerationOutcome {
+/**
+ * Always `"model"` on success, regardless of `hasTranscript` (Q-021 item 1, revised). Labeling a
+ * session `"noTranscript"` when the model DID produce real understanding would erase information
+ * instead of adding it: a reader scanning handoffs for "does this one have model-written
+ * understanding?" would skip it by mistake, even though `understanding` here is exactly that.
+ */
+function successOutcome(result: GeneratedUnderstanding): GenerationOutcome {
   return {
-    source: hasTranscript ? 'model' : 'noTranscript',
+    source: 'model',
     understanding: result.understanding,
     pendingItems: result.pendingItems,
     tomorrowPlan: result.tomorrowPlan,
@@ -58,11 +75,19 @@ function successOutcome(hasTranscript: boolean, result: GeneratedUnderstanding):
 }
 
 /**
- * Picks the generator (`selectCaptureMode`), calls it, and turns the outcome into the three-way
- * `HandoffSource` split `core/types.ts#HandoffSource` documents. Never lets `generator.generate()`
- * throwing escape as an unhandled rejection — `application/endDay`'s per-session isolation only
- * protects the SESSION as a whole; this is what stops a generation failure from being anything
- * other than D-003's documented fallback.
+ * Picks the generator (`selectCaptureMode`), calls it, and turns the outcome into
+ * `core/types.ts#HandoffSource`. Never lets `generator.generate()` throwing escape as an
+ * unhandled rejection — `application/endDay`'s per-session isolation only protects the SESSION as
+ * a whole; this is what stops a generation failure from being anything other than D-003's
+ * documented fallback.
+ *
+ * **`"noTranscript"` is not produced by this function today.** It exists in `HandoffSource` for
+ * the case where the model is never called at all because there's no transcript to justify the
+ * cost — a policy this codebase doesn't implement yet, since the lean generator is currently
+ * always attempted regardless of `hasTranscript` (see `deterministicOutcome`'s docstring). An
+ * enum value with no current producer is still correct to keep: it describes a real state the
+ * spec's `source` field names, and removing it would mean re-adding it later instead of leaving
+ * it ready (Q-021 item 1).
  *
  * **Doesn't `instanceof GenerationError`.** That class lives in `adapters/generation/`, which
  * `application/` cannot import (D-020's layer matrix) even though `core/ports.ts#HandoffGenerator`
@@ -78,9 +103,9 @@ export async function generateUnderstanding(
 ): Promise<GenerationOutcome> {
   try {
     const result = await generator.generate(session, facts);
-    return successOutcome(session.hasTranscript, result);
+    return successOutcome(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return deterministicOutcome(session.hasTranscript, message);
+    return deterministicOutcome(message);
   }
 }

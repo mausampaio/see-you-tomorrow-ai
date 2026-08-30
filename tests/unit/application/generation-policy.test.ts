@@ -43,17 +43,22 @@ describe('generateUnderstanding (D-003)', () => {
     });
   });
 
-  it('success with NO transcript is source: "noTranscript", not "model" (D-013)', async () => {
-    const session = createSessionWithPid({ hasTranscript: false });
-    const generator = succeedingGenerator({
-      understanding: 'guessed from git alone',
-      pendingItems: [],
-      tomorrowPlan: [],
-    });
-    const outcome = await generateUnderstanding(generator, session, facts);
-    expect(outcome.source).toBe('noTranscript');
-    expect(outcome.generationError).toBeNull();
-  });
+  it(
+    'success with NO transcript is STILL source: "model", not "noTranscript" (Q-021 item 1) — ' +
+      '"source" is about who produced the understanding, not what evidence fed it',
+    async () => {
+      const session = createSessionWithPid({ hasTranscript: false });
+      const generator = succeedingGenerator({
+        understanding: 'guessed from git alone',
+        pendingItems: [],
+        tomorrowPlan: [],
+      });
+      const outcome = await generateUnderstanding(generator, session, facts);
+      expect(outcome.source).toBe('model');
+      expect(outcome.understanding).toBe('guessed from git alone');
+      expect(outcome.generationError).toBeNull();
+    },
+  );
 
   it('failure with a transcript falls back to source: "deterministic", facts only (D-003)', async () => {
     const session = createSessionWithPid({ hasTranscript: true });
@@ -68,13 +73,17 @@ describe('generateUnderstanding (D-003)', () => {
     });
   });
 
-  it('failure with NO transcript is still "noTranscript", not "deterministic"', async () => {
-    const session = createSessionWithPid({ hasTranscript: false });
-    const generator = failingGenerator('claude exited with code 1');
-    const outcome = await generateUnderstanding(generator, session, facts);
-    expect(outcome.source).toBe('noTranscript');
-    expect(outcome.generationError).toBe('claude exited with code 1');
-  });
+  it(
+    'failure with NO transcript is STILL "deterministic", not "noTranscript" (Q-021 item 1) — ' +
+      'the call was attempted and failed, same as any other failed call',
+    async () => {
+      const session = createSessionWithPid({ hasTranscript: false });
+      const generator = failingGenerator('claude exited with code 1');
+      const outcome = await generateUnderstanding(generator, session, facts);
+      expect(outcome.source).toBe('deterministic');
+      expect(outcome.generationError).toBe('claude exited with code 1');
+    },
+  );
 
   it('a rejection that is not an Error still gets a non-empty message (String(error))', async () => {
     const session = createSessionWithPid({ hasTranscript: true });

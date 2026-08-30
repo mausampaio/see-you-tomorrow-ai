@@ -315,19 +315,26 @@ export type EvidenceSource = 'git' | 'transcript' | 'registry';
 
 /**
  * The handoff's own `source` field (docs/ESPECIFICACAO.md § "Formato do handoff") — which of
- * three ways the `understanding` layer (D-003) came to be:
+ * three ways the `understanding` layer (D-003) came to be. This describes **provenance of the
+ * understanding layer**, not the quality or completeness of the evidence that fed it — that
+ * question is `sources[]`'s job (docs/QUESTOES.md Q-021, item 1, revised on review):
  *
- * - `model` — a `HandoffGenerator` produced real understanding, from a session that had a
- *   transcript to inform it.
+ * - `model` — a `HandoffGenerator` call produced real understanding. Applies whenever the model
+ *   actually answered, whether or not the session had a transcript: a session with no transcript
+ *   still routes through the lean generator when other evidence justifies calling it at all
+ *   (D-013), and a successful result from that call is exactly as much "the model produced this"
+ *   as one backed by a transcript.
  * - `deterministic` — generation was attempted and failed (network, quota, timeout, missing
  *   binary — `GenerationError`); the handoff is written anyway with only the facts (D-003's
- *   failure decision), `generationError` naming why.
- * - `noTranscript` — the session had no transcript at all (D-013): the deep generator's
- *   `--resume` would not find it, so only the lean generator is attempted, and it never sees more
- *   than git/registry facts. Applied regardless of whether that attempt succeeded or failed,
- *   because what a reader needs to know here is which evidence was available, not just whether
- *   the model call itself worked — see `application/`'s generation policy (S2-T3) for where this
- *   choice is made.
+ *   failure decision), `generationError` naming why. Applies regardless of `hasTranscript` too —
+ *   a failed call fails for the same reasons whether or not a transcript existed.
+ * - `noTranscript` — the model was never called at all, because there was no transcript to
+ *   justify the cost. Distinct from a `deterministic` failure: here nothing was attempted, not
+ *   attempted-and-failed. `application/`'s generation policy (S2-T3) does not produce this value
+ *   today — it always attempts the lean generator when eligible, regardless of `hasTranscript` —
+ *   but the value is kept because it names a real state the spec's `source` field anticipates,
+ *   for a "skip the model entirely when there's no transcript" policy this codebase may add
+ *   later (docs/QUESTOES.md Q-021, item 1).
  */
 export type HandoffSource = 'model' | 'deterministic' | 'noTranscript';
 
@@ -389,9 +396,10 @@ export interface Handoff {
   readonly understanding: string;
   readonly pendingItems: readonly string[];
   readonly tomorrowPlan: readonly string[];
-  /** `null` on success. The failed `GenerationError`'s message when generation was attempted and
-   * failed (`source: "deterministic"`, or `source: "noTranscript"` when that attempt itself also
-   * failed) — D-025: absence of an error string here IS the claim that nothing failed. */
+  /** `null` on success (`source: "model"`) or when the model was never called (`source:
+   * "noTranscript"`, not produced today — see that value's own docstring). The failed
+   * `GenerationError`'s message when generation was attempted and failed (`source:
+   * "deterministic"`) — D-025: absence of an error string here IS the claim that nothing failed. */
   readonly generationError: string | null;
 }
 

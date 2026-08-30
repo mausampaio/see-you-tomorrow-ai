@@ -139,7 +139,7 @@ describe('endDay — eligibility filtering', () => {
         capturedAt: NOW,
         sessionState: 'alive',
         capturedDuringActiveTurn: false,
-        source: 'noTranscript',
+        source: 'model',
         captureMode: 'lean',
         sources: ['git'],
         facts: { lastActivity: null, lastPrompts: [], touchedFiles: [], git: unchangedGitFacts },
