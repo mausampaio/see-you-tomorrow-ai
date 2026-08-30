@@ -151,12 +151,25 @@ describe.skipIf(process.platform !== 'win32')(
     // word, don't wait for the OS to finish tearing the helper down). Post-fix, measured running
     // the full `unit`+`integration`+`guards` suite with coverage (`npm run cobertura`) three times
     // in a row on this machine: 3891ms, 3149ms, 4115ms for this test alone. S1-T13 set the budget
-    // to 10s from THAT measurement, on a dev machine, with the suite at ~290 tests.
-    // S2-T8: that number was never re-measured on the CI runner, which is slower and more
-    // contended than this machine, and the suite has since grown to 714 tests (more parallel
-    // workers competing for the same CPUs). TEMP: measuring on GitHub Actions windows-latest
-    // before picking a final number — see docs/PLANO-DE-ENTREGA.md S2-T8 for the real figure once
-    // it lands.
+    // to 10s from THAT measurement — a dev machine, suite at ~290 tests — and it was never
+    // re-checked against the CI runner, which is what actually gates the portão (S2-T8).
+    //
+    // S2-T8 measurement, on the real runner: GitHub Actions `windows-latest`, draft PR #1, run
+    // 33314352147, two separate job attempts, `--reporter=verbose` — AFTER fixing the two
+    // cold-start costs that were contaminating this file's numbers on a fresh VM
+    // (`_windows-shim-global-setup.ts`, `_powershell-warmup-global-setup.ts`; this test's own
+    // `console-signal.ts` path spawns `powershell.exe` too). This test alone: 1870ms and 1511ms.
+    // The sibling test below: 640ms and 524ms. Both comfortably below their own internal
+    // `terminateGracefully` budget (5s here, 2s below) — the child shuts down long before either
+    // deadline, on this measurement.
+    //
+    // The budget picked isn't "worst observed times a factor" — it's the internal budget passed
+    // to `terminateGracefully` PLUS a fixed 3s of slack (same shape of relationship S2-T7 uses for
+    // the guards' child-process budget): if the child were ever slow enough to make
+    // `terminateGracefully` actually wait out its own internal allowance, the outer test still
+    // needs room to receive that answer and run its assertions, or the test framework's own
+    // timeout fires first and destroys the diagnosis (the exact failure mode S2-T7 was about).
+    // 5_000 (internal) + 3_000 (slack) = 8_000.
     it('the child runs its own shutdown handler to completion before dying', async () => {
       const marker = await markerPath();
       const ready = readyPath();
@@ -171,8 +184,13 @@ describe.skipIf(process.platform !== 'win32')(
       expect(died).toBe(true);
       expect(await markerExists(marker)).toBe(true);
       await expect(processControl.isAlive(pid)).resolves.toBe(false);
-    }, 30_000); // TEMP measurement budget (S2-T8) — see the comment above the describe block.
+    }, 8_000);
 
+    // Same reasoning as above, sized to THIS test's own internal budget (2s, not 5s) — see the
+    // comment on the sibling test for the measurement and the "internal budget + 3s slack" shape.
+    // Deliberately NOT the same number as the sibling: S2-T7 already spent one task on the mistake
+    // of one shared budget serving two different operations. 2_000 (internal) + 3_000 (slack) =
+    // 5_000. Measured on the same runner/run as above: 640ms and 524ms.
     it('a session with no console at all cannot be reached, and the answer is an honest false', async () => {
       const marker = await markerPath();
       // detached:true => DETACHED_PROCESS on Windows (D-005): no console to AttachConsole to.
@@ -186,7 +204,7 @@ describe.skipIf(process.platform !== 'win32')(
       expect(died).toBe(false);
       expect(await markerExists(marker)).toBe(false);
       await expect(processControl.isAlive(pid)).resolves.toBe(true);
-    }, 20_000); // TEMP measurement budget (S2-T8) — see the comment above the describe block.
+    }, 5_000);
 
     it('reports true when the process already happens to be dead — that much is still honest', async () => {
       const marker = await markerPath();
