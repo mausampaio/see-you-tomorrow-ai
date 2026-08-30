@@ -1,6 +1,6 @@
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import {
-  CHILD_PROCESS_TIMEOUT,
+  TEST_TIMEOUT_MS,
   deleteTempFile,
   guardFixturePath,
   writeTempFile,
@@ -28,9 +28,11 @@ function fixture(layerDir: string, fileName: string): string {
  * noticing.
  *
  * Each test writes a file (violating or not) in the real tree, runs the real eslint as a child
- * process, and deletes the file in `afterEach`, even if the assertion fails. `CHILD_PROCESS_
- * TIMEOUT` (S0-T6) because Vitest's default 5s times out under load when spawning the real
- * eslint.
+ * process, and deletes the file in `afterEach`, even if the assertion fails. `TEST_TIMEOUT_MS`
+ * (S0-T6, split from the child's own budget in S2-T7) because Vitest's default 5s times out
+ * under load when spawning the real eslint — this file's real `eslint` invocations are the
+ * slowest of any guard, measured up to ~12s under a loaded machine (`_support.ts`'s
+ * `CHILD_PROCESS_BUDGET_MS` comment has the full measurement).
  *
  * S1-T0: each fixture lives in `src/<layer>/_guard-eslint/`, a subdirectory reserved for THIS
  * test file — never shared with dependency-cruiser.test.ts or layer-matrix.test.ts.
@@ -69,7 +71,7 @@ describe('guard: eslint rejects node:* in core/ and non-deterministic time sourc
 
       expect(result.exitCode, result.output).toBe(0);
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 
   it(
@@ -87,7 +89,7 @@ describe('guard: eslint rejects node:* in core/ and non-deterministic time sourc
       expect(result.output).toContain('no-restricted-imports');
       expect(result.output).toContain('port declared in core/ports.ts');
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 
   it(
@@ -105,7 +107,7 @@ describe('guard: eslint rejects node:* in core/ and non-deterministic time sourc
       expect(result.output).toContain('no-restricted-syntax');
       expect(result.output).toContain('Clock port');
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 
   it(
@@ -123,7 +125,7 @@ describe('guard: eslint rejects node:* in core/ and non-deterministic time sourc
       expect(result.output).toContain('no-restricted-syntax');
       expect(result.output).toContain('Clock port');
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 
   it(
@@ -139,7 +141,7 @@ describe('guard: eslint rejects node:* in core/ and non-deterministic time sourc
 
       expect(result.exitCode, result.output).toBe(0);
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 
   it(
@@ -155,7 +157,7 @@ describe('guard: eslint rejects node:* in core/ and non-deterministic time sourc
 
       expect(result.exitCode, result.output).toBe(0);
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 
   it(
@@ -173,7 +175,7 @@ describe('guard: eslint rejects node:* in core/ and non-deterministic time sourc
       expect(result.output).toContain('no-restricted-globals');
       expect(result.output).toContain('Clock port');
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 
   it(
@@ -190,7 +192,7 @@ describe('guard: eslint rejects node:* in core/ and non-deterministic time sourc
       expect(result.exitCode, result.output).not.toBe(0);
       expect(result.output).toContain('no-restricted-globals');
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 
   it(
@@ -206,6 +208,6 @@ describe('guard: eslint rejects node:* in core/ and non-deterministic time sourc
 
       expect(result.exitCode, result.output).toBe(0);
     },
-    CHILD_PROCESS_TIMEOUT,
+    TEST_TIMEOUT_MS,
   );
 });

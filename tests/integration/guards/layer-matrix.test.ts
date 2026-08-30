@@ -4,7 +4,7 @@ import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import {
   SYNTHETIC_TEST_LAYER_NAME,
   PROJECT_ROOT,
-  CHILD_PROCESS_TIMEOUT,
+  TEST_TIMEOUT_MS,
   deleteTempFile,
   guardFixturePath,
   writeTempFile,
@@ -121,7 +121,7 @@ describe('guard: the 20 ordered pairs of the docs/ARQUITETURA.md matrix have com
           expect(violations, result.raw).not.toEqual([]);
         }
       },
-      CHILD_PROCESS_TIMEOUT,
+      TEST_TIMEOUT_MS,
     );
   }
 

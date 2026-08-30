@@ -1,5 +1,5 @@
 import { mkdirSync, readdirSync, rmSync, writeFileSync, type Dirent } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -16,28 +16,105 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const PROJECT_ROOT = path.resolve(HERE, '..', '..', '..');
 
 /**
- * Timeout (ms) for tests that spawn eslint/depcruise as a real child process. Vitest's default
- * 5s times out under load (busy CI, slow disk) and produces an intermittent failure with no
- * relation to the rule being tested — observed in the S0-T2 review. Pass this as the third
- * argument of `it(...)` in any test that calls `runEslint` or `runDependencyCruiser`.
+ * Budget (ms) for the CHILD PROCESS itself, passed straight to `spawnSync`'s own `timeout`
+ * option so eslint/dependency-cruiser/vitest are killed on THEIR clock, not on vitest's
+ * (S2-T7, docs/PLANO-DE-ENTREGA.md). Before this task there was no such option at all — `run()`
+ * called `spawnSync` with no `timeout`, so the child had no budget of its own; the ONLY thing
+ * that ever stopped a slow child was vitest's `it(...)` timeout killing the whole test (and the
+ * child with it) from outside. `CHILD_PROCESS_TIMEOUT` (the old single constant, `20_000`) was
+ * passed as that `it(...)` timeout and read, misleadingly, like a child budget — it never was
+ * one. The two clocks expired at literally the same instant, so the test always lost the race:
+ * "Test timed out in 20000ms" instead of a diagnosable message from the tool that was actually
+ * slow.
+ *
+ * Measured (S2-T7): `npx vitest run --project guards` and `npm run cobertura` (unit + integration
+ * + guards, with coverage — the realistic `npm run verificar` load), 6 runs total on this
+ * machine. The slowest legitimate (completed, not killed) child every time was a real `eslint`
+ * invocation in `eslint-restrictions.test.ts` — type-aware parsing cost that scales badly under
+ * CPU contention from the other guard files running in parallel: 6246, 6676, 8808, 9834, 11618,
+ * 11872ms. One of those runs, still under the OLD 20_000ms combined budget, reproduced the exact
+ * bug this task fixes: vitest reported "Test timed out in 20000ms" for a test whose own elapsed
+ * counter read 22239ms — the child was never hung, just unlucky under load, and the old design
+ * destroyed that distinction. `30_000` keeps ~2.5x margin over the clean worst case (11872ms)
+ * and real margin (>7.7s) over that one contested run, while still failing a truly hung child in
+ * well under a minute.
  */
-export const CHILD_PROCESS_TIMEOUT = 20_000;
+export const CHILD_PROCESS_BUDGET_MS = 30_000;
+
+/**
+ * Budget (ms) for the TEST that calls a child-spawning helper — pass this as the third argument
+ * of `it(...)` in any test that calls `runEslint`, `runDependencyCruiser`,
+ * `runVitestWithCoverage`, or `listProjectTestFiles` (S2-T7). Deliberately NOT equal to
+ * `CHILD_PROCESS_BUDGET_MS`: the whole point of separating the two is that the child's own
+ * `spawnSync` timeout has to fire, get turned into a `CommandResult` (see `run()` below), and let
+ * the test finish its assertions on that result BEFORE vitest's test-level timeout has a chance
+ * to fire too — otherwise the child's budget never actually exists in practice, it just loses
+ * the same race one level up.
+ *
+ * The 15s gap is not the size of the work that happens after the child returns — measured
+ * directly (S2-T7): killing a child via `spawnSync`'s `timeout` option returns in ~10-25ms past
+ * the configured value on this machine (no meaningful "dead air" like the CTRL_BREAK-attached
+ * console teardown S1-T13 found — that was a different mechanism, an async signal broadcast to a
+ * console the helper shares, not a plain synchronous SIGTERM to an owned child), and the
+ * test-side work afterwards (JSON.parse, a handful of `expect` calls) is sub-millisecond. The
+ * 15s exists as a deliberate margin so the gap can never accidentally close under CI scheduling
+ * jitter, not because that work is slow.
+ */
+export const TEST_TIMEOUT_MS = CHILD_PROCESS_BUDGET_MS + 15_000;
 
 export interface CommandResult {
   exitCode: number | null;
   output: string;
 }
 
-function run(args: readonly string[], options?: { cwd?: string }): CommandResult {
+/**
+ * Turns `spawnSync`'s own timeout into a message a human (or a failing `expect`) can read,
+ * instead of silently returning empty output and a `null` exit code that looks indistinguishable
+ * from "the tool ran and printed nothing" (S2-T7). `error.code === 'ETIMEDOUT'` is exactly how
+ * Node reports this case for `spawnSync` — confirmed on this machine: `status: null`,
+ * `signal: 'SIGTERM'`, `error: { code: 'ETIMEDOUT' }`. Any other `error` (e.g. `ENOENT` for a
+ * missing binary) is a different failure mode and is left to the raw stdout/stderr to explain,
+ * same as before this task.
+ */
+function describeTimeout(result: SpawnSyncReturns<string>, budgetMs: number): string {
+  if (!isErrorWithCode(result.error, 'ETIMEDOUT')) {
+    return '';
+  }
+  return `\n[guard child process exceeded its own ${budgetMs}ms budget (CHILD_PROCESS_BUDGET_MS) and was killed (${result.signal}) before finishing]`;
+}
+
+/**
+ * `timeoutMs` defaults to `CHILD_PROCESS_BUDGET_MS` (S2-T7) — every production caller
+ * (`runEslint`, `runDependencyCruiser`, `runVitestWithCoverage`, `listProjectTestFiles`) uses the
+ * default. The override exists only so `child-process-timeout.test.ts` can prove the timeout
+ * mechanism itself with a fake command and a small budget, without waiting out the real 30s
+ * budget on every suite run.
+ */
+function run(
+  args: readonly string[],
+  options?: { cwd?: string; timeoutMs?: number },
+): CommandResult {
+  const timeoutMs = options?.timeoutMs ?? CHILD_PROCESS_BUDGET_MS;
   const result = spawnSync(process.execPath, [...args], {
     cwd: options?.cwd ?? PROJECT_ROOT,
     encoding: 'utf8',
     shell: false,
+    timeout: timeoutMs,
   });
   return {
     exitCode: result.status,
-    output: `${result.stdout ?? ''}${result.stderr ?? ''}`,
+    output: `${result.stdout ?? ''}${result.stderr ?? ''}${describeTimeout(result, timeoutMs)}`,
   };
+}
+
+/**
+ * Exported (S2-T7) only for `child-process-timeout.test.ts`, which proves the timeout mechanism
+ * in `run()` above against a real child process — a fake command that outlives its budget, per
+ * the plan's acceptance criterion — without going through `runEslint`/`runDependencyCruiser`
+ * and their real 30s production budget.
+ */
+export function runCommandWithBudget(args: readonly string[], timeoutMs: number): CommandResult {
+  return run(args, { timeoutMs });
 }
 
 /** Runs the real eslint (the binary installed in node_modules) against the given paths. */

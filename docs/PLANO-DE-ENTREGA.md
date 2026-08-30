@@ -644,7 +644,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       destino da entrada em `forks.json` após a exclusão, e o tratamento de arquivo já ausente.
       `npm run verificar` e `npm run verificar:linux` verdes.
 - [ ] **S2-T4 — Briefing.** Geração do `summary.md` a partir dos handoffs.
-- [ ] **S2-T7 — O tempo limite do teste é igual ao do processo filho.** Diagnosticado pelo agente
+- [~] **S2-T7 — O tempo limite do teste é igual ao do processo filho.** Diagnosticado pelo agente
       da S2-T6 ao investigar a intermitência recorrente do `eslint-restrictions.test.ts` — que já
       apareceu nas duas plataformas e foi atribuída a carga de máquina mais de uma vez.
       A causa é de desenho: `CHILD_PROCESS_TIMEOUT = 20_000` (`tests/integration/guards/_support.ts`)
@@ -658,6 +658,34 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       - a folga vem de medição, não de chute (mesma disciplina da S1-T13)
       *Aceite:* um filho que estoura o próprio orçamento produz falha **do filho**, com motivo
       legível, e não "Test timed out". Provado por execução.
+      **Achado real (S2-T7): não existia orçamento nenhum no processo filho.** `run()` chamava
+      `spawnSync` sem a opção `timeout` — o único relógio que já existia era o do `it(...)`, por
+      fora. Por isso os dois "expiravam ao mesmo tempo": não eram dois relógios com o mesmo
+      valor, era só **um** relógio (o do teste) fazendo o papel dos dois, e matando o filho antes
+      que ele pudesse reportar por que estava lento.
+      **Medido** (`npx vitest run --project guards` e `npm run cobertura`, 6 execuções nesta
+      máquina): o filho legítimo mais lento — sempre um `eslint` real em
+      `eslint-restrictions.test.ts`, cujo custo de parsing type-aware escala mal sob concorrência
+      — terminou em 6246, 6676, 8808, 9834, 11618 e 11872ms. Uma dessas execuções, ainda sob o
+      orçamento combinado antigo de 20000ms, reproduziu o bug de verdade: "Test timed out in
+      20000ms" para um teste cujo próprio contador marcava 22239ms — o filho nunca tinha
+      travado, só estava azarado sob carga, e o desenho antigo destruía essa distinção.
+      `CHILD_PROCESS_BUDGET_MS = 30_000` (agora passado a `spawnSync({ timeout })`) fica ~2,5x
+      acima do pior caso limpo (11872ms) e com folga real (>7,7s) sobre a execução contestada.
+      `TEST_TIMEOUT_MS = CHILD_PROCESS_BUDGET_MS + 15_000 = 45_000` — a folga de 15s não é o
+      tamanho do trabalho depois que o filho retorna (medido: matar via `timeout` do `spawnSync`
+      volta ~10-25ms depois do valor configurado nesta máquina, sem o "ar morto" do console
+      attach da S1-T13, que é um mecanismo diferente), é margem deliberada contra variação de
+      agendamento sob carga real de CI.
+      Teste de regressão novo: `tests/integration/guards/child-process-timeout.test.ts` força um
+      comando falso (`node -e 'setTimeout(...)'`) a dormir além de um orçamento pequeno (300ms) e
+      prova a mensagem legível: `"[guard child process exceeded its own 300ms budget
+      (CHILD_PROCESS_BUDGET_MS) and was killed (SIGTERM) before finishing]"` — nunca "Test timed
+      out". `npm run verificar` rodou **5 vezes seguidas, 5 verdes** (75 arquivos de teste, 671
+      testes, 2 pulados por design). `npm run verificar:linux` verde (75 arquivos, 670 testes, 3
+      pulados por design).
+      **Não serializamos a faixa `guards`** — a causa aqui era o orçamento mal desenhado, não uma
+      corrida real entre testes.
 - [ ] **S2-T5 — `seeya end-day` com `--dry-run` e `--session`.**
       *Aceite do sprint:* e2e 2, 3 e 4 passam. Encerramento com o modelo indisponível ainda
       produz handoffs úteis.
