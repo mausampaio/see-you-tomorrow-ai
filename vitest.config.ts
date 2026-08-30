@@ -86,6 +86,7 @@ const PRODUCTION_DIRECTORY_THRESHOLDS = {
   'src/adapters/git/**': { statements: 80, branches: 80, functions: 80, lines: 80 },
   'src/adapters/notification/**': { statements: 80, branches: 80, functions: 80, lines: 80 },
   'src/adapters/process/**': { statements: 80, branches: 80, functions: 80, lines: 80 },
+  'src/adapters/resumption/**': { statements: 80, branches: 80, functions: 80, lines: 80 },
   'src/adapters/storage/**': { statements: 80, branches: 80, functions: 80, lines: 80 },
   'src/adapters/transcript/**': { statements: 80, branches: 80, functions: 80, lines: 80 },
 };

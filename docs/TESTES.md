@@ -73,6 +73,15 @@ Cada adapter contra o mundo real, mas num mundo de mentira controlado.
   **Nenhum teste da suíte chama a API de verdade.** Obrigatório: um teste que passa contexto com
   quebra de linha, aspas duplas e simples, acento e `%`, e verifica que o processo filho recebeu
   o texto **íntegro** (D-015 — foi exatamente isso que quebrou no Spike C).
+- **`resumption/`** (S3-T2): mesmo script falso de `claude`, mas com `stdio: 'inherit'` de
+  verdade — o teste lê de volta o que o processo filho recebeu, nunca inspeciona
+  stdout/stderr (que vão para o terminal real, não para este processo). Obrigatório: prompt
+  pequeno vira argumento posicional de `--resume` e chega íntegro (mesma disciplina de D-015 do
+  `generation/`); `--resume` que sai rápido com código != 0 aciona o fallback — sessão nova via
+  `--append-system-prompt-file`, nunca `--resume` de novo; prompt acima do teto medido no Spike H
+  pula a tentativa de argumento inteiramente; arquivo de contexto do fallback é apagado depois de
+  usado; ambiente saneado (D-017) chega ao processo filho nos dois caminhos. Ver
+  `docs/spikes/H-retomada-interativa.md`.
 - **`git/`**: repositório de teste construído em `tmpdir` com dois worktrees, um sujo e um
   limpo, commits datados de hoje e de ontem. Verificar enumeração, estado por worktree e o
   recorte de "commits do dia". Mais um caso com `cwd` que não é repositório.

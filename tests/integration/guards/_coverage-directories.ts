@@ -54,6 +54,7 @@ export const DECLARED_COVERAGE_DIRECTORIES: readonly DeclaredCoverageDirectory[]
   { path: 'adapters/git', expectation: { kind: 'covered', threshold: 80 } },
   { path: 'adapters/notification', expectation: { kind: 'covered', threshold: 80 } },
   { path: 'adapters/process', expectation: { kind: 'covered', threshold: 80 } },
+  { path: 'adapters/resumption', expectation: { kind: 'covered', threshold: 80 } },
   { path: 'adapters/storage', expectation: { kind: 'covered', threshold: 80 } },
   { path: 'adapters/transcript', expectation: { kind: 'covered', threshold: 80 } },
   { path: 'cli', expectation: { kind: 'covered', threshold: 80 } },
