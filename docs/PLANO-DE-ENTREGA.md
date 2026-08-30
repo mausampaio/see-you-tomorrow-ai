@@ -749,7 +749,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
 ## Sprint 3 — Começar o dia
 
-- [~] **S3-T1 — Leitura do briefing pendente** e montagem do prompt de retomada por sessão.
+- [x] **S3-T1 — Leitura do briefing pendente** e montagem do prompt de retomada por sessão.
       **Implementado em 2026-08-30:** `Storage` ganhou `readBriefing(day)` (`core/ports.ts`,
       segundo bloco mesclado ao fim do arquivo — mesmo padrão de Q-022 item 2, porque a S3-T2
       mexe no mesmo arquivo em paralelo) e o tipo `Briefing` (`{ day, handoffs, rejected }`,
@@ -789,7 +789,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       quem retoma de fato (passos 3-5) são S3-T3 e S3-T2 — esta tarefa não toca `cli/` (D-020).
       `npm run verificar` e `npm run verificar:linux` verdes; `core/` 100% linhas/branches nos
       dois.
-- [~] **S3-T2 — Retomada.** `claude --resume` no `cwd` original, com fallback para sessão nova
+- [x] **S3-T2 — Retomada.** `claude --resume` no `cwd` original, com fallback para sessão nova
       e aviso explícito ao usuário.
       **Duas incógnitas medidas antes de implementar (pedido do PO), resultado em
       `docs/spikes/H-retomada-interativa.md`:** (1) sem TTY real, "interativo" degrada sozinho
@@ -819,7 +819,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       que falhou (D-025 — `seeya` não lê o stderr real, que foi para a tela do usuário via
       `stdio: 'inherit'`). Seis escolhas sem resposta literal em D-004/D-015 registradas em
       Q-027 (renumerada no merge: a S3-T1 já tinha tomado o Q-026 em paralelo). `npm run verificar` e `npm run verificar:linux` verdes.
-- [~] **S3-T3 — `seeya start-day`** com seleção interativa e `--all`.
+- [x] **S3-T3 — `seeya start-day`** com seleção interativa e `--all`.
       *Aceite do sprint:* e2e 5 passa; retomada real de uma sessão de ontem funciona à mão.
       **Implementado em 2026-08-30.** Os cinco passos: `application/find-pending-briefing.ts`
       (passo 1, já existia) → `core/consolidated-plan.ts#renderConsolidatedPlan` (passo 2, já
@@ -867,9 +867,17 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       `['--resume', sessionId, prompt]`, e `resumed.json` reflete a sessão marcada. Um segundo
       e2e prova o caminho sem TTY (stdin `'ignore'` do harness já não é TTY, de graça): plano
       impresso, `--all`/`--session` sugeridos, `claude` nunca invocado, saída 0.
-      *Retomada real feita à mão pelo agente*: não foi possível dentro deste ambiente sandboxed
-      (sem sessão Claude Code real de "ontem" para retomar) — o mantenedor deve validar essa parte
-      do aceite manualmente antes de aprovar.
+      *Retomada real à mão:* **verificada pelo mantenedor em 2026-08-30**, e é o que fecha o
+      aceite do sprint. O agente corretamente NÃO alegou esta parte — não havia sessão Claude Code
+      real para retomar dentro do ambiente dele —, então ela ficou pendente até a verificação
+      humana. Percurso executado: sessão de teste aberta à mão com trabalho deliberadamente
+      inacabado; `seeya end-day --session '<cwd>'` capturou em modo `lean` com `source: model`;
+      `seeya start-day` num terminal separado achou o briefing do dia e retomou. Retomada e
+      contexto injetado funcionaram.
+      *Observado na captura, e vale registrar:* o "Understanding" gerado disse explicitamente que
+      **não havia confirmação no contexto** de que o arquivo tinha sido criado ou as tarefas
+      marcadas — em vez da narrativa óbvia a partir do pedido. É o D-025 aparecendo no texto do
+      modelo, não só nos tipos, que é o que o prompt da S3-T1 foi desenhado para produzir.
       `npm run verificar` e `npm run verificar:linux` verdes; `core/` 100%, `application/` 100%,
       `cli/` 100% (linhas/statements) nos dois sistemas.
 
