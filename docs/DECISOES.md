@@ -12,9 +12,25 @@ Toda decisão nova entra como uma entrada numerada nova. Decisão revogada é ma
 ## D-001 — O handoff é gerado por fora da sessão, nunca por dentro
 
 **Contexto.** A ideia original era "enviar um comando para a sessão interromper e guardar
-tudo". Não existe canal suportado para injetar entrada numa sessão interativa do Claude Code
-em execução: não há IPC, não há socket de controle, e escrever no TTY de outro processo não é
-viável nos três SOs.
+tudo". Escrever no TTY de outro processo não é viável nos três SOs.
+
+> **CORREÇÃO (2026-08-30, observado).** Este parágrafo afirmava também que "não há IPC, não há
+> socket de controle". **Isso não é mais verdade.** O registro de uma sessão viva traz
+> `messagingSocketPath` (no Windows, um named pipe `\.pipecc-msg-<hex>`),
+> `bridgeSessionId` e `peerProtocol`; o ambiente dos processos filhos traz
+> `CLAUDE_CODE_MESSAGING_SOCKET` e `CLAUDE_CODE_MESSAGING_TOKEN`. Observado no registro real,
+> **não sondado** — mandar mensagem malformada para o pipe de uma sessão viva é risco sem
+> retorno.
+>
+> Pelo que dá para ler, é a **malha interna de mensagens entre agentes** do Claude Code, não um
+> canal de controle geral, e é protegida por um token que vive no ambiente herdado — exatamente
+> a categoria de variável que a **D-017** existe para remover. Usá-lo seria o `seeya` se passar
+> por processo filho de uma sessão, contra uma decisão que já tomamos.
+>
+> **A decisão continua valendo, pelos motivos que sobrevivem à correção**, e eles são de
+> produto, não de impossibilidade: gerar por dentro gastaria o contexto da própria sessão —
+> justamente a mais escassa no fim do dia, que é quando o handoff importa — e interromperia o
+> turno dela. Ver **D-031**, que redefine o escopo e mantém "por fora" como o único mecanismo.
 
 **Decisão.** O `see-you-tomorrow` nunca fala com a sessão viva. Ele lê o transcript da sessão
 em disco e gera o handoff em um **processo headless separado**
@@ -822,3 +838,72 @@ vocabulário neutro (`SessionProvider`, `TranscriptReader`, `HandoffGenerator`, 
 a costura é assimétrico: mantê-la é de graça (já está assim), e recuperá-la depois de alguém
 "generalizar" o nome do adaptador ou enfiar um ramo de harness no núcleo é caro. Esta decisão não
 pede trabalho nenhum hoje — ela impede trabalho errado amanhã.
+
+## D-031 — O `seeya` captura o que está vivo, e o que morreu por acidente
+
+**Proposta do mantenedor, em 2026-08-30**, depois do primeiro teste ponta a ponta real.
+
+**Contexto.** O produto existe para fazer um **corte do trabalho em andamento** e devolver a
+pessoa a ele no dia seguinte. Sessão fechada não é trabalho em andamento — e, pior, **não diz
+nada sobre por que foi fechada**: pode ter sido concluída, abandonada, ou fechada para continuar
+depois. Nada no rastro distingue os três.
+
+A analogia do mantenedor, que é o argumento inteiro em uma frase: seria o equivalente a, em vez
+de olhar os documentos **abertos** no fim do dia, varrer o computador inteiro atrás de todos os
+arquivos alterados naquele dia. E a escala não é hipotética — ele abre e fecha **mais de 40
+sessões** num dia de trabalho normal.
+
+**O sinal que separa os casos já estava medido.** O Spike E mediu que a entrada do registro
+existe apenas enquanto o processo vive e **é apagada na saída graciosa**; entrada obsoleta
+sobrevive só a terminação anormal — kill, crash, queda de energia. Nas palavras do próprio
+spike: *"entrada obsoleta é acidente, nunca registro confiável de trabalho concluído"*. Isso dá
+três populações, não duas:
+
+| situação | significado | escopo |
+|---|---|---|
+| registro + PID vivo (`alive`/`idle`) | sessão viva | **captura** |
+| registro + PID morto (`ended`) | morreu **sem** sair graciosamente | **captura** |
+| só transcript, sem registro (`unknown`) | saiu graciosamente: a pessoa fechou | **fora** |
+
+**Decisão.** A captura do fim do dia cobre a sessão viva e a que morreu por acidente. A sessão
+fechada deliberadamente **sai do escopo da captura**.
+
+A segunda linha não é concessão: terminal fechado no braço, máquina que suspendeu e não voltou,
+`claude` que caiu — a pessoa **perdeu** aquilo sem escolher, que é exatamente quando um handoff
+mais serve. Só a saída graciosa é decisão dela.
+
+**A sessão fechada aparece no briefing como listagem, nunca como captura.** E a listagem só se
+justifica se identificar a sessão **para um humano**: "code-6d, fechada 17h" não diz nada a
+ninguém. O que identifica é **o que a pessoa estava pedindo** — o último prompt dela, que já é
+extraído (`SessionFacts.lastPrompts`) e custa **zero chamada de modelo**. Uma linha por sessão
+fechada, com horário e o último prompt, resolve o "qual das 40 era aquela" sem pagar captura por
+nenhuma delas.
+
+**O que isto custa, dito na cara.** O varrimento de transcript (segunda estratégia da D-016) não
+enxerga só as fechadas com carinho: é também o que encontra **sessões vivas que não se
+registraram** (D-018). Sem registro elas não têm PID, então caem todas no mesmo estado
+`unknown` — **não há como separar "viva e não registrada" de "fechada graciosamente"**. Esta
+decisão tira a captura das duas juntas. A perda é parcialmente antiga: a D-029 já tinha recusado
+construir maquinaria para essa população e escolhido **avisar** em vez de contornar. O aviso
+continua; a captura é que sai.
+
+**Três decisões que isto revisa, e nenhuma delas é pequena:**
+
+1. **D-001.** A consequência "funciona mesmo para sessões que já morreram" deixa de ser
+   **objetivo** e passa a ser efeito colateral a conter. A decisão de gerar por fora continua
+   valendo inteira — pelos motivos que sobrevivem (não gastar o contexto da sessão viva, não
+   interromper o turno, um mecanismo só), e não pela impossibilidade técnica que o texto dela
+   ainda alega. Ver a correção separada sobre o canal de mensagens.
+2. **D-016.** O papel da segunda estratégia muda: ela continua descobrindo, para listar e para
+   avisar, mas deixa de alimentar a captura.
+3. **D-011.** É a revisão mais interessante, e vem de graça. O padrão enxuto foi escolhido
+   porque ~US$ 0,50 por sessão no modo profundo é proibitivo — **vezes 40**. Vezes três ou
+   cinco, é plausível. Se o conjunto candidato encolhe para as sessões vivas, o argumento que
+   sustentava o enxuto por padrão enfraquece, e o profundo entrega ao modelo a conversa inteira.
+
+**Por que isso importa mais do que parece.** O primeiro teste real mostrou o modelo dizendo,
+corretamente, que não havia confirmação no contexto sobre o que tinha sido feito — enquanto a
+conversa dizia, em texto do assistente, "4 concluídas, 6 pendentes". O modo enxuto nunca vê o
+texto do assistente: `processAssistantEntry` extrai dele apenas timestamp e caminhos de arquivo.
+Reavaliar a D-011 com a conta nova pode resolver isso **por escopo** — o modelo passando a ler o
+que o Claude escreveu — em vez de por remendo no prompt.

@@ -899,7 +899,63 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       provar, sem inventar uma garantia que o teste não sustenta (D-025).
       *Fora de escopo:* trocar o flag, ou construir fallback para o caso de ele sumir — só
       quando e se a medição mostrar que sumiu.
+
+- [ ] **S3-T5 — Identificar a sessão na listagem e no `--session`.** Aprovada pelo mantenedor em
+      2026-08-30, saída do primeiro teste real. **O problema:** ele lança o `claude` do diretório
+      do usuário — hábito comum, e deliberado, porque trabalha em vários repositórios ao mesmo
+      tempo e quer uma memória só para o projeto inteiro. Resultado: **dezenas de sessões com o
+      mesmo `cwd`**, e nada na saída do `seeya sessions` que diga qual é qual. O `--session` aceita
+      só `sessionId` ou `cwd` — e o `sessionId` **não é exibido em lugar nenhum**, então na prática
+      sobra o `cwd`, que é ambíguo exatamente no caso dele.
+      *O dado já existe:* `DiscoveredSession` carrega `sessionId`; a view é que o descarta.
+      Verificado no registro real: `20632.json` traz `sessionId`, e `name` (`"code-6d"`,
+      `nameSource: "derived"`) é gerado por sessão pelo próprio Claude Code — ou seja, vinte
+      sessões no mesmo `cwd` já teriam nomes distintos.
+      *Escopo:* exibir o `sessionId` (ou prefixo estável) no `seeya sessions`; `--session` passar a
+      casar também por **prefixo de `sessionId`** e pelo **nome de exibição**, com erro claro
+      quando o prefixo for ambíguo (nunca escolher uma por conta própria — D-025).
+      *Junto, porque é a mesma dor:* normalizar caminho antes de comparar no `--session` e no
+      `ignore` do `config.json` — hoje é igualdade exata de string, e o mantenedor tropeçou nisso
+      com as contrabarras comidas pelo shell (`C:Usersmausa` chegando como `C:Usersmausa`).
+      Mesma classe de erro da S2-T1, onde comparação de caminho por string passou no Linux e
+      reprovou no macOS e no Windows. A mensagem de "não casou" deve mostrar o valor recebido
+      quando ele diferir do digitado.
+
+- [ ] **S3-T6 — Formatação da saída do `start-day`.** Aprovada pelo mantenedor em 2026-08-30
+      ("achei confuso demais"), com a saída real do primeiro uso como evidência. **Não é o
+      PowerShell — é o nosso formatador**, em `core/consolidated-plan.ts`:
+      (1) `pendingItems` e `tomorrowPlan` são **listas** e viram uma linha corrida só, coladas
+      com `join('; ')` — cinco itens num parágrafo único, ilegível;
+      (2) o cabeçalho envolve o `cwd` em **crase de markdown** numa saída que é texto
+      puro de terminal, então a crase aparece literal na tela;
+      (3) não há linha em branco separando o plano da pergunta do seletor.
+      *Escopo:* item por linha, sem markdown em saída de terminal, e respiro antes da pergunta.
+      *Fora de escopo:* a redundância entre `pending` e `plan` observada na mesma saída — ela vem
+      do modelo, não do formatador, e tende a diminuir sozinha quando a D-011 for reavaliada sob
+      a D-031 (captura profunda dá ao modelo a conversa inteira, em vez de dez prompts do
+      usuário). Não vale remendar no formatador o que é escassez de evidência na captura.
+
+---
+
 ## Sprint 4 — Automatizar
+
+- [ ] **S4-T0 — A evidência não pode ficar presa ao `cwd` de lançamento.** Aprovada pelo
+      mantenedor em 2026-08-30. **O problema, observado no primeiro teste real:** a sessão subiu
+      de `C:\Users\<usuario>` e o trabalho aconteceu numa pasta criada durante a conversa. O
+      `GitReader` olhou para o diretório pessoal — que não é repositório — e não achou nada, então
+      o handoff não soube dizer se havia diretório associado nem se havia git. **O modo profundo
+      não conserta isso:** a evidência de git é atrelada ao `cwd` independentemente do modo.
+      *A raiz é mais ampla:* o `cwd` faz **três trabalhos ao mesmo tempo** — identidade da sessão
+      (`--session`, `projectPolicy`), local do trabalho (evidência de git) e agrupamento na
+      exibição. Para quem lança do diretório pessoal, ele erra nos três.
+      *Escopo sugerido:* derivar diretórios candidatos a partir de `touchedFiles` (que já traz
+      caminhos reais, extraídos dos blocos de tool-use) e rodar o `GitReader` também contra eles,
+      reportando por diretório em vez de um só. Manter D-025: diretório que não é repositório é
+      ausência de evidência, nunca "sem mudanças".
+      *Por que aqui e não na S3:* depende da reavaliação da **D-011** sob a **D-031**. Com captura
+      profunda o modelo lê a conversa, que **nomeia** o diretório de trabalho — isso não entrega
+      fatos de git, mas muda o que esta tarefa precisa consertar. Especificar antes disso seria
+      desenhar contra um alvo que está se movendo.
 
 - [ ] **S4-T1 — `adapters/notification`** conforme o Spike B, com a cadeia de fallback e o
       contrato mínimo **sem ações**. Validação manual do `activationType="protocol"` com esquema
