@@ -19,9 +19,11 @@
  */
 import type {
   Config,
+  Day,
   DiscoveredSession,
   EarlyWarningState,
   GeneratedUnderstanding,
+  Handoff,
   SessionFacts,
 } from './types.js';
 
@@ -146,6 +148,38 @@ export interface Storage {
    * warning fired, to avoid a write on every idle discovery pass.
    */
   saveEarlyWarningState(state: EarlyWarningState): Promise<void>;
+
+  /**
+   * Persists `handoff` at `~/.seeya/days/<day>/sessions/<sessionId>.json`
+   * (docs/ESPECIFICACAO.md § "Formato do handoff"), atomically. D-002's ordering requirement —
+   * "handoff gravado e verificado em disco → só então terminar o processo" — is why
+   * `application/endDay` (S2-T3) always calls `readHandoff` right after this one to confirm the
+   * write actually landed before ever touching `ProcessControl.terminateGracefully`; this method's
+   * own job stops at "the write completed without throwing".
+   *
+   * **Grown additively in S2-T3**, same pattern this port's docstring already used for
+   * `readEarlyWarningState`/`saveEarlyWarningState` in S1-T7: `Handoff`/`Day` (`core/types.ts`)
+   * now exist to type it.
+   */
+  saveHandoff(day: Day, handoff: Handoff): Promise<void>;
+
+  /**
+   * Reads one session's handoff for `day`, or `null` when it doesn't exist yet — no capture made
+   * today for this session is normal, not an error (D-025). This is the read side D-026's
+   * anti-duplication needs: has this session already been captured today, and with what evidence
+   * (`core/evidence.ts#buildEvidenceSignature`, applied to the returned `Handoff.facts`). A file
+   * that exists but is malformed rejects — same policy as `readConfig`/`readEarlyWarningState`,
+   * corruption is never silently read as "nothing captured yet".
+   *
+   * **Not in docs/ARQUITETURA.md § "Portas"'s sketch of this port**, which only lists
+   * `readBriefing(day)` — the whole day's consolidated `summary.md` (S2-T4), a human-readable
+   * markdown document with nowhere to parse a single session's exact `facts` back out of. Same
+   * shape of divergence already recorded for `DiscoveryResult`/`TranscriptReadResult`/
+   * `GitReadResult` above: the sketch predates a constraint the implementing task found. Flagged in
+   * docs/QUESTOES.md (S2-T3) instead of edited into `ARQUITETURA.md` directly (AGENTS.md § "Ordem
+   * de autoridade").
+   */
+  readHandoff(day: Day, sessionId: string): Promise<Handoff | null>;
 }
 
 /**

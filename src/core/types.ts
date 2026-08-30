@@ -297,6 +297,105 @@ export interface GitFacts {
 }
 
 /**
+ * A local calendar day, `"YYYY-MM-DD"` — the granularity `~/.seeya/days/<Day>/` is keyed by
+ * (docs/ESPECIFICACAO.md § "Formato do handoff"). Produced by `core/day.ts#localDayString` from an
+ * already-resolved `Date` (D-019) — never computed from `Date.now()` directly. A plain string
+ * alias, not a branded type: nothing in this project brands primitives (`sessionId`, `cwd` are
+ * both bare `string` too), so introducing one here just for `Day` would be an inconsistent,
+ * unrequested pattern change rather than a real safety gain.
+ */
+export type Day = string;
+
+/**
+ * One of D-013's three evidence sources, exactly as the handoff's own `sources[]` names it
+ * (docs/ESPECIFICACAO.md § "Formato do handoff"; AGENTS.md § "Idioma" fixes the three literal
+ * values: `git` / `transcript` / `registry`).
+ */
+export type EvidenceSource = 'git' | 'transcript' | 'registry';
+
+/**
+ * The handoff's own `source` field (docs/ESPECIFICACAO.md § "Formato do handoff") — which of
+ * three ways the `understanding` layer (D-003) came to be:
+ *
+ * - `model` — a `HandoffGenerator` produced real understanding, from a session that had a
+ *   transcript to inform it.
+ * - `deterministic` — generation was attempted and failed (network, quota, timeout, missing
+ *   binary — `GenerationError`); the handoff is written anyway with only the facts (D-003's
+ *   failure decision), `generationError` naming why.
+ * - `noTranscript` — the session had no transcript at all (D-013): the deep generator's
+ *   `--resume` would not find it, so only the lean generator is attempted, and it never sees more
+ *   than git/registry facts. Applied regardless of whether that attempt succeeded or failed,
+ *   because what a reader needs to know here is which evidence was available, not just whether
+ *   the model call itself worked — see `application/`'s generation policy (S2-T3) for where this
+ *   choice is made.
+ */
+export type HandoffSource = 'model' | 'deterministic' | 'noTranscript';
+
+/** The handoff's own `captureMode` field (D-011): which `HandoffGenerator` implementation ran. */
+export type CaptureMode = 'lean' | 'deep';
+
+/**
+ * `facts` inside a persisted `Handoff` (docs/ESPECIFICACAO.md § "Formato do handoff") — the merge
+ * `application/endDay` (S2-T3) performs between `SessionFacts` (transcript, S1-T4) and `GitFacts`
+ * (S2-T1). Nothing upstream combines the two on its own: `HandoffGenerator.generate()` only ever
+ * receives bare `SessionFacts` (`core/ports.ts`), because the model's prompt and the handoff's own
+ * `facts` field serve different purposes and don't need to carry the same shape.
+ *
+ * `git: null` when `cwd` isn't a git repository at all (`GitReadResult.hasGit === false`) — a
+ * real, ordinary state (D-025), never a `GitFacts` with every field at its emptiest standing in
+ * for "no repo here".
+ */
+export interface HandoffFacts extends SessionFacts {
+  readonly git: GitFacts | null;
+}
+
+/**
+ * A captured session's handoff document (docs/ESPECIFICACAO.md § "Formato do handoff"), persisted
+ * at `~/.seeya/days/<Day>/sessions/<sessionId>.json` by `Storage.saveHandoff()`. Assembled by
+ * `application/endDay` (S2-T3) from a `DiscoveredSession`, the `HandoffFacts` gathered for it, and
+ * either a `GeneratedUnderstanding` or D-003's deterministic fallback — no single adapter produces
+ * this whole shape on its own.
+ *
+ * Field names match the spec's own disk keys exactly (AGENTS.md § "Idioma", "Identificadores que
+ * vão para disco") — this type does not invent a key that table doesn't already have.
+ *
+ * **No `schemaVersion` field here**, same as `Config`/`EarlyWarningState` above: schemaVersion is
+ * a wire-format concern `adapters/storage/handoff-schema.ts` owns entirely (stamped on write,
+ * checked on read via `resolveSchemaVersion`), not something `application/endDay` — which builds
+ * this value in memory and never touches the disk format directly — needs to know about.
+ */
+export interface Handoff {
+  readonly sessionId: string;
+  readonly cwd: string;
+  readonly name: string;
+  /** Instant this specific session's capture completed (D-019: from the `Clock` port, never a
+   * bare `new Date()` read inside `application/` or `core/`). */
+  readonly capturedAt: Date;
+  readonly sessionState: SessionState;
+  /**
+   * docs/ESPECIFICACAO.md's daemon-level "guarda de turno ativo", applied here without the 5-minute retry
+   * loop that belongs to `scheduler/` (S4-T3, the only layer that owns adjusting *when* a capture
+   * runs): `application/endDay` captures the session anyway and only records that it happened
+   * mid-turn, never skips it.
+   */
+  readonly capturedDuringActiveTurn: boolean;
+  readonly source: HandoffSource;
+  readonly captureMode: CaptureMode;
+  /** Which of D-013's three sources answered for this specific handoff — never decoration
+   * (docs/ESPECIFICACAO.md's own framing): it's what lets a reader, months later, know what this
+   * handoff could see. */
+  readonly sources: readonly EvidenceSource[];
+  readonly facts: HandoffFacts;
+  readonly understanding: string;
+  readonly pendingItems: readonly string[];
+  readonly tomorrowPlan: readonly string[];
+  /** `null` on success. The failed `GenerationError`'s message when generation was attempted and
+   * failed (`source: "deterministic"`, or `source: "noTranscript"` when that attempt itself also
+   * failed) — D-025: absence of an error string here IS the claim that nothing failed. */
+  readonly generationError: string | null;
+}
+
+/**
  * D-003's "layer 2" (the model's understanding) — `HandoffGenerator.generate()`'s success value
  * (`core/ports.ts`, S2-T2). Field names match the handoff's own disk keys exactly (AGENTS.md §
  * "Idioma", "Identificadores que vão para disco": `understanding`, `pendingItems`,
