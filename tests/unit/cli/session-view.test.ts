@@ -108,4 +108,49 @@ describe('buildSessionRows', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]?.name).toBe('derived-from-cwd');
   });
+
+  describe('sessionId / displaySessionId (S3-T5)', () => {
+    it('carries the full sessionId through unchanged', () => {
+      const session = createSessionWithPid({
+        sessionId: '11111111-1111-4111-8111-111111111111',
+      });
+
+      const [row] = buildSessionRows([session], config(), NOW);
+
+      expect(row?.sessionId).toBe('11111111-1111-4111-8111-111111111111');
+    });
+
+    /**
+     * The exact case that motivated S3-T5: the maintainer launches `claude` from a single
+     * directory for dozens of sessions in the same working day, and `seeya sessions` had nothing
+     * that told two of them apart when `cwd` (and, in this test, even `name`) repeats. This is the
+     * test nobody had before this task.
+     */
+    it('two sessions with the SAME cwd (and the same name) still get distinct displaySessionId values', () => {
+      const first = createSessionWithPid({
+        sessionId: '88881111-0000-4000-8000-000000000000',
+        name: 'code-6d',
+        cwd: 'c:\\users\\<usuario>',
+      });
+      const second = createSessionWithPid({
+        sessionId: '44442222-0000-4000-8000-000000000000',
+        name: 'code-6d',
+        cwd: 'c:\\users\\<usuario>',
+      });
+
+      const rows = buildSessionRows([first, second], config(), NOW);
+
+      expect(rows).toHaveLength(2);
+      const displayIds = rows.map((row) => row.displaySessionId);
+      expect(new Set(displayIds).size).toBe(2);
+      expect(displayIds).toContain('88881111');
+      expect(displayIds).toContain('44442222');
+      // And the two rows remain distinguishable by their full sessionId too, not just the display
+      // form — `cli/session-reference.ts` is what `--session` actually matches against.
+      expect(rows.map((row) => row.sessionId).sort()).toEqual([
+        '44442222-0000-4000-8000-000000000000',
+        '88881111-0000-4000-8000-000000000000',
+      ]);
+    });
+  });
 });

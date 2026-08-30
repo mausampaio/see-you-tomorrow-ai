@@ -7,6 +7,8 @@ function row(overrides: Partial<SessionRow> = {}): SessionRow {
   return {
     name: 'projeto-01',
     cwd: 'c:\\code\\projeto-01',
+    sessionId: '11111111-1111-4111-8111-111111111111',
+    displaySessionId: '11111111',
     state: 'alive',
     lastActivity: new Date('2026-08-29T12:00:00.000Z'),
     canTerminate: false,
@@ -46,16 +48,44 @@ describe('formatSessionsReport', () => {
     expect(report).toContain('2 sessions found, 2 entries ignored.');
   });
 
-  it('every session row shows name, cwd, state, last activity and the termination policy', () => {
+  it('every session row shows name, cwd, id, state, last activity and the termination policy', () => {
     const report = formatSessionsReport(
-      [row({ name: 'p', cwd: 'c:\\code\\p', state: 'idle', canTerminate: true })],
+      [
+        row({
+          name: 'p',
+          cwd: 'c:\\code\\p',
+          displaySessionId: 'abcd1234',
+          state: 'idle',
+          canTerminate: true,
+        }),
+      ],
       [],
     );
 
     expect(report).toContain('- p (c:\\code\\p)');
+    expect(report).toContain('id: abcd1234');
     expect(report).toContain('state: idle');
     expect(report).toContain('last activity: 2026-08-29T12:00:00.000Z');
     expect(report).toContain('terminate on end-day: yes');
+  });
+
+  /**
+   * S3-T5's motivating scenario, at the formatting layer: two rows with the same `cwd` (and, per
+   * D-021, possibly the same `name` too) render with visibly different `id:` values — that's the
+   * one thing in this listing that still tells them apart.
+   */
+  it('two rows sharing the same cwd render with different id: values', () => {
+    const sharedCwd = 'c:\\users\\<usuario>';
+    const report = formatSessionsReport(
+      [
+        row({ name: 'code-6d', cwd: sharedCwd, displaySessionId: 'aaaa1111' }),
+        row({ name: 'code-6d', cwd: sharedCwd, displaySessionId: 'bbbb2222' }),
+      ],
+      [],
+    );
+
+    expect(report).toContain('id: aaaa1111');
+    expect(report).toContain('id: bbbb2222');
   });
 
   it('D-025: a null lastActivity renders as "unknown", never as "never" or an invented date', () => {
