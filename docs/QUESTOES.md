@@ -1805,14 +1805,12 @@ ausência de veredito não é veredito de "concluído". Consequência prática: 
 `seeya start-day` no mesmo dia, sem que nada tenha sido marcado como retomado ainda, encontra o
 mesmo briefing de novo — esse é o gap que o passo 5, fora desta tarefa, fecha depois.
 
-**Decisão 2 — a busca é limitada a `MAX_BRIEFING_LOOKBACK_DAYS = 7` dias**
-(`application/find-pending-briefing.ts`), o mesmo número já usado neste projeto para "até quando
-uma evidência velha ainda vale a pena agir em cima" (`Config.forkCleanupDays`, default 7, D-012)
-— em vez de inventar um segundo número não relacionado só para isto. Passado esse horizonte,
-"nenhum briefing pendente" é a resposta (aceite #5: caso normal, não erro), não esticar a busca
-para achar *algo*. `findPendingBriefing` devolve `{ found: false, daysSearched }` — nunca lança,
-e nunca inventa um `Briefing` vazio como sentinela (D-024: união discriminada, não
-`Briefing | null` solto no meio do código de aplicação).
+**Decisão 2 (texto original, revogado pelo PO — ver Resposta abaixo) — a busca era limitada a
+`MAX_BRIEFING_LOOKBACK_DAYS = 7` dias** (`application/find-pending-briefing.ts`), o mesmo número
+já usado neste projeto para "até quando uma evidência velha ainda vale a pena agir em cima"
+(`Config.forkCleanupDays`, default 7, D-012) — em vez de inventar um segundo número não
+relacionado só para isto. Passado esse horizonte, "nenhum briefing pendente" era a resposta
+(aceite #5: caso normal, não erro), não esticar a busca para achar *algo*.
 
 **O que ficou explicitamente ambíguo, sem solução minha:** não sei se 7 dias é o número certo do
 ponto de vista de produto — é uma analogia com `forkCleanupDays`, não uma medição ou uma regra da
@@ -1828,4 +1826,42 @@ S3-T1 para depois de S4-T2, fora da ordem do plano. 2) manter os 7 dias por anal
 rodar `seeya`") — não tenho medição para decidir entre os dois. 3) manter "pendência" só como
 `pendingItems`/`tomorrowPlan`/ausência de veredito do modelo, ou ampliar para considerar
 `sessionState`/git sujo também.
-**Resposta:** _(em aberto)_
+
+**Resposta:** **FECHADA — decisão 1 confirmada, decisão 2 revertida, item 3 respondido "não
+agora".**
+
+**Decisão 1 (regra por conteúdo): confirmada, com uma nota importante.** A regra carrega o peso
+sozinha só porque o passo 5 (marcar como retomado) ainda não existe. Quando existir, "pendente"
+passa a ser **não retomado E com conteúdo** — a regra de conteúdo vira metade da condição, não a
+única guarda. Até lá, um handoff `source !== "model"` (ou um `"model"` com `pendingItems`/
+`tomorrowPlan` reais) fica pendente **para sempre**, mesmo depois de retomado e concluído à mão.
+Aceitável agora — não há outro sinal disponível —, e vira defeito de verdade se quem implementar
+o passo 5 esquecer de somar as duas condições. Escrito no comentário de
+`core/pending-briefing.ts` para não ser esquecido.
+
+**Decisão 2 (corte de 7 dias): errada, removida.** A analogia com `forkCleanupDays` não se
+sustenta: aquele número existe para apagar arquivo velho, onde errar para mais custa disco e
+errar para menos custa dado perdido. Aqui a conta é oposta — descartar um briefing pendente por
+idade não protege de nada, só esconde a única coisa que responderia "onde eu parei?" para quem
+voltou de duas semanas fora. Se vale a pena retomar trabalho antigo é decisão de quem usa, não
+desta função. `findPendingBriefing` não tem mais corte de produto por idade: acha o briefing
+pendente mais recente não importa a distância, e devolve `daysAgo` para quem exibe (S3-T3)
+mostrar a idade quando não for "ontem" ("3 weeks ago") e a pessoa decidir. Continua existindo
+`MAX_BRIEFING_SCAN_DAYS` (30, generoso — um pouco mais que uma folga típica), mas agora
+**rotulado explicitamente como limite de E/S**, não julgamento de produto: aumentar esse número
+não muda o que conta como "pendente", só até onde a função está disposta a procurar em disco numa
+chamada. Um briefing pendente mais velho que o limite de varredura simplesmente não é encontrado
+(`found: false`) — honesto sobre o próprio limite, não uma afirmação de que não existe (D-025).
+
+**Item 3 (ampliar "pendência" para `sessionState`/git sujo): não agora.** `pendingItems` e
+`tomorrowPlan` são o que o handoff **afirma** sobre o que falta; árvore suja é indício e pode ser
+lixo esquecido. Misturar os dois torna a regra difícil de explicar sem melhorar a resposta.
+
+**Nota à parte, registrada aqui para não se perder:** o `Storage` deste módulo cresceu como um
+segundo bloco `export interface Storage {}` mesclado (não editado no corpo original) para seguir
+a orientação "aditivo no fim do arquivo, nada entre interfaces existentes" enquanto a S3-T2 mexe
+em `core/ports.ts` em paralelo. Isso estava certo para acrescentar um **tipo novo**
+(`Briefing`), mas a própria orientação não dava como acrescentar um **método a uma interface já
+existente** sem o bloco duplo — a instrução é que estava incompleta, não a execução. Já corrigida
+para as próximas tarefas: método em interface existente vai dentro dela. O bloco duplo desta
+tarefa fica como está por ora; a consolidação acontece quando a S3-T2 aterrissar.
