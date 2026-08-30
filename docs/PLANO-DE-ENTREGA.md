@@ -749,7 +749,36 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
 ## Sprint 3 — Começar o dia
 
-- [ ] **S3-T1 — Leitura do briefing pendente** e montagem do prompt de retomada por sessão.
+- [~] **S3-T1 — Leitura do briefing pendente** e montagem do prompt de retomada por sessão.
+      **Implementado em 2026-08-30:** `Storage` ganhou `readBriefing(day)` (`core/ports.ts`,
+      segundo bloco mesclado ao fim do arquivo — mesmo padrão de Q-022 item 2, porque a S3-T2
+      mexe no mesmo arquivo em paralelo) e o tipo `Briefing` (`{ day, handoffs, rejected }`,
+      reservado desde S1-T0g/Q-022): nenhum formato novo em disco, é `listHandoffs(day)` com
+      `day` anexado — `null` só quando não há nada gravado para aquele dia (D-025).
+      `application/find-pending-briefing.ts#findPendingBriefing` implementa o passo 1: caminha
+      para trás um dia local por vez (`core/day.ts#subtractLocalDays`, novo, D-019) a partir do
+      `Clock` injetado, parando no primeiro dia cujo `Briefing`
+      `core/pending-briefing.ts#briefingStillPending` considera pendente, limitado a
+      `MAX_BRIEFING_LOOKBACK_DAYS = 7` (mesmo número de `forkCleanupDays`, D-012). Devolve uma
+      união discriminada (`{ found: true, briefing } | { found: false, daysSearched }`, D-024) —
+      nenhum briefing pendente é caso normal, nunca exceção (aceite #5).
+      **"Ainda tem pendências" definido por conteúdo, não por bookkeeping de retomada — Q-026,
+      em aberto para confirmação do PO.** Nada persiste hoje "este dia já foi retomado" (isso é o
+      passo 5, fora desta tarefa); um handoff `source !== "model"` conta sempre como pendente
+      (D-025: ausência de veredito do modelo não é veredito de "concluído"), e só um
+      `source: "model"` que relatou `pendingItems`/`tomorrowPlan` vazios conta como resolvido.
+      `core/resume-prompt.ts#buildResumePrompt`/`buildResumePrompts` monta o passo 4 (D-004,
+      texto em inglês, D-028): honesto para `source: "deterministic"`/`"noTranscript"` (nunca
+      finge entendimento que não existe, entrega só os fatos crus registrados) e sinaliza
+      `capturedDuringActiveTurn: true` como aviso explícito de possível desatualização.
+      `core/consolidated-plan.ts#renderConsolidatedPlan` monta o passo 2 ("mostra o plano
+      consolidado"), texto plano por sessão (não o markdown completo de `seeya end-day`, que
+      carrega git/recall/rejeitados demais para uma pré-visualização antes de escolher o que
+      retomar). `core/briefing.ts#renderGitBlock` passou a exportado para o gerador de prompt
+      reaproveitar (evita duplicar a mesma renderização de `GitFacts`). Quem exibe (passo 2) e
+      quem retoma de fato (passos 3-5) são S3-T3 e S3-T2 — esta tarefa não toca `cli/` (D-020).
+      `npm run verificar` e `npm run verificar:linux` verdes; `core/` 100% linhas/branches nos
+      dois.
 - [ ] **S3-T2 — Retomada.** `claude --resume` no `cwd` original, com fallback para sessão nova
       e aviso explícito ao usuário.
 - [ ] **S3-T3 — `seeya start-day`** com seleção interativa e `--all`.
