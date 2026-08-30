@@ -118,11 +118,14 @@ export default defineConfig({
           // notification/ starting at Sprint 1) uses a per-test isolated tmpdir and doesn't
           // contend for any resource, so it keeps Vitest's default parallelism.
           exclude: [...configDefaults.exclude, 'tests/integration/guards/**'],
-          // S2-T8: compiles the Windows fake-`claude` shim ONCE for the whole project run,
-          // instead of once per test file (see the global setup's own comment for why isolation
-          // made the old per-process memoization not actually share across files). No-op on
-          // POSIX and on the `unit`/`guards`/`e2e`/`contract` projects, which don't have it wired.
-          globalSetup: ['tests/integration/generation/_windows-shim-global-setup.ts'],
+          // S2-T8: pays two Windows-only cold-start costs exactly ONCE for the whole project run,
+          // instead of leaving them to whichever test file's worker hits them first (see each
+          // global setup's own comment). No-op on POSIX and on the `unit`/`guards`/`e2e`/`contract`
+          // projects, which don't have this wired.
+          globalSetup: [
+            'tests/integration/generation/_windows-shim-global-setup.ts',
+            'tests/integration/process/_powershell-warmup-global-setup.ts',
+          ],
         },
       },
       {
