@@ -7,7 +7,7 @@
  */
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
-import type { RejectedDiscoveryRecord, Storage } from '../../core/ports.js';
+import type { Briefing, RejectedDiscoveryRecord, Storage } from '../../core/ports.js';
 import type { Config, Day, EarlyWarningState, Handoff } from '../../core/types.js';
 import { EMPTY_EARLY_WARNING_STATE } from '../../core/early-warnings.js';
 import { isEnoent } from './fs-errors.js';
@@ -215,5 +215,17 @@ export class StorageAdapter implements Storage {
 
   async saveBriefing(day: Day, markdown: string): Promise<void> {
     await writeFileAtomic(this.briefingPath(day), markdown);
+  }
+
+  /** S3-T1: no second read path, no new on-disk format — `listHandoffs` already does the real
+   * work; this only decides what "nothing for this day" means (D-025, see `Briefing`'s own
+   * docstring in `core/ports.ts`). */
+  async readBriefing(day: Day): Promise<Briefing | null> {
+    const { handoffs, rejected } = await this.listHandoffs(day);
+    if (handoffs.length === 0 && rejected.length === 0) {
+      // Nothing captured for this day at all (D-025): absence, not an empty briefing.
+      return null;
+    }
+    return { day, handoffs, rejected };
   }
 }

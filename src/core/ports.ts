@@ -403,3 +403,52 @@ export interface ForkCleanupResult {
 export interface ForkCleanup {
   cleanup(forkCleanupDays: number): Promise<ForkCleanupResult>;
 }
+
+// Own block at the end of the file on purpose (S3-T1), same pattern this file's own history
+// already established for S2-T4/S2-T6 (see the `GitFacts` import comment and the `ForkCleanup`
+// block above): a second in-flight task (S3-T2) touches this same file's earlier interfaces, and
+// D-022/D-025 already established keeping an addition self-contained, appended after everything
+// that exists already, instead of inserting mid-file or editing the `Storage` body above.
+
+/**
+ * The day's consolidated document (docs/ESPECIFICACAO.md § "Glossário": "Documento consolidado do
+ * dia, com todos os handoffs, lido no dia seguinte") — `Storage.readBriefing()`'s return shape
+ * (S3-T1). Distinct from `~/.seeya/days/<day>/summary.md`'s markdown rendering
+ * (`core/briefing.ts#generateBriefingMarkdown`, S2-T4): that's one human-readable *display* of
+ * this same data, built for `seeya end-day`'s own output. `seeya start-day` (S3-T1) needs the
+ * *structured* form instead — `pendingItems`/`tomorrowPlan`/`understanding` per session live on
+ * each `Handoff`, and there is nowhere in prose to parse them back out of (same shape of
+ * divergence from `docs/ARQUITETURA.md` § "Portas"'s sketch already recorded for
+ * `DiscoveryResult`/`TranscriptReadResult`/`GitReadResult`/`readHandoff`, Q-012/Q-014/Q-019/
+ * Q-021 item 4). Built directly on top of `Storage.listHandoffs(day)`, which already does the
+ * real work — this is that same `{ handoffs, rejected }` shape with `day` attached, not a second
+ * read path or a second on-disk format.
+ */
+export interface Briefing {
+  readonly day: Day;
+  readonly handoffs: readonly Handoff[];
+  readonly rejected: readonly RejectedDiscoveryRecord[];
+}
+
+/**
+ * Grown as a second `Storage` block — merged by TypeScript with the interface declared above,
+ * without editing its body — for the same reason Q-022 item 2 recorded for `saveBriefing`/
+ * `listHandoffs`: a second in-flight task (S3-T2) touches this same file at the same time, and
+ * this file's own history already shows a merge break from a cut landing mid-interface. Merging
+ * declarations keeps this addition entirely at the end, untouched by whatever S3-T2 inserts into
+ * the interfaces above.
+ */
+export interface Storage {
+  /**
+   * Reads `day`'s consolidated `Briefing` — every handoff captured for `day`, exactly as
+   * `listHandoffs(day)` already returns them, with `day` attached; no second read path and no new
+   * on-disk format. `null` when there is truly nothing for that day at all (no `sessions/`
+   * directory, nothing ever captured) — D-025: absence of any capture is a different,
+   * less-specific state than "a day with zero pending work", and this method doesn't blur the
+   * two. A day where every handoff on file failed validation (`handoffs: []`, `rejected`
+   * non-empty) is NOT the same as "nothing happened" and still comes back as a `Briefing`, not
+   * `null` — silently hiding a day of unreadable files would be exactly the omission D-022 exists
+   * to prevent.
+   */
+  readBriefing(day: Day): Promise<Briefing | null>;
+}

@@ -156,3 +156,73 @@ describe('StorageAdapter#saveBriefing', () => {
     }
   });
 });
+
+describe('StorageAdapter#readBriefing (S3-T1)', () => {
+  it('returns null when nothing was ever captured for the day (D-025: absence, not error)', async () => {
+    const seeyaHome = await makeTmpDir();
+    try {
+      const storage = new StorageAdapter(seeyaHome);
+      expect(await storage.readBriefing('2026-08-16')).toBeNull();
+    } finally {
+      await rm(seeyaHome, { recursive: true, force: true });
+    }
+  });
+
+  it('returns the day attached alongside every handoff saved for it — no second read path', async () => {
+    const seeyaHome = await makeTmpDir();
+    try {
+      const storage = new StorageAdapter(seeyaHome);
+      const a = sampleHandoff('11111111-1111-4111-8111-111111111111', 'projeto-a');
+      const b = sampleHandoff('22222222-2222-4222-8222-222222222222', 'projeto-b');
+      await storage.saveHandoff('2026-08-16', a);
+      await storage.saveHandoff('2026-08-16', b);
+
+      const briefing = await storage.readBriefing('2026-08-16');
+      expect(briefing).not.toBeNull();
+      expect(briefing?.day).toBe('2026-08-16');
+      expect(briefing?.rejected).toEqual([]);
+      expect(briefing?.handoffs.map((h) => h.sessionId).sort()).toEqual(
+        [a.sessionId, b.sessionId].sort(),
+      );
+    } finally {
+      await rm(seeyaHome, { recursive: true, force: true });
+    }
+  });
+
+  it(
+    'a day where every handoff on file is unreadable is NOT null — D-022: unreadable is not ' +
+      'the same as never captured',
+    async () => {
+      const seeyaHome = await makeTmpDir();
+      try {
+        const dir = path.join(seeyaHome, 'days', '2026-08-16', 'sessions');
+        await mkdir(dir, { recursive: true });
+        await writeFile(path.join(dir, 'broken.json'), '{not json', 'utf8');
+        const storage = new StorageAdapter(seeyaHome);
+
+        const briefing = await storage.readBriefing('2026-08-16');
+        expect(briefing).not.toBeNull();
+        expect(briefing?.handoffs).toEqual([]);
+        expect(briefing?.rejected).toHaveLength(1);
+        expect(briefing?.rejected[0]?.file).toContain('broken.json');
+      } finally {
+        await rm(seeyaHome, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it('reads a different day than the one just written, independently (day-keyed, D-027)', async () => {
+    const seeyaHome = await makeTmpDir();
+    try {
+      const storage = new StorageAdapter(seeyaHome);
+      await storage.saveHandoff(
+        '2026-08-15',
+        sampleHandoff('11111111-1111-4111-8111-111111111111', 'projeto-a'),
+      );
+      expect(await storage.readBriefing('2026-08-16')).toBeNull();
+      expect(await storage.readBriefing('2026-08-15')).not.toBeNull();
+    } finally {
+      await rm(seeyaHome, { recursive: true, force: true });
+    }
+  });
+});
