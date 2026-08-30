@@ -31,7 +31,7 @@ import { unresumedHandoffs } from '../core/pending-briefing.js';
 import type { Clock, SessionResumer, Storage } from '../core/ports.js';
 import type { Day, Handoff } from '../core/types.js';
 import {
-  findHandoffBySessionOrCwd,
+  findHandoffBySessionReference,
   parseInteractiveSelection,
   resolveSelectionMode,
 } from './start-day-selection.js';
@@ -99,10 +99,13 @@ async function pickSessions(
   const candidates = unresumedHandoffs(lookup.briefing, lookup.resumedSessionIds);
   const mode = resolveSelectionMode(options, io.isTTY);
   if (mode.kind === 'session') {
-    const match = findHandoffBySessionOrCwd(lookup.briefing.handoffs, mode.sessionOrCwd);
-    return match === undefined
-      ? { kind: 'blocked', message: formatNoSessionMatch(mode.sessionOrCwd) }
-      : { kind: 'chosen', handoffs: [match] };
+    // S3-T5: 'ambiguous' collapses into the same "no match" message as 'notFound' here — never
+    // resumes a guess (D-025) — pending a distinguishable ambiguous message, which belongs in
+    // `format-start-day.ts` (S3-T6's file, out of this task's reach; docs/QUESTOES.md Q-030).
+    const match = findHandoffBySessionReference(lookup.briefing.handoffs, mode.sessionOrCwd);
+    return match.kind === 'found'
+      ? { kind: 'chosen', handoffs: [match.item] }
+      : { kind: 'blocked', message: formatNoSessionMatch(mode.sessionOrCwd) };
   }
   if (mode.kind === 'all') {
     return { kind: 'chosen', handoffs: candidates };

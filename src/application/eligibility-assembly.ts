@@ -13,9 +13,52 @@ import {
   type EligibilityCriteria,
   type EligibilityResult,
 } from '../core/eligibility.js';
+import { normalizeCwdForComparison, type PathPlatformHint } from '../core/cwd-normalization.js';
 import { buildEvidenceSignature, type EvidenceSignature } from '../core/evidence.js';
 
 const EMPTY_SIGNATURE: EvidenceSignature = {};
+
+/** Real environment read once, here — `application/` cannot import `adapters/` (D-020), but
+ * `process.platform` is a Node global, not an adapter: reading it directly is the same kind of
+ * thing `new Date(valor)` already is (D-019's distinction) — using data already in hand, not
+ * performing I/O. See `core/cwd-normalization.ts`'s own docstring for why the platform is a plain
+ * parameter there instead of being read inside `core/`. */
+const PLATFORM_HINT: PathPlatformHint = process.platform === 'win32' ? 'win32' : 'posix';
+
+/**
+ * `config.ignore`'s entries, normalized the same way `withComparableCwd` normalizes a session's
+ * own `cwd` below — comparing a raw ignore entry against a raw `session.cwd` is exactly the S3-T5
+ * bug: two spellings of the same directory (different separator, different case on Windows, a
+ * trailing slash) silently fail to match, and a session on the ignore list keeps showing up as
+ * eligible with no visible reason why the config entry "isn't working".
+ *
+ * Exported: `cli/eligibility-view.ts#countEligibleSessions` (the `seeya status` count) needs the
+ * exact same normalization for the exact same comparison — `cli/` importing `application/` is
+ * permitted (D-020), and a second copy of this function would be the duplication AGENTS.md rules
+ * out, not a reasonable amount of coupling.
+ */
+export function normalizedIgnoreSet(config: Config): ReadonlySet<string> {
+  return new Set(config.ignore.map((cwd) => normalizeCwdForComparison(cwd, PLATFORM_HINT)));
+}
+
+/**
+ * A session whose `cwd` has been run through the same normalization as `normalizedIgnoreSet`
+ * above, for the ONE comparison `core/eligibility.ts#evaluateEligibility` makes
+ * (`criteria.ignoredCwds.has(session.cwd)`) — core does exact string equality on purpose (its own
+ * docstring: "core/ can't import node:path ... normalization is the responsibility of code
+ * outside the core"), so both sides of that comparison have to already agree on a shape before
+ * they get there. Branches on `hasPid` (rather than one generic object-spread) so each branch's
+ * spread type is a concrete `SessionWithPid`/`SessionWithoutPid`, not a union — cheaper for
+ * TypeScript to check and avoids relying on how well it distributes a spread over a union type.
+ * Nothing but this function's own return value ever sees the normalized `cwd`: the original
+ * `session` (with its real `cwd`, used for display, facts and the handoff) is untouched.
+ *
+ * Exported for the same reason as `normalizedIgnoreSet` above.
+ */
+export function withComparableCwd(session: DiscoveredSession): DiscoveredSession {
+  const cwd = normalizeCwdForComparison(session.cwd, PLATFORM_HINT);
+  return session.hasPid ? { ...session, cwd } : { ...session, cwd };
+}
 
 const DEFAULT_PROJECT_POLICY: ProjectPolicy = { canTerminate: false, deepCapture: false };
 
@@ -60,10 +103,10 @@ export function evaluateCheapEligibility(
   now: Date,
   config: Config,
 ): EligibilityResult {
-  return evaluateEligibility(session, {
+  return evaluateEligibility(withComparableCwd(session), {
     now,
     relevanceHours: config.relevanceHours,
-    ignoredCwds: new Set(config.ignore),
+    ignoredCwds: normalizedIgnoreSet(config),
     knownForks: NO_KNOWN_FORKS,
     previousCaptureToday: null,
     currentSignature: EMPTY_SIGNATURE,
@@ -90,7 +133,7 @@ export async function evaluateFullEligibility(
   const criteria: EligibilityCriteria = {
     now,
     relevanceHours: config.relevanceHours,
-    ignoredCwds: new Set(config.ignore),
+    ignoredCwds: normalizedIgnoreSet(config),
     knownForks: NO_KNOWN_FORKS,
     previousCaptureToday:
       previousHandoff === null
@@ -98,5 +141,5 @@ export async function evaluateFullEligibility(
         : { signature: buildEvidenceSignature(previousHandoff.facts) },
     currentSignature: buildEvidenceSignature(currentFacts),
   };
-  return evaluateEligibility(session, criteria);
+  return evaluateEligibility(withComparableCwd(session), criteria);
 }

@@ -64,6 +64,29 @@ describe('evaluateCheapEligibility (no I/O)', () => {
     const result = evaluateCheapEligibility(session, NOW, DEFAULT_TEST_CONFIG);
     expect(result.reasons).not.toContain('ownSeeyaFork');
   });
+
+  describe('ignore-list matching normalizes cwd before comparing (S3-T5)', () => {
+    it('a session cwd spelled with forward slashes still matches a backslash-spelled ignore entry', () => {
+      const session = createSessionWithPid({ cwd: 'c:/code/rascunhos', lastActivity: NOW });
+      const config = { ...DEFAULT_TEST_CONFIG, ignore: ['c:\\code\\rascunhos'] };
+      const result = evaluateCheapEligibility(session, NOW, config);
+      expect(result).toEqual({ eligible: false, reasons: ['ignoredCwd'] });
+    });
+
+    it('a trailing separator on either side does not defeat the ignore match', () => {
+      const session = createSessionWithPid({ cwd: 'c:\\code\\rascunhos\\', lastActivity: NOW });
+      const config = { ...DEFAULT_TEST_CONFIG, ignore: ['c:\\code\\rascunhos'] };
+      const result = evaluateCheapEligibility(session, NOW, config);
+      expect(result.eligible).toBe(false);
+    });
+
+    it('a genuinely different cwd is never ignored just because it shares a prefix', () => {
+      const session = createSessionWithPid({ cwd: 'c:\\code\\rascunhos-2', lastActivity: NOW });
+      const config = { ...DEFAULT_TEST_CONFIG, ignore: ['c:\\code\\rascunhos'] };
+      const result = evaluateCheapEligibility(session, NOW, config);
+      expect(result.eligible).toBe(true);
+    });
+  });
 });
 
 describe('evaluateFullEligibility (D-026 anti-duplication)', () => {

@@ -5,10 +5,21 @@
  */
 import { classifyState } from '../core/classification.js';
 import type { DiscoveredSession, SessionState, Config } from '../core/types.js';
+import { computeDisplaySessionIds } from './session-id-display.js';
 
 export interface SessionRow {
   readonly name: string;
   readonly cwd: string;
+  /** Full `sessionId` (S3-T5) — `--session` matching (`cli/session-reference.ts`) uses this, not
+   * `displaySessionId`, which exists for reading, not for pasting back into another command
+   * (though it happens to work there too via prefix matching, since it's always one of that
+   * session's own real prefixes). */
+  readonly sessionId: string;
+  /** A short, batch-unique stand-in for `sessionId` (`session-id-display.ts`) — what tells two
+   * sessions apart in `seeya sessions` when their `cwd` (and even their derived `name`) collide,
+   * which is exactly the case that motivated S3-T5: the maintainer launches `claude` from the same
+   * directory for dozens of sessions in a row. */
+  readonly displaySessionId: string;
   readonly state: SessionState;
   /** `null` is absence of data (D-025), never rendered as a real instant by the formatter. */
   readonly lastActivity: Date | null;
@@ -39,9 +50,14 @@ export function buildSessionRows(
   config: Config,
   now: Date,
 ): SessionRow[] {
+  const displayIds = computeDisplaySessionIds(sessions.map((session) => session.sessionId));
   const rows = sessions.map((session): SessionRow => ({
     name: session.name,
     cwd: session.cwd,
+    sessionId: session.sessionId,
+    // Falls back to the full id only in the defensive, shouldn't-happen case
+    // `computeDisplaySessionIds` itself documents (two identical sessionIds in the same batch).
+    displaySessionId: displayIds.get(session.sessionId) ?? session.sessionId,
     state: classifyState(session, { now, idleMinutes: config.idleMinutes }),
     lastActivity: session.lastActivity,
     canTerminate: resolveCanTerminate(session.cwd, config),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  findHandoffBySessionOrCwd,
+  findHandoffBySessionReference,
   parseInteractiveSelection,
   resolveSelectionMode,
 } from '../../../src/cli/start-day-selection.js';
@@ -27,20 +27,56 @@ describe('resolveSelectionMode', () => {
   });
 });
 
-describe('findHandoffBySessionOrCwd', () => {
-  const alpha = createHandoff({ sessionId: 'alpha-id', cwd: 'c:\\code\\alpha' });
-  const beta = createHandoff({ sessionId: 'beta-id', cwd: 'c:\\code\\beta' });
+describe('findHandoffBySessionReference (S3-T5: sessionId, prefix, name, or normalized cwd)', () => {
+  const alpha = createHandoff({ sessionId: 'alpha-id', cwd: 'c:\\code\\alpha', name: 'alpha' });
+  const beta = createHandoff({ sessionId: 'beta-id', cwd: 'c:\\code\\beta', name: 'beta' });
 
   it('matches by sessionId', () => {
-    expect(findHandoffBySessionOrCwd([alpha, beta], 'alpha-id')).toBe(alpha);
+    expect(findHandoffBySessionReference([alpha, beta], 'alpha-id')).toEqual({
+      kind: 'found',
+      item: alpha,
+    });
   });
 
-  it('matches by cwd', () => {
-    expect(findHandoffBySessionOrCwd([alpha, beta], 'c:\\code\\beta')).toBe(beta);
+  it('matches by cwd, exact spelling', () => {
+    expect(findHandoffBySessionReference([alpha, beta], 'c:\\code\\beta')).toEqual({
+      kind: 'found',
+      item: beta,
+    });
   });
 
-  it('returns undefined when nothing matches', () => {
-    expect(findHandoffBySessionOrCwd([alpha, beta], 'nope')).toBeUndefined();
+  it('matches by cwd through normalization (separator + trailing slash)', () => {
+    expect(findHandoffBySessionReference([alpha, beta], 'c:/code/beta/')).toEqual({
+      kind: 'found',
+      item: beta,
+    });
+  });
+
+  it('matches by a unique sessionId prefix', () => {
+    expect(findHandoffBySessionReference([alpha, beta], 'alpha')).toEqual({
+      kind: 'found',
+      item: alpha,
+    });
+  });
+
+  it('matches by exact display name', () => {
+    expect(findHandoffBySessionReference([alpha, beta], 'beta')).toEqual({
+      kind: 'found',
+      item: beta,
+    });
+  });
+
+  it('reports notFound when nothing matches', () => {
+    expect(findHandoffBySessionReference([alpha, beta], 'nope')).toEqual({ kind: 'notFound' });
+  });
+
+  it('two handoffs sharing a cwd: matching by that cwd is ambiguous, never picks the first (D-025)', () => {
+    const first = createHandoff({ sessionId: 'a', cwd: 'c:\\code\\shared', name: 'first' });
+    const second = createHandoff({ sessionId: 'b', cwd: 'c:\\code\\shared', name: 'second' });
+
+    const result = findHandoffBySessionReference([first, second], 'c:\\code\\shared');
+
+    expect(result.kind).toBe('ambiguous');
   });
 });
 

@@ -951,7 +951,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Fora de escopo:* trocar o flag, ou construir fallback para o caso de ele sumir — só
       quando e se a medição mostrar que sumiu.
 
-- [ ] **S3-T5 — Identificar a sessão na listagem e no `--session`.** Aprovada pelo mantenedor em
+- [~] **S3-T5 — Identificar a sessão na listagem e no `--session`.** Aprovada pelo mantenedor em
       2026-08-30, saída do primeiro teste real. **O problema:** ele lança o `claude` do diretório
       do usuário — hábito comum, e deliberado, porque trabalha em vários repositórios ao mesmo
       tempo e quer uma memória só para o projeto inteiro. Resultado: **dezenas de sessões com o
@@ -967,10 +967,53 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       quando o prefixo for ambíguo (nunca escolher uma por conta própria — D-025).
       *Junto, porque é a mesma dor:* normalizar caminho antes de comparar no `--session` e no
       `ignore` do `config.json` — hoje é igualdade exata de string, e o mantenedor tropeçou nisso
-      com as contrabarras comidas pelo shell (`C:Usersmausa` chegando como `C:Usersmausa`).
+      com as contrabarras comidas pelo shell (`C:\Users\<usuario>` chegando como `C:Users<usuario>`).
       Mesma classe de erro da S2-T1, onde comparação de caminho por string passou no Linux e
       reprovou no macOS e no Windows. A mensagem de "não casou" deve mostrar o valor recebido
       quando ele diferir do digitado.
+
+      **Implementado em 2026-08-30.** `core/cwd-normalization.ts#normalizeCwdForComparison`
+      (nova, pura, sem `node:*`): unifica separador, remove barra final e só dobra maiúscula em
+      `'win32'` — plataforma é **parâmetro**, nunca lida ali (mesma disciplina do `Clock`, D-019),
+      justamente para o teste exercitar o ramo Windows rodando em qualquer SO (aceite: "não
+      depende de rodar no Windows para valer"). `cli/session-reference.ts#resolveSessionReference`
+      (nova, genérica sobre `{ sessionId, cwd, name }`) é o casador único usado por
+      `end-day-command.ts` e `start-day-selection.ts`: `sessionId` exato é autoritativo e nunca
+      ambíguo (D-021); senão, prefixo de `sessionId` + nome exato + `cwd` normalizado são avaliados
+      juntos, e **dois ou mais candidatos casando é `ambiguous`**, nunca resolvido sozinho — nomeia
+      todos os que casaram. `cli/session-id-display.ts#computeDisplaySessionIds` dá o prefixo
+      exibido no `seeya sessions`: 8 caracteres (primeiro grupo do UUID) por padrão, escalando por
+      fronteira de grupo (`8/13/18/23/36`) só para quem colidir no lote — matemática da colisão e
+      justificativa do tamanho no docstring do módulo. `session-view.ts`/`format-sessions.ts`
+      ganharam `sessionId`/`displaySessionId`/a linha `id: ...`; testado explicitamente com duas
+      sessões de mesmo `cwd` e mesmo `name`, que é o caso que motivou a tarefa
+      (`session-view.test.ts`, `format-sessions.test.ts`).
+
+      **Mudança de comportamento em `end-day --session`, não só extensão.** Antes, `cwd` batendo em
+      várias sessões descobertas processava todas em silêncio (igualdade exata nunca impedia isso).
+      Agora `end-day-command.ts` resolve `--session` contra uma descoberta própria **antes** de
+      chamar `application/endDay` (não dá para desfazer uma captura/encerramento depois de
+      acontecer) e recusa com `ambiguous` — nunca captura nenhuma das candidatas. Custa uma segunda
+      chamada de descoberta, com uma corrida pequena e rara coberta por mensagem própria
+      (`formatVanishedMatchMessage`). A mensagem de "não casou"
+      (`end-day-command.ts#formatNoMatchMessage`) sempre mostra o valor **cru** recebido, nunca uma
+      forma normalizada silenciosa, e acrescenta a forma normalizada-como-`cwd` quando ela difere —
+      é a peça do aceite 4, e só existe aqui (a de `start-day` é do S3-T6).
+      **`start-day`:** `findHandoffBySessionReference` já devolve `ambiguous` com a lista completa,
+      mas `start-day-command.ts` colapsa em `blocked` reaproveitando a `formatNoSessionMatch`
+      **existente**, sem tocar `format-start-day.ts` nem `core/consolidated-plan.ts` — conforme
+      instrução. **Falta**, fora do meu alcance: uma mensagem de ambiguidade própria para
+      `start-day`, que nomeie as sessões, em vez de reaproveitar o "não encontrado" genérico.
+      Cinco escolhas sem resposta literal na spec registradas em Q-030 para confirmação; um achado
+      ortogonal (flutuação intermitente do `verificar:linux` na suíte `guards` sob contenção do
+      container, não causada pelo código desta tarefa mas talvez agravada por ele) registrado em
+      Q-030a.
+      Normalização coberta nos três sistemas sem depender de rodar no SO real
+      (`tests/unit/core/cwd-normalization.test.ts`, ambas as dicas de plataforma exercitadas
+      explicitamente). `npm run verificar` verde; `npm run verificar:linux` verde (medido 4 de 6
+      execuções verdes — ver Q-030a para as duas vermelhas, sem relação com a asserção da própria
+      tarefa). `core/` 100%, `application/` 100% linhas (96,2% branches, agregado — ver Q-030 item
+      1 sobre a leitura de `process.platform`), `cli/` 100% linhas (96,79% branches, agregado).
 
 - [~] **S3-T6 — Formatação da saída do `start-day`.** Aprovada pelo mantenedor em 2026-08-30
       ("achei confuso demais"), com a saída real do primeiro uso como evidência. **Não é o

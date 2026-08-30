@@ -15,12 +15,20 @@ function formatLastActivity(lastActivity: Date | null): string {
   return lastActivity === null ? 'unknown' : lastActivity.toISOString();
 }
 
+/**
+ * `id:` (S3-T5) is what tells two rows apart when `cwd` (and even the derived display `name`)
+ * repeat — the case that motivated this task: the maintainer launches `claude` from the same
+ * directory for dozens of sessions in a row, and before this line there was nothing in this
+ * listing that distinguished one from another. `row.displaySessionId` is a short, batch-unique
+ * prefix (`session-id-display.ts`), not the value `--session` requires — any of its own real
+ * prefixes works there too (`cli/session-reference.ts`).
+ */
 function formatSessionLine(row: SessionRow): string {
   const terminate = row.canTerminate ? 'yes' : 'no';
   return (
     `- ${row.name} (${row.cwd})\n` +
-    `    state: ${row.state} | last activity: ${formatLastActivity(row.lastActivity)} | ` +
-    `terminate on end-day: ${terminate}`
+    `    id: ${row.displaySessionId} | state: ${row.state} | ` +
+    `last activity: ${formatLastActivity(row.lastActivity)} | terminate on end-day: ${terminate}`
   );
 }
 
