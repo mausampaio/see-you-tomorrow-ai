@@ -1,6 +1,8 @@
 import type {
   Clock,
   DiscoveryResult,
+  ForkCleanup,
+  ForkCleanupResult,
   GitReader,
   GitReadResult,
   HandoffGenerator,
@@ -208,6 +210,29 @@ export class UnverifiableSaveStorage extends FakeStorage {
 
   override readHandoff(): Promise<Handoff | null> {
     return Promise.resolve(null);
+  }
+}
+
+/** Always reports nothing to clean up unless a test hands it a specific `ForkCleanupResult` —
+ * `endDay`'s own tests aren't about D-012, they only need `EndDayDeps` to type-check with a real
+ * implementation of every port (S2-T5 added this one). */
+export class FakeForkCleanup implements ForkCleanup {
+  constructor(private readonly result: ForkCleanupResult = { outcomes: [], rejected: [] }) {}
+
+  cleanup(forkCleanupDays: number): Promise<ForkCleanupResult> {
+    // Named/typed (not dropped to zero parameters) so a subclass overriding this method to spy on
+    // the argument (endDay.test.ts) has a real parameter to type its own override against, matching
+    // the real `ForkCleanup` port's signature exactly. This double itself doesn't need the value.
+    void forkCleanupDays;
+    return Promise.resolve(this.result);
+  }
+}
+
+/** A `ForkCleanup` whose `cleanup()` always rejects — for `endDay`'s isolation test: a fork-cleanup
+ * failure must never take down captures/briefing that already succeeded in the same run. */
+export class FailingForkCleanup implements ForkCleanup {
+  cleanup(): Promise<ForkCleanupResult> {
+    return Promise.reject(new Error('FailingForkCleanup: cleanup always fails'));
   }
 }
 

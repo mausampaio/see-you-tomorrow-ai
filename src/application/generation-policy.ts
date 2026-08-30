@@ -109,3 +109,36 @@ export async function generateUnderstanding(
     return deterministicOutcome(message);
   }
 }
+
+/**
+ * `--dry-run`'s safe substitute for deep capture (S2-T5, docs/ESPECIFICACAO.md § `seeya end-day`:
+ * "executa tudo menos escrever e terminar processos"). Every other generation path in a dry run
+ * runs for real — a lean call has no disk footprint at all (D-017: `--no-session-persistence`
+ * creates no fork, no transcript) — but the real `DeepHandoffGenerator` registers a fork in
+ * `forks.json` BEFORE spawning `claude --resume --fork-session` (`fork-registration.ts`'s own
+ * docstring explains why it has to), and `--fork-session` itself then writes a real transcript
+ * file under `~/.claude/projects/` as an unavoidable side effect of the external `claude` process
+ * — not something any flag on this codebase's own call could suppress. AGENTS.md's "nunca escreve
+ * em `~/.claude/`" is not negotiable for a PREVIEW command, so dry-run never calls
+ * `deps.deepGenerator` at all; this is what a session whose policy calls for deep capture reports
+ * instead.
+ *
+ * `source: "deterministic"` here is the least dishonest of the three `HandoffSource` values
+ * available (`core/types.ts`): the model was never attempted, which is literally what
+ * `"noTranscript"` describes too, but that value's own name and docstring specifically mean
+ * "missing transcript", not "dry-run policy" — reusing it here would misname the reason a reader
+ * sees in a session that DOES have a transcript. `generationError` says in plain words that this
+ * is a skip, not a failure, so nobody reads it as the model having actually been tried and failed
+ * (D-025: no claim stronger than the evidence — here, "nothing was attempted").
+ */
+export function previewDeepCaptureOutcome(): GenerationOutcome {
+  return {
+    source: 'deterministic',
+    understanding: '',
+    pendingItems: [],
+    tomorrowPlan: [],
+    generationError:
+      'dry-run: deep capture skipped to avoid writing a real fork to disk (a real run would call ' +
+      'claude --resume --fork-session here)',
+  };
+}
