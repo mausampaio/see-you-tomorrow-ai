@@ -342,7 +342,10 @@ function buildArgsWithFlags(forkId, include) {
   ];
 }
 
-/** Fresh original session for the S4-T00b round (see IDS.original2's comment). */
+/**
+ * Fresh original session for the S4-T00b round (see IDS.original2's comment).
+ * @param {SpikeState} state
+ */
 function stepTurn1b(state) {
   const cwd = ensureCwd(state);
   const args = [
@@ -364,7 +367,9 @@ function stepTurn1b(state) {
 
 /** `base`: today's real deep-capture shape again (all three flags), run close in time to the
  * single-flag-dropped arms below so the clock never confounds the comparison (unlike reusing
- * round 1's `arm1`, a day stale by the time this round runs). Anchors against round 1's `arm1`. */
+ * round 1's `arm1`, a day stale by the time this round runs). Anchors against round 1's `arm1`.
+ * @param {SpikeState} state
+ */
 function stepBase(state) {
   const cwd = ensureCwd(state);
   const args = buildArgsWithFlags(IDS.baseFork, {
@@ -382,7 +387,9 @@ function stepBase(state) {
  * 1's `arm2` (drop ALL THREE flags) against THIS round's fresh session, to check whether the
  * environment/cache mechanism itself is capable of a hit right now at all. Without this, a zero
  * read on every single-flag-dropped arm is ambiguous between "that specific flag breaks the
- * cache" and "nothing is hitting cache in this session for an unrelated reason". */
+ * cache" and "nothing is hitting cache in this session for an unrelated reason".
+ * @param {SpikeState} state
+ */
 function stepNoFlagsControl(state) {
   const cwd = ensureCwd(state);
   const args = buildArgsWithFlags(IDS.noFlagsControlFork, {});
@@ -394,7 +401,9 @@ function stepNoFlagsControl(state) {
 
 /** The decisive arm: drop ONLY --system-prompt, keep --tools "" and --json-schema. If the
  * hypothesis is right (system-prompt alone breaks prefix identity because it sits at the absolute
- * start of the prefix), this should read close to full cache like round 1's `arm2` did. */
+ * start of the prefix), this should read close to full cache like round 1's `arm2` did.
+ * @param {SpikeState} state
+ */
 function stepNoSystemPrompt(state) {
   const cwd = ensureCwd(state);
   const args = buildArgsWithFlags(IDS.noSystemPromptFork, { tools: true, jsonSchema: true });
@@ -404,7 +413,10 @@ function stepNoSystemPrompt(state) {
   saveState(state);
 }
 
-/** Drop ONLY --tools "" (default tool set active), keep --system-prompt and --json-schema. */
+/**
+ * Drop ONLY --tools "" (default tool set active), keep --system-prompt and --json-schema.
+ * @param {SpikeState} state
+ */
 function stepNoTools(state) {
   const cwd = ensureCwd(state);
   const args = buildArgsWithFlags(IDS.noToolsFork, { systemPrompt: true, jsonSchema: true });
@@ -416,7 +428,9 @@ function stepNoTools(state) {
 
 /** Drop ONLY --json-schema, keep --tools "" and --system-prompt. Achado 4's own candidate flag:
  * if the fixed internal apparatus --json-schema triggers is what reads the mystery 70,260 tokens,
- * this arm's cache_read should collapse relative to `base`. */
+ * this arm's cache_read should collapse relative to `base`.
+ * @param {SpikeState} state
+ */
 function stepNoJsonSchema(state) {
   const cwd = ensureCwd(state);
   const args = buildArgsWithFlags(IDS.noJsonSchemaFork, { tools: true, systemPrompt: true });
@@ -428,7 +442,9 @@ function stepNoJsonSchema(state) {
 
 /** The variant Q-034 actually needs, run ONLY if `no-system-prompt` confirms the hypothesis:
  * extractor instruction moved to the USER prompt (stdin), --system-prompt dropped, --tools "" and
- * --json-schema both kept — structured output AND (if the hypothesis holds) prefix identity. */
+ * --json-schema both kept — structured output AND (if the hypothesis holds) prefix identity.
+ * @param {SpikeState} state
+ */
 function stepUserPromptExtraction(state) {
   const cwd = ensureCwd(state);
   const args = buildArgsWithFlags(IDS.userPromptExtractionFork, { tools: true, jsonSchema: true });
