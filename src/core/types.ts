@@ -249,6 +249,24 @@ export interface SessionFacts {
    */
   readonly lastPrompts: readonly string[];
   /**
+   * The most recent things the assistant itself said, oldest first, bounded to a fixed window
+   * (`adapters/transcript/facts.ts`'s `MAX_ASSISTANT_MESSAGES`, each entry capped at
+   * `MAX_ASSISTANT_MESSAGE_CHARS`). Added by S4-T00c (docs/QUESTOES.md Q-036) to fix the gap the
+   * D-011 reevaluation (docs/DECISOES.md) found: before this field existed, a turn like "4 done, 6
+   * pending" was visible nowhere in `SessionFacts` at all, because the transcript reader only ever
+   * pulled timestamp and tool-use file paths out of an `assistant` entry — the model's own account
+   * of the work was discarded structurally, not filtered out on purpose. Excludes sub-agent turns
+   * (`isSidechain: true`), same reasoning as `lastPrompts`: that's internal tool-use narration, not
+   * something said to the human. Empty when none were found; never a placeholder claiming the
+   * assistant said nothing (D-025).
+   *
+   * **Feeds `buildLeanPrompt` only — deliberately NOT added to `handoffFactsSchema`/
+   * `serializeHandoff` (`adapters/storage/handoff-schema.ts`), so it never becomes a new persisted
+   * key in `Handoff` on disk.** That's a maintainer decision, not an oversight — see
+   * docs/QUESTOES.md Q-036 for the open question of whether it should also be persisted later.
+   */
+  readonly assistantMessages: readonly string[];
+  /**
    * File paths passed to a write-capable tool (`Edit`, `Write`, `NotebookEdit`) anywhere in the
    * transcript, including inside sub-agent turns — a sub-agent's edit is still the session's own
    * work (D-013). Deduplicated, first-seen order. Empty when none were found.

@@ -14,7 +14,7 @@ import { parseTranscriptFile } from './reader.js';
  * at its least-specific value, never an invented claim about what the session did.
  */
 const NO_TRANSCRIPT_RESULT: TranscriptReadResult = {
-  facts: { lastActivity: null, lastPrompts: [], touchedFiles: [] },
+  facts: { lastActivity: null, lastPrompts: [], assistantMessages: [], touchedFiles: [] },
   rejected: [],
   unknownEntryTypeCount: 0,
 };

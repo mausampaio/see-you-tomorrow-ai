@@ -89,6 +89,7 @@ describe('buildResumePrompt — source: "deterministic" (honest, not empty)', ()
         facts: {
           lastActivity: new Date('2026-08-16T20:45:00.000Z'),
           lastPrompts: ['fix the flaky test'],
+          assistantMessages: [],
           touchedFiles: ['src/parser.ts'],
           git: {
             branch: 'main',
@@ -124,7 +125,13 @@ describe('buildResumePrompt — source: "deterministic" (honest, not empty)', ()
       createHandoff({
         source: 'deterministic',
         generationError: 'timeout',
-        facts: { lastActivity: null, lastPrompts: [], touchedFiles: [], git: null },
+        facts: {
+          lastActivity: null,
+          lastPrompts: [],
+          assistantMessages: [],
+          touchedFiles: [],
+          git: null,
+        },
       }),
     );
     expect(prompt).toContain('Last activity: unknown');

@@ -5,6 +5,7 @@ import type { HandoffFacts } from '../../../src/core/types.js';
 const NO_EVIDENCE_FACTS: HandoffFacts = {
   lastActivity: null,
   lastPrompts: [],
+  assistantMessages: [],
   touchedFiles: [],
   git: null,
 };

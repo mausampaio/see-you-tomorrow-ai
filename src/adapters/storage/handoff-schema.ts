@@ -62,11 +62,19 @@ const handoffDocumentSchema = z.object({
   generationError: z.string().nullable(),
 });
 
+/**
+ * `assistantMessages` (S4-T00c, `core/types.ts#SessionFacts`) is deliberately absent from
+ * `handoffFactsSchema` above and from `serializeHandoff` below — see that field's own docstring
+ * and docs/QUESTOES.md Q-036: it feeds the lean prompt, it is not a persisted key. Reading it back
+ * from disk therefore always answers `[]`, the same "not found" D-025 already gives any other
+ * field this document never wrote — never an invented reconstruction of what the assistant said.
+ */
 function parseHandoffFacts(raw: z.infer<typeof handoffFactsSchema>): HandoffFacts {
   const git: GitFacts | null = raw.git;
   return {
     lastActivity: raw.lastActivity === null ? null : new Date(raw.lastActivity),
     lastPrompts: raw.lastPrompts,
+    assistantMessages: [],
     touchedFiles: raw.touchedFiles,
     git,
   };
@@ -123,6 +131,8 @@ export function serializeHandoff(handoff: Handoff): Record<string, unknown> {
       lastActivity:
         handoff.facts.lastActivity === null ? null : handoff.facts.lastActivity.toISOString(),
       lastPrompts: handoff.facts.lastPrompts,
+      // handoff.facts.assistantMessages is deliberately NOT written here — see
+      // parseHandoffFacts's docstring above and docs/QUESTOES.md Q-036.
       touchedFiles: handoff.facts.touchedFiles,
       git: handoff.facts.git,
     },

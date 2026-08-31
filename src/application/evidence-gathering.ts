@@ -26,6 +26,7 @@ import type {
 const EMPTY_TRANSCRIPT_FACTS: SessionFacts = {
   lastActivity: null,
   lastPrompts: [],
+  assistantMessages: [],
   touchedFiles: [],
 };
 

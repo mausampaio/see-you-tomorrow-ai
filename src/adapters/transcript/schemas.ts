@@ -146,13 +146,20 @@ export type UserEntryWithText = z.infer<typeof userEntryTextSchema>;
 
 /**
  * `assistantEntrySchema`, extended the same way `userEntryTextSchema` extends `userEntrySchema`,
- * but for `writeToolUseBlockSchema` instead of text — same tolerance-preserving shape.
+ * but keeping BOTH richer block shapes fact extraction reads from an assistant entry:
+ * `writeToolUseBlockSchema` (for `touchedFiles`, S1-T4) and `textContentBlockSchema` (for the
+ * assistant's own words, S4-T00c/Q-036 — the text a "4 done, 6 pending"-style status turn carries,
+ * which `touchedFiles` alone can never surface). Same tolerance-preserving shape as
+ * `userEntryTextSchema`: any other block still falls through to the generic `{ type }` shape.
  */
-export const assistantEntryToolUseSchema = assistantEntrySchema.extend({
+export const assistantEntryWithContentSchema = assistantEntrySchema.extend({
   message: z.object({
     role: z.string().min(1),
-    content: z.union([z.string(), z.array(z.union([writeToolUseBlockSchema, contentBlockSchema]))]),
+    content: z.union([
+      z.string(),
+      z.array(z.union([textContentBlockSchema, writeToolUseBlockSchema, contentBlockSchema])),
+    ]),
   }),
 });
 
-export type AssistantEntryWithToolUse = z.infer<typeof assistantEntryToolUseSchema>;
+export type AssistantEntryWithContent = z.infer<typeof assistantEntryWithContentSchema>;

@@ -48,7 +48,7 @@ export class FakeSessionProvider implements SessionProvider {
 }
 
 const EMPTY_TRANSCRIPT_READ_RESULT: TranscriptReadResult = {
-  facts: { lastActivity: null, lastPrompts: [], touchedFiles: [] },
+  facts: { lastActivity: null, lastPrompts: [], assistantMessages: [], touchedFiles: [] },
   rejected: [],
   unknownEntryTypeCount: 0,
 };
