@@ -1035,9 +1035,44 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       (`start-day-selection.ts`) deixava implícitas. Sem laço de nova tentativa (mantido de
       S3-T3); código de saída continua 0. Escolhas registradas em `docs/QUESTOES.md` Q-031.
 
+- [ ] **S3-T7 — A mensagem de falha do fallback precisa mostrar o argv tentado.** Saída da
+      Q-029, aprovada em 2026-08-30. **O problema, hoje:** se o
+      `--append-system-prompt-file` sumir ou mudar de nome numa versão futura — e o mantenedor
+      está certo de que isso é questão de tempo —, o `claude` recusa o argumento, sai rápido com
+      código ≠ 0, e o `adapters/resumption/resumer.ts` lança com a mensagem *"Check that
+      `claude` is on PATH and that `<cwd>` still exists"*. **Que estaria errada.** O binário está
+      no PATH e o `cwd` existe; o que sumiu foi o flag. Mandar investigar o lugar errado é pior
+      que não dizer nada.
+      *Escopo:* a mensagem carrega o argv de fato tentado, para que a causa apareça sozinha. Vale
+      olhar se o mesmo vale para o caminho do `--resume` primário.
+      *Por que isto e não mais teste de contrato:* o teste da S3-T4 mede o modo `-p` e o fallback
+      roda interativo — ele nunca vai cobrir o caminho real. A escolha registrada na Q-029 é
+      seguir com `--append` até quebrar; esta tarefa é o que garante que, quando quebrar, dê para
+      saber por quê em vez de caçar PATH.
+
 ---
 
 ## Sprint 4 — Automatizar
+
+- [ ] **S4-T00 — Medir se a captura pega carona no cache.** Aprovada pelo mantenedor em
+      2026-08-30 ao fechar a Q-032: "acho importante saber disso desde já". **Vem antes da
+      S4-T0 e da S4-T1** porque é a resposta que decide a forma do daemon.
+      *O que medir, e só isto por enquanto:* o custo de uma captura profunda **logo depois** de
+      um turno da sessão, contra a mesma captura horas depois. Isola o efeito do relógio, que
+      provavelmente decide antes da identidade de prefixo — cache com validade de minutos a uma
+      hora torna irrelevante qualquer prefixo numa captura às 19h sobre sessão parada desde as
+      10h.
+      *Por que importa:* se a diferença for grande, o daemon deixa de ser "acorda no horário e
+      captura tudo" e passa a ser "acompanha as sessões e captura cada uma quando esfria", com o
+      fim do dia virando **consolidação** do que já foi capturado. Não são variações de
+      implementação, são formas diferentes. O Spike I mostra que o próprio Claude Code resolve o
+      mesmo problema assim: o away summary dispara por **ociosidade de 5 minutos**, não por
+      horário.
+      *Fora de escopo:* identidade de prefixo e validade efetiva (itens 2 e 3 da Q-032) — só
+      valem a pena se o item 1 mostrar diferença.
+      *Cuidado (D-001):* perseguir o cache reproduzindo o prefixo da sessão viva chega perto de
+      "gerar por dentro". Qualquer desenho que saia daqui precisa mostrar que não gasta o
+      contexto da sessão viva nem interrompe o turno dela.
 
 - [ ] **S4-T0 — A evidência não pode ficar presa ao `cwd` de lançamento.** Aprovada pelo
       mantenedor em 2026-08-30. **O problema, observado no primeiro teste real:** a sessão subiu

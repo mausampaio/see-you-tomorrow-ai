@@ -2264,7 +2264,40 @@ dois modos separadamente — não antes, para não guardar escopo especulativo (
 Q-027 item 4/opção C). C) o achado 4 (sonnet não discrimina) pode valer uma nota à parte em
 D-004/Q-027 sobre não confiar em autorrelato de modelo para decisões de produto — hoje o `seeya`
 não faz isso em lugar nenhum, mas fica como risco conhecido caso surja a tentação.
-**Resposta:** (preenchida pelo PO)
+**Resposta:** **FECHADO — o teste fica, mas o que se afirma a partir dele desce de garantia para
+medição re-executável. E a proteção de verdade vai para outro lugar.**
+
+**A dúvida do mantenedor é justa, e o argumento mais forte a favor dela é um que o próprio
+relatório já tinha admitido:** o teste mede o modo **headless `-p`**, e o fallback real roda
+**interativo com stdio herdado**. Se os dois modos divergirem na montagem do prompt de sistema,
+o teste passa e a produção quebra. Ele valida um modo que a gente não usa — isso não é detalhe,
+é o teto do que ele pode provar.
+
+Some a isso o que ele levantou: o Claude Code muda rápido, e não há garantia de que o flag exista
+daqui a um mês. Tratar esse teste como rede de segurança seria confiança mal colocada.
+
+**Mesmo assim ele não sai, e a razão é outra que não "garantia".** Ele custa **zero** no trabalho
+normal: roda só por `npm run test:contrato`, que não está no CI padrão. E o valor dele é ser uma
+**medição re-executável**: daqui a seis meses, quando alguém perguntar "por que `--append` e não
+`--system-prompt-file`?", um comando responde em trinta segundos — em vez de refazer as 11
+invocações que esta tarefa gastou para descobrir. Deixar de tratá-lo como portão não é motivo
+para jogar fora a medição.
+
+**A proteção de verdade vai para onde a quebra vai aparecer.** Se o flag sumir, hoje acontece o
+seguinte: o `claude` recusa o argumento, sai rápido com código ≠ 0, e o
+`adapters/resumption/resumer.ts` trata falha rápida do fallback como exceção — com a mensagem
+*"Check that `claude` is on PATH and that `<cwd>` still exists"*. **Que estaria errada.** O
+`claude` está no PATH e o `cwd` existe; o que sumiu foi o flag. Mandar a pessoa investigar PATH
+quando a causa é outra é pior que não dizer nada.
+
+**Vira tarefa própria: a mensagem de falha do fallback precisa mostrar o argv que foi tentado.**
+Aí, no dia em que o flag mudar de nome ou sumir, a mensagem carrega a evidência em vez de apontar
+para o lugar errado. É barato, não custa chamada de modelo nenhuma, e cobre exatamente o cenário
+que o mantenedor descreveu ("continuar até quebrar em algum momento") — fazendo com que, quando
+quebrar, dê para saber por quê.
+
+**A limitação do modo fica escrita no topo do teste**, não só aqui: quem for lê-lo precisa saber,
+antes de confiar, que ele mede `-p` e o produto usa interativo.
 
 ---
 
@@ -2439,7 +2472,14 @@ não `start-day-command.ts`, mover a chamada não quebra a assinatura de `format
 só avisando aqui para não ser surpresa. C) para o item 4, medir com o mantenedor se o texto de
 `--help` precisa mesmo dizer explicitamente "skips the interactive picker" em vez de deixar
 implícito.
-**Resposta:** (preenchida pelo PO)
+**Resposta:** **FECHADA — as cinco confirmadas pelo mantenedor em 2026-08-30.**
+
+Inclui o julgamento sobre o `--help`: você conferiu a saída real antes de apontar para ela, em
+vez de assumir, e concluiu que as descrições de `--all`/`--session` sustentam o ponteiro. É a
+ordem certa — ponteiro para documentação que não explica o que promete é pior que nenhum.
+
+A costura do `formatNoSessionMatch` foi fechada pela S3-T5, que já passa o valor recebido e a
+forma normalizada quando diferem.
 
 ---
 
@@ -2502,4 +2542,19 @@ precisa mostrar que não faz nenhuma das duas coisas.
 **Opções que enxergo:** A) responder no Sprint 4, antes de fixar a forma do daemon — é onde a
 resposta muda o desenho. B) deixar para a v2 e aceitar que o Sprint 4 nasça com a passada cara,
 sabendo que vai ser refeita. C) medir só o item 1, que é barato e sozinho já diz se vale continuar.
-**Resposta:** _(em aberto)_
+**Resposta:** **FECHADO — medir no início do Sprint 4, antes de fixar a forma do daemon.**
+
+Decisão do mantenedor em 2026-08-30: "acho importante saber disso desde já". Concordo, e o motivo
+é o que já está escrito acima — o daemon é a peça que a resposta muda. "Acorda no horário e
+captura tudo" e "acompanha as sessões e captura cada uma quando esfria" não são variações de
+implementação: são formas diferentes, e escolher sem medir é escolher a cara por omissão.
+
+**Escopo da medição: o item 1 sozinho, primeiro.** O custo de uma captura profunda **logo depois**
+de um turno da sessão, contra a mesma captura horas depois. Isola o efeito do relógio, que é o que
+provavelmente decide antes do prefixo — cache com validade de minutos a uma hora torna irrelevante
+qualquer identidade de prefixo numa captura às 19h sobre sessão parada desde as 10h.
+
+Se o item 1 mostrar diferença grande, os itens 2 e 3 (identidade de prefixo, validade efetiva)
+passam a valer a pena. Se não mostrar, a ideia morre barato e o daemon segue como está desenhado.
+
+Entra como **S4-T00**, antes da S4-T0 e da S4-T1.
