@@ -14,11 +14,48 @@
 export type GenerationFailureReason =
   | { readonly kind: 'spawnError'; readonly message: string }
   | { readonly kind: 'timeout'; readonly timeoutMs: number }
-  | { readonly kind: 'nonZeroExit'; readonly exitCode: number; readonly stderr: string }
+  // `stdout` added in S4-T00d: a non-zero exit code says nothing about whether stdout is
+  // readable. `run-generation.ts` only reaches this branch after trying (and failing) to read
+  // `stdout` as claude's own `--output-format json` envelope, so the raw text is the only
+  // evidence left — same reasoning `invalidJson` already applied to its own `raw`.
+  | {
+      readonly kind: 'nonZeroExit';
+      readonly exitCode: number;
+      readonly stderr: string;
+      readonly stdout: string;
+    }
   | { readonly kind: 'invalidJson'; readonly raw: string; readonly message: string }
   | { readonly kind: 'invalidOutputShape'; readonly raw: unknown; readonly message: string }
   | { readonly kind: 'invalidUnderstandingShape'; readonly raw: unknown; readonly message: string }
-  | { readonly kind: 'modelReportedError'; readonly subtype: string; readonly result: string };
+  // `exitCode` added in S4-T00d: claude reports `is_error` inside this envelope on stdout
+  // regardless of the process's own exit code (`run-generation.ts` reaches this variant from
+  // both a clean exit and a non-zero one). Always the exit code actually observed, never
+  // defaulted — a reader distinguishing "model reported failure, process still exited 0" from
+  // "model reported failure, process ALSO exited non-zero" gets both facts, no inferred cause
+  // (D-025: report what was observed, not a guess about which one explains the other).
+  | {
+      readonly kind: 'modelReportedError';
+      readonly subtype: string;
+      readonly result: string;
+      readonly exitCode: number;
+    };
+
+// `result` above can carry arbitrary model-produced text, and `describe()`'s return value ends up
+// verbatim in `generationError`, which is written into the handoff on disk
+// (`application/generation-policy.ts`). Capped here — not in `run-generation.ts` — so the full,
+// untruncated `result` still reaches anyone pattern-matching on `error.reason.result`
+// programmatically; only the rendered message that goes to disk is bounded. 500 characters is
+// enough to read what the model said without turning a disk-persisted error field into a copy of
+// its output (S4-T00d).
+const MAX_MODEL_RESULT_CHARS = 500;
+
+function truncateModelResult(result: string): string {
+  if (result.length <= MAX_MODEL_RESULT_CHARS) {
+    return result;
+  }
+  const omittedChars = result.length - MAX_MODEL_RESULT_CHARS;
+  return `${result.slice(0, MAX_MODEL_RESULT_CHARS)}… (${omittedChars} more characters omitted)`;
+}
 
 function describe(reason: GenerationFailureReason): string {
   switch (reason.kind) {
@@ -29,7 +66,8 @@ function describe(reason: GenerationFailureReason): string {
     case 'nonZeroExit':
       return (
         `claude exited with code ${reason.exitCode}, expected 0. stderr: ` +
-        (reason.stderr.length > 0 ? reason.stderr : '(empty)')
+        (reason.stderr.length > 0 ? reason.stderr : '(empty)') +
+        `. stdout: ${reason.stdout.length > 0 ? reason.stdout : '(empty)'}`
       );
     case 'invalidJson':
       return `claude's stdout is not valid JSON: ${reason.message}. Raw stdout:\n${reason.raw}`;
@@ -41,7 +79,10 @@ function describe(reason: GenerationFailureReason): string {
         `tomorrowPlan}: ${reason.message}`
       );
     case 'modelReportedError':
-      return `claude reported is_error with subtype "${reason.subtype}". result: ${reason.result}`;
+      return (
+        `claude reported is_error (exit code ${reason.exitCode}) with subtype ` +
+        `"${reason.subtype}". result: ${truncateModelResult(reason.result)}`
+      );
   }
 }
 

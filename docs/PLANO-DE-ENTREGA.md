@@ -1140,7 +1140,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* uma sessão onde o assistente diz o que fez e o usuário nunca repete produz
       handoff que registra o que foi feito — o caso exato que falhou no teste real.
 
-- [ ] **S4-T00d — A falha de geração precisa dizer o que o `claude` respondeu.** Achada pelo
+- [~] **S4-T00d — A falha de geração precisa dizer o que o `claude` respondeu.** Achada pelo
       mantenedor em 2026-08-31, testando à mão a captura nova da S4-T00c. **Faça antes do daemon:**
       ele vai chamar a captura em laço, e uma falha cega repetida N vezes é pior que uma.
 
@@ -1178,6 +1178,24 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       real, cobrando os dois. **Mas é hipótese**, e é exatamente o que esta tarefa existe para
       tornar visível na próxima vez. Se os defaults precisarem mudar, isso é decisão de produto
       com a evidência na mão, não palpite agora.
+
+      **Implementado em 2026-08-31.** `run-generation.ts#runGeneration`, em saída ≠ 0, tenta ler o
+      `stdout` como o envelope `--output-format json` (`tryParseClaudeOutput`, que não lança) antes
+      de desistir; se ele trouxer `is_error`, a rejeição vira `modelReportedError` (mesma função
+      `modelReportedError` usada pelo caminho de saída limpa, agora carregando também o `exitCode`
+      real observado). Só quando o `stdout` não é o envelope válido cai para `nonZeroExit`, que
+      ganhou um campo `stdout` com o texto bruto — mesmo tratamento que `invalidJson#raw` já dava
+      ao dele. O corte de tamanho do `result` (500 caracteres) mora em `errors.ts#describe()`, não
+      na construção do `reason`: `error.reason.result` continua íntegro para quem faz
+      pattern-matching programático, só a mensagem renderizada (a que vai para `generationError`
+      no handoff em disco) fica limitada. `tests/fixtures/generation/fake-claude.mjs` ganhou a
+      capacidade de escrever `FAKE_CLAUDE_STDOUT` também no modo `nonzero` (reaproveitado, não
+      duplicado), o que permite reproduzir as duas formas de falha em
+      `tests/integration/generation/lean-generator.test.ts`: saída ≠ 0 com envelope `is_error`
+      válido → `modelReportedError`; saída ≠ 0 com `stdout` ilegível → `nonZeroExit` com o `stdout`
+      bruto anexado. Três escolhas sem resposta literal na tarefa, e um achado à parte não
+      consertado (o `timeout` de `spawn-claude.ts` descarta o mesmo tipo de evidência, só que no
+      caminho de timeout) registrados na Q-039.
 
 - [ ] **S4-T0 — A evidência não pode ficar presa ao `cwd` de lançamento.** Aprovada pelo
       mantenedor em 2026-08-30. **O problema, observado no primeiro teste real:** a sessão subiu

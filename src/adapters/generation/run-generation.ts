@@ -41,6 +41,38 @@ function parseClaudeOutput(stdout: string): ClaudePrintOutput {
 }
 
 /**
+ * Same parse as `parseClaudeOutput`, but swallows the failure instead of throwing (S4-T00d).
+ * Used only when `claude`'s own exit code is non-zero: that alone doesn't mean stdout is
+ * unreadable, since claude writes its `--output-format json` envelope to stdout even when it
+ * reports its own failure there, regardless of the process exit code. Returns `undefined` for
+ * anything that doesn't parse or doesn't match the schema — the caller treats that the same as
+ * "no envelope" and falls back to `nonZeroExit` with the raw stdout attached.
+ */
+function tryParseClaudeOutput(stdout: string): ClaudePrintOutput | undefined {
+  try {
+    return parseClaudeOutput(stdout);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Builds the `modelReportedError` rejection shared by both places `runGeneration` can reach it:
+ * a clean exit (`exitCode` 0) and a non-zero exit where the envelope on stdout still parsed
+ * (S4-T00d). `exitCode` is always the value actually observed for that call, never defaulted —
+ * the two situations stay distinguishable to whoever reads `generationError` later, without this
+ * function guessing which one explains the other (D-025).
+ */
+function modelReportedError(output: ClaudePrintOutput, exitCode: number): GenerationError {
+  return new GenerationError({
+    kind: 'modelReportedError',
+    subtype: output.subtype,
+    result: output.result,
+    exitCode,
+  });
+}
+
+/**
  * Pulls `{understanding, pendingItems, tomorrowPlan}` out of a successful `ClaudePrintOutput`.
  * Prefers `output.structured_output` — the already-parsed object `--json-schema` adds (confirmed
  * for real, see `understanding-schema.ts`) — and only falls back to `JSON.parse(output.result)`
@@ -70,19 +102,27 @@ function extractUnderstanding(output: ClaudePrintOutput): GeneratedUnderstanding
  * stdout that isn't JSON, JSON that doesn't match `claudePrintOutputSchema`, the model reporting
  * `is_error`, or a `structured_output`/`result` that doesn't match the requested understanding
  * shape.
+ *
+ * **On a non-zero exit, stdout is checked for the envelope BEFORE giving up (S4-T00d).** The
+ * original version of this function treated "exit code != 0" as its own terminal failure and
+ * never looked at stdout, even though `claude --output-format json` writes its own `is_error`
+ * report there regardless of exit code — a real capture failed this way and the handoff recorded
+ * only `stderr: (empty)`, discarding the far more useful `subtype`/`result` envelope that was
+ * sitting on stdout the whole time. Only when stdout does NOT parse as that envelope does a
+ * non-zero exit fall back to `nonZeroExit`, now carrying the raw stdout too.
  */
 export async function runGeneration(options: SpawnClaudeOptions): Promise<GeneratedUnderstanding> {
   const { stdout, stderr, exitCode } = await spawnClaude(options);
   if (exitCode !== 0) {
-    throw new GenerationError({ kind: 'nonZeroExit', exitCode, stderr });
+    const output = tryParseClaudeOutput(stdout);
+    if (output?.is_error === true) {
+      throw modelReportedError(output, exitCode);
+    }
+    throw new GenerationError({ kind: 'nonZeroExit', exitCode, stderr, stdout });
   }
   const output = parseClaudeOutput(stdout);
   if (output.is_error) {
-    throw new GenerationError({
-      kind: 'modelReportedError',
-      subtype: output.subtype,
-      result: output.result,
-    });
+    throw modelReportedError(output, exitCode);
   }
   return extractUnderstanding(output);
 }

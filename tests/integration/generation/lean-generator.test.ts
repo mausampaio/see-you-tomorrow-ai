@@ -210,6 +210,66 @@ describe('LeanHandoffGenerator — the three failure fixtures, none a silent suc
     }
   });
 
+  it('non-zero exit code with an unreadable stdout: rejects as nonZeroExit with the raw stdout attached', async () => {
+    process.env['FAKE_CLAUDE_MODE'] = 'nonzero';
+    process.env['FAKE_CLAUDE_EXIT_CODE'] = '1';
+    process.env['FAKE_CLAUDE_STDOUT'] = 'not json at all {{{';
+
+    const call = generator().generate(session(), facts());
+
+    await expect(call).rejects.toMatchObject({ reason: { kind: 'nonZeroExit', exitCode: 1 } });
+    const error = await call.catch((error: unknown) => error);
+    if (error instanceof GenerationError && error.reason.kind === 'nonZeroExit') {
+      expect(error.reason.stdout).toContain('not json at all {{{');
+    }
+  });
+
+  // S4-T00d's regression test: a real capture failed with exit code 1 and `claude` had actually
+  // written a `--output-format json` envelope (`is_error: true`, `subtype`, `result`) to stdout —
+  // evidence the previous version of run-generation.ts never looked at, because it treated a
+  // non-zero exit code as its own terminal failure. This is that exact shape, reproduced through
+  // the fake claude binary rather than by asserting against the real captured session (no real
+  // session output goes into a fixture, per AGENTS.md's local-terms guard).
+  it('non-zero exit code with a valid is_error envelope on stdout: rejects as modelReportedError, not nonZeroExit', async () => {
+    process.env['FAKE_CLAUDE_MODE'] = 'nonzero';
+    process.env['FAKE_CLAUDE_EXIT_CODE'] = '1';
+    process.env['FAKE_CLAUDE_STDOUT'] = JSON.stringify({
+      type: 'result',
+      subtype: 'error_during_execution',
+      is_error: true,
+      duration_ms: 400,
+      num_turns: 1,
+      result: 'budget exhausted before the turn completed',
+      session_id: '22222222-2222-4222-8222-222222222222',
+      total_cost_usd: 0.25,
+      usage: {
+        input_tokens: 9,
+        output_tokens: 0,
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 0,
+      },
+      modelUsage: {},
+      permission_denials: [],
+      uuid: '33333333-3333-4333-8333-333333333333',
+    });
+
+    const call = generator().generate(session(), facts());
+
+    await expect(call).rejects.toMatchObject({
+      reason: {
+        kind: 'modelReportedError',
+        subtype: 'error_during_execution',
+        exitCode: 1,
+      },
+    });
+    const error = await call.catch((error: unknown) => error);
+    expect(error).toBeInstanceOf(GenerationError);
+    if (error instanceof GenerationError && error.reason.kind === 'modelReportedError') {
+      expect(error.message).toContain('budget exhausted before the turn completed');
+      expect(error.message).not.toContain('(empty)');
+    }
+  });
+
   it('a process that hangs: rejects with a timeout once the hard deadline passes, never hangs the caller', async () => {
     process.env['FAKE_CLAUDE_MODE'] = 'hang';
     const shortTimeoutGenerator = new LeanHandoffGenerator({

@@ -8,7 +8,10 @@
 // Controlled entirely by environment variables the test sets before spawning, so ONE script
 // covers every fixture instead of four near-duplicates:
 //   FAKE_CLAUDE_MODE           'success' | 'invalid-json' | 'nonzero' | 'hang' (default 'success')
-//   FAKE_CLAUDE_STDOUT         stdout text for 'success' mode
+//   FAKE_CLAUDE_STDOUT         stdout text for 'success' mode; also honored by 'nonzero' (S4-T00d:
+//                              claude can write its own `--output-format json` envelope to stdout
+//                              even when the process itself exits non-zero — unset/empty here
+//                              reproduces the original "exit != 0, unreadable stdout" case).
 //   FAKE_CLAUDE_EXIT_CODE      exit code for 'nonzero' mode (default '1')
 //   FAKE_CLAUDE_CAPTURE_FILE   if set, this process writes {argv, stdin, env} here as JSON BEFORE
 //                              acting on FAKE_CLAUDE_MODE — this is the proof instrument for D-015
@@ -52,6 +55,10 @@ switch (mode) {
     process.exit(0);
     break;
   case 'nonzero':
+    // Writing FAKE_CLAUDE_STDOUT here too (S4-T00d) lets one test simulate claude reporting
+    // `is_error` on stdout while still exiting non-zero; leaving it unset keeps the original
+    // "exit != 0, stdout has nothing readable" case working unchanged.
+    process.stdout.write(process.env['FAKE_CLAUDE_STDOUT'] ?? '');
     process.stderr.write('fake claude: simulated failure\n');
     process.exit(Number(process.env['FAKE_CLAUDE_EXIT_CODE'] ?? '1'));
     break;
