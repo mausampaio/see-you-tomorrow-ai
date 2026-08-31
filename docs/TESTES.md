@@ -108,8 +108,17 @@ Cada adapter contra o mundo real, mas num mundo de mentira controlado.
   recorte de "commits do dia". Mais um caso com `cwd` que não é repositório.
 - **`process/`**: iniciar um processo filho trivial, verificar liveness, terminar com graça,
   verificar que morreu. Por plataforma.
-- **`notification/`**: cada backend com o binário externo falsificado; verificar os argumentos
-  montados, não o toast aparecendo.
+- **`notification/`**: cada backend verifica os argumentos montados, nunca o toast aparecendo.
+  **Implementado com o comando externo injetável (`CommandRunner`), não um binário falso em
+  `PATH`** (S4-T1): ao contrário de `claude` (D-015 exige provar integridade através de um
+  processo real de verdade), o conteúdo do toast nunca é reprocessado por um shell entre o
+  processo do `seeya` e o comando nativo — `-EncodedCommand` no Windows, array de argumentos sem
+  shell nos outros dois —, então não há fronteira de processo cujo comportamento real precise ser
+  provado; a montagem do comando é 100% determinística e testável em memória. Ver
+  `docs/QUESTOES.md` Q-038. O e2e (`tests/e2e/_fake-notification-commands.ts`) continua
+  substituindo o binário nativo de verdade por um falso em `PATH`, porque ali quem spawna é o
+  binário `seeya` compilado — sem esse cuidado, `npm run test:e2e` mostraria uma notificação real
+  na tela de quem roda o portão.
 
 ## Medir custo de chamada real: controle o calor do cache
 

@@ -1197,7 +1197,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       fatos de git, mas muda o que esta tarefa precisa consertar. Especificar antes disso seria
       desenhar contra um alvo que está se movendo.
 
-- [ ] **S4-T1 — `adapters/notification`** conforme o Spike B, com a cadeia de fallback e o
+- [~] **S4-T1 — `adapters/notification`** conforme o Spike B, com a cadeia de fallback e o
       contrato mínimo **sem ações**. Validação manual do `activationType="protocol"` com esquema
       `seeya://` no Windows; se não se provar, o produto segue sem ações clicáveis e nada quebra.
       **Q-007:** quando `canTerminate: true` estiver ligado e a terminação não acontecer (depois da

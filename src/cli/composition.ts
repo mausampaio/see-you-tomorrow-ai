@@ -9,6 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type {
   Clock,
+  Notifier,
   ProcessControl,
   SessionProvider,
   SessionResumer,
@@ -23,6 +24,7 @@ import { TranscriptFileReader } from '../adapters/transcript/index.js';
 import { GitAdapter } from '../adapters/git/index.js';
 import { LeanHandoffGenerator, DeepHandoffGenerator } from '../adapters/generation/index.js';
 import { ClaudeSessionResumer } from '../adapters/resumption/index.js';
+import { notifier as realNotifier } from '../adapters/notification/index.js';
 import type { EndDayDeps } from '../application/types.js';
 
 export interface CliHome {
@@ -92,13 +94,21 @@ export async function buildCliContext(homeDir: string = os.homedir()): Promise<C
 export interface EndDayContext {
   readonly deps: EndDayDeps;
   readonly config: Config;
+  /**
+   * S4-T1: `cli/end-day-command.ts`'s own step 5 (docs/ESPECIFICACAO.md § `seeya end-day`,
+   * "Notifica o resultado"). Not part of `EndDayDeps` — `application/end-day.ts`'s own docstring
+   * earmarks notifying as happening OUTSIDE `endDay` itself, in whichever caller runs after it.
+   */
+  readonly notifier: Notifier;
 }
 
 /**
- * `seeya end-day`'s own composition (S2-T5): every port `application/endDay` orchestrates, wired
- * to its real adapter. Two pieces this task is the one to switch on, both built and ready since
- * earlier sprints (S2-T2's generators, S2-T6's `ForkCleanup`) but never named by `cli/` until now
- * — D-020 means nothing outside this file was allowed to instantiate them first.
+ * `seeya end-day`'s own composition (S2-T5, `notifier` added in S4-T1): every port
+ * `application/endDay` orchestrates, wired to its real adapter, plus the `Notifier` its own
+ * caller (`end-day-command.ts`) uses for step 5. Two pieces this task is the one to switch on,
+ * both built and ready since earlier sprints (S2-T2's generators, S2-T6's `ForkCleanup`) but never
+ * named by `cli/` until now — D-020 means nothing outside this file was allowed to instantiate
+ * them first.
  *
  * `leanGenerator`/`deepGenerator` are both always built, never chosen here: `captureSession`
  * (`application/capture-session.ts`) picks between them per session, since that decision needs
@@ -138,7 +148,7 @@ export async function buildEndDayContext(homeDir: string = os.homedir()): Promis
       clock,
     }),
   };
-  return { deps, config };
+  return { deps, config, notifier: realNotifier };
 }
 
 export interface StartDayContext {

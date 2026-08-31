@@ -71,13 +71,18 @@ program
   )
   .option('--session <idOrCwd>', 'Limit end-day to a single session, matched by sessionId or cwd.')
   .action(async (options: { dryRun?: boolean; session?: string }) => {
-    const { deps, config } = await buildEndDayContext();
+    const { deps, config, notifier } = await buildEndDayContext();
     console.log(
-      await runEndDayCommand(deps, config, {
-        dryRun: options.dryRun ?? false,
-        // `exactOptionalPropertyTypes`: only set `session` when commander actually parsed one.
-        ...(options.session !== undefined ? { session: options.session } : {}),
-      }),
+      await runEndDayCommand(
+        deps,
+        config,
+        {
+          dryRun: options.dryRun ?? false,
+          // `exactOptionalPropertyTypes`: only set `session` when commander actually parsed one.
+          ...(options.session !== undefined ? { session: options.session } : {}),
+        },
+        notifier,
+      ),
     );
   });
 

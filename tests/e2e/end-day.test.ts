@@ -239,7 +239,7 @@ describe('e2e: seeya end-day (nº3) and --session (S2-T5 acceptance)', () => {
 
     expect(result.exitCode, `stderr: ${result.stderr}`).toBe(0);
     expect(result.stdout).toContain('No discovered session matches "does-not-exist"');
-    expect(result.stdout).toContain('1 session(s) were discovered in total');
+    expect(result.stdout).toContain('1 session was discovered in total');
   }, 20_000);
 });
 

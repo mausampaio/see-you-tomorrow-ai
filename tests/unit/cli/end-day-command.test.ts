@@ -23,6 +23,7 @@ import {
   FakeTranscriptReader,
   succeedingGenerator,
 } from '../application/_fakes.js';
+import { RecordingNotifier, ThrowingNotifier } from './_fakes.js';
 
 const NOW = new Date('2026-08-16T21:00:00.000Z');
 
@@ -332,5 +333,76 @@ describe('runEndDayCommand — Config threading', () => {
     });
     const report = await runEndDayCommand(deps, config, { dryRun: true });
     expect(report).toContain('would terminate: yes');
+  });
+});
+
+describe('runEndDayCommand — notifier (S4-T1)', () => {
+  it('with no notifier given, still returns the same report as before (backward compatible)', async () => {
+    const session = createSessionWithPid({ name: 'projeto-01', lastActivity: NOW });
+    const deps = buildDeps({
+      sessionProvider: new FakeSessionProvider({ sessions: [session], rejected: [] }),
+    });
+    const report = await runEndDayCommand(deps, DEFAULT_TEST_CONFIG, { dryRun: false });
+    expect(report).toContain('seeya end-day — 2026-08-16');
+  });
+
+  it('notifies the real result of a full run', async () => {
+    const session = createSessionWithPid({ name: 'projeto-01', lastActivity: NOW });
+    const deps = buildDeps({
+      sessionProvider: new FakeSessionProvider({ sessions: [session], rejected: [] }),
+    });
+    const notifier = new RecordingNotifier();
+
+    await runEndDayCommand(deps, DEFAULT_TEST_CONFIG, { dryRun: false }, notifier);
+
+    expect(notifier.notices).toHaveLength(1);
+    expect(notifier.notices[0]?.title).toBe('seeya end-day: 2026-08-16');
+    expect(notifier.notices[0]?.body).toContain('1 session captured');
+  });
+
+  it('never notifies for a dry run', async () => {
+    const session = createSessionWithPid({ name: 'projeto-01', lastActivity: NOW });
+    const deps = buildDeps({
+      sessionProvider: new FakeSessionProvider({ sessions: [session], rejected: [] }),
+    });
+    const notifier = new RecordingNotifier();
+
+    await runEndDayCommand(deps, DEFAULT_TEST_CONFIG, { dryRun: true }, notifier);
+
+    expect(notifier.notices).toHaveLength(0);
+  });
+
+  it('never notifies when --session matches nothing (no real run happened)', async () => {
+    const session = createSessionWithPid({ name: 'projeto-01', lastActivity: NOW });
+    const deps = buildDeps({
+      sessionProvider: new FakeSessionProvider({ sessions: [session], rejected: [] }),
+    });
+    const notifier = new RecordingNotifier();
+
+    await runEndDayCommand(
+      deps,
+      DEFAULT_TEST_CONFIG,
+      { dryRun: false, session: 'nothing-matches-this' },
+      notifier,
+    );
+
+    expect(notifier.notices).toHaveLength(0);
+  });
+
+  it('a Notifier that rejects never aborts the command — the report still comes back', async () => {
+    const session = createSessionWithPid({ name: 'projeto-01', lastActivity: NOW });
+    const deps = buildDeps({
+      sessionProvider: new FakeSessionProvider({ sessions: [session], rejected: [] }),
+    });
+
+    const report = await runEndDayCommand(
+      deps,
+      DEFAULT_TEST_CONFIG,
+      { dryRun: false },
+      new ThrowingNotifier(),
+    );
+
+    expect(report).toContain('seeya end-day — 2026-08-16');
+    expect(report).toContain('projeto-01');
   });
 });

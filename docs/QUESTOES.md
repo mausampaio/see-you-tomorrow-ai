@@ -2798,6 +2798,9 @@ usuário). **Resposta:** em aberto — decisão do mantenedor, não do agente.
 
 ---
 
+
+---
+
 ## Q-037 — Seis escolhas feitas fazendo S4-T2 (`core/schedule.ts`), registradas para confirmação
 
 **Tarefa:** S4-T2
@@ -2890,3 +2893,126 @@ tabela de "Identificadores que vão para disco" cita só o conceito, não os nom
 campos (`skipped`, `snoozeMinutesTotal`, `firedLeadTimesInMinutes`, `endOfDayFired`) e os nomes de
 função são meus, sem correspondente literal em nenhum documento. Nenhum dos dois vira chave em
 disco nesta tarefa (ver item 6).
+
+---
+
+## Q-038 — Sete escolhas feitas fazendo S4-T1 (`adapters/notification`), registradas para confirmação
+
+**Tarefa:** S4-T1
+**Bloqueia:** não — nenhuma das sete impediu a entrega; `npm run verificar` e
+`npm run verificar:linux` estão verdes com a cadeia de fallback completa e a Q-007 implementada.
+Registro aqui porque cada uma tem uma leitura alternativa razoável, e "perguntar custa uma
+mensagem".
+
+**1) Spike B previa um backend "nativo" e um "degradado" por SO (e `terminal-notifier` no macOS);
+implementei só UM backend nativo por SO.** O Spike B propôs, para o macOS, `terminal-notifier`
+(com ações) como tier 1 e `osascript display notification` (sem ações) como tier 2 degradado — e
+listava `notify-send -A` (com ações) como o caminho "certo" no Linux. A única vantagem de
+`terminal-notifier`/`-A` sobre a alternativa mais simples é a ação clicável, e o contrato desta
+tarefa é explicitamente **sem ações**. Trazer `terminal-notifier` — "binário externo, pode não
+estar instalado", nas palavras do próprio spike — para uma capacidade que nada usa pareceria
+complexidade adiantada (AGENTS.md: "escopo adiantado é defeito"). Implementei um backend nativo
+só por SO: `WindowsToastBackend` (WinRT), `MacOsascriptBackend` (`osascript`, sem `terminal-
+notifier`), `LinuxNotifySendBackend` (`notify-send`, sem `-A`). A cadeia de 3 níveis do spike
+(nativo → degradado → stderr) vira, na prática, 2 níveis (nativo do SO → stderr), porque o nível
+"degradado" só existia para separar ações caras de ações baratas.
+**Opções:** A) confirma o corte — se ações se provarem (validação manual pendente, ver item 7),
+`terminal-notifier`/`notify-send -A` entram como um SEGUNDO backend nativo por SO nessa hora,
+não uma correção retroativa desta tarefa. B) o spike deveria ter sido seguido à risca mesmo sem
+uso imediato, para não precisar revisitar a cadeia depois.
+**Resposta:** _(aguardando)_
+
+**2) Nenhum backend real é exercitado via "binário externo falsificado em `PATH`" nos testes de
+unidade/integração — usei um `CommandRunner` injetável.** `docs/TESTES.md` § `notification/` diz
+literalmente "cada backend com o binário externo falsificado". Segui essa letra para `generation/`
+e `resumption/` (que a copiam de `claude`) por um motivo concreto que não se aplica aqui: D-015
+exige provar que conteúdo de tamanho variável sobrevive a uma fronteira de processo REAL sem
+mutilação de shell — e essa prova só é honesta com um processo de verdade do outro lado. O
+conteúdo do toast nunca atravessa um shell: vai de string JS para base64 (`-EncodedCommand` no
+Windows) ou para um elemento de array `argv` (POSIX, `shell:false`) — a montagem é 100%
+determinística e não tem "do outro lado de um processo real" para corromper algo. Testei a
+montagem dos argumentos com um `CommandRunner` injetado (nomeado, `RecordingCommandRunner`) e
+adicionei um teste de integração à parte (`tests/integration/notification/spawn-command.test.ts`)
+que exercita o `spawnCommand` genérico contra um processo REAL inofensivo (o próprio `node
+--version`) — nunca `powershell.exe`/`notify-send`/`osascript` de verdade, que é exatamente o que
+a tarefa pediu para nunca acontecer durante o teste. `docs/TESTES.md` foi atualizado com essa
+justificativa.
+**Opções:** A) confirma a leitura — a letra de `docs/TESTES.md` valia para o motivo (D-015), não
+para a forma (arquivo em PATH), e este caso não tem o motivo. B) a letra é a regra, e cada backend
+deveria ter seu próprio binário falso em `PATH`, com o mesmo custo de engenharia que
+`generation/`/`resumption/` pagaram (um `.exe` compilado via `csc.exe` no Windows).
+**Resposta:** _(aguardando)_
+
+**3) Notificar o resultado do `end-day` (passo 5 da spec) foi ligado no `cli/`, não dentro de
+`application/endDay`.** O próprio `application/end-day.ts` (S2-T3) já dizia no comentário: "step
+5 — notifying the result — is S4-T1", sem dizer ONDE. Escolhi `cli/end-day-command.ts` (nova
+função `notifyEndDayResult`, novo módulo `cli/end-day-notice.ts` para o texto) em vez de crescer
+`EndDayDeps`/`endDay()` com mais uma porta, por três motivos: (a) manteria `application/endDay`
+puro de um efeito colateral que nada no pipeline de captura precisa saber sobre; (b)
+`EndDayDeps`/`endDay()` são usados por muitos testes existentes (S2-T3/S2-T5), e um novo campo
+obrigatório teria um raio de alcance grande para uma tarefa que deveria ficar isolada de
+`core/`/`application/`; (c) é exatamente o padrão D-020 pede — a fiação fica no `cli/`. Sessões
+que não passam por um `endDay(...)` real (o caso `--session` sem correspondência, e o caso "sessão
+sumiu entre a resolução e o `endDay`") não notificam — nada de real aconteceu para relatar.
+`--dry-run` também não notifica (é uma prévia, não "encerramento executado").
+**Opções:** A) confirma a escolha de camada. B) `Notifier` deveria ter entrado em `EndDayDeps`
+mesmo, para que `seeya end-day` notifique de forma idêntica não importa quem o chame (hoje só
+`cli/index.ts` chama `runEndDayCommand`, mas o daemon em S4-T3 pode vir a chamar `endDay`
+diretamente).
+**Resposta:** _(aguardando)_
+
+**4) `runEndDayCommand` ganhou um 4º parâmetro `notifier` OPCIONAL, com um `SilentNotifier` como
+default.** Consequência direta da escolha do item 3: `EndDayCommandOptions`/`EndDayOptions` já
+usam exatamente este padrão (parâmetro novo opcional, docstring explicando que é para manter todo
+call site existente compilando). Segui o mesmo, em vez de tornar `notifier` obrigatório e editar os
+~15 call sites de teste já existentes em `tests/unit/cli/end-day-command.test.ts` (que não são
+desta tarefa).
+**Opções:** A) confirma o padrão — consistente com o precedente já aceito. B) `notifier`
+deveria ser obrigatório, forçando cada chamador a decidir explicitamente, e os call sites
+antigos deveriam ter sido atualizados.
+**Resposta:** _(aguardando)_
+
+**5) O e2e (`tests/e2e/_harness.ts`) ganhou um binário nativo de notificação FALSO em `PATH`, para
+todo teste, não só os de `end-day`.** Medi (não deduzi) que sem isso, `npm run test:e2e` mostraria
+uma notificação REAL na tela de quem roda o portão nesta máquina Windows: o `cli/composition.ts`
+agora liga o `Notifier` real de produção (`adapters/notification/index.ts`), e todo e2e de
+`end-day` sem `--dry-run` chama `notify()` de verdade. `tests/e2e/_fake-notification-commands.ts`
+instala um `powershell.exe` (Windows, `.exe` compilado via `csc.exe`, mesma técnica de
+`tests/integration/generation/_fixtures.ts`) ou `notify-send`/`osascript` (POSIX, script `#!/bin/sh
+exit 0`) na frente do `PATH`, para os três SOs uniformemente — mesmo sabendo que só um dos três é
+resolvido de fato em cada execução. Confirmado rodando `npm run test:e2e` real nesta máquina antes
+e depois: sem o fake, nenhum teste falhava (a suíte não afirma nada sobre notificação), mas o
+processo abria um toast de verdade — comportamento que não aparece em nenhuma asserção, só na
+tela. Depois do fake, os mesmos testes passam sem nenhum toast.
+**Opções:** A) confirma a mudança no harness compartilhado — o risco (mostrar notificação real
+durante `npm test`) é concreto e a tarefa pede explicitamente para evitá-lo. B) o fake deveria
+viver só nos testes de `end-day`, não em TODOS os e2e (hoje ele instala para os três SOs
+incondicionalmente, mesmo em `sessions.test.ts`/`start-day.test.ts`, que nunca chamam `end-day`).
+**Resposta:** _(aguardando)_
+
+**6) Removi a citação a "docs/QUESTOES.md Q-004" do comentário de topo de `core/ports.ts`.**
+Editando esse parágrafo (para tirar `Notifier` da lista de "ainda faltando"), reparei que a
+citação "Open question about this scope cut: docs/QUESTOES.md Q-004" não bate com o conteúdo real
+de Q-004 (que é sobre quatro achados de S1-T1 — elegibilidade, união discriminada, estado
+`unknown`, sessão viva sem transcript — nada sobre `Notifier`). Não investiguei a origem do
+descompasso (pode ser um número que mudou de dono numa reorganização anterior). Removi a citação
+em vez de corrigi-la para outro número, por não saber qual seria o certo.
+**Opções:** A) confirma a remoção — citação quebrada é pior que nenhuma. B) havia uma Q-004
+"original" sobre `Notifier` que foi sobrescrita por engano, e vale investigar o histórico do
+arquivo para recuperar o texto perdido.
+**Resposta:** _(aguardando)_
+
+**7) Achado ortogonal, não desta tarefa: `tests/e2e/end-day.test.ts` já tinha uma asserção
+quebrada antes desta tarefa, sem relação com notificação.** `describe('e2e: seeya end-day (nº3)...
+--session', () => { it('a --session value matching no discovered session says so...') })` espera
+`'1 session(s) were discovered in total'`, mas `src/cli/end-day-command.ts#formatNoMatchMessage`
+sempre produziu `'1 session was discovered in total'` (singular sem `"(s)"`, plural vira `"sessions
+were"`) — nunca a forma `"session(s)"` que o teste procura. Confirmado com `git show HEAD` no
+próprio arquivo de teste: o descompasso já existia antes de eu tocar em qualquer coisa, não é
+regressão desta tarefa. Não toquei nele — não é escopo desta tarefa e a mensagem de produção em si
+parece correta (concorda em número). `npm run verificar`/`verificar:linux` não rodam
+`test:e2e` (script separado), então isso não bloqueia o portão desta tarefa, mas fica registrado
+porque `npm run test:e2e` está vermelho por este motivo hoje.
+**Opções:** A) corrigir a asserção do teste para "1 session was discovered in total" (produção
+está certa). B) investigar se a intenção original era outra forma de mensagem.
+**Resposta:** _(aguardando)_

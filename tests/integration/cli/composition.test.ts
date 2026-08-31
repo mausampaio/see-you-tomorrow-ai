@@ -150,6 +150,17 @@ describe('buildEndDayContext', () => {
     expect(deps.forkCleanup).toBeDefined();
   });
 
+  // S4-T1: `notifier` is on `EndDayContext` itself, not `EndDayDeps` — see that field's own
+  // docstring for why (`application/end-day.ts` never calls it; `end-day-command.ts` does, after).
+  it('wires a real Notifier alongside deps', async () => {
+    fixture = await createDiscoveryFixture();
+
+    const { notifier } = await buildEndDayContext(fixture.root);
+
+    expect(notifier).toBeDefined();
+    expect(typeof notifier.notify).toBe('function');
+  });
+
   it('the real SessionProvider it wires discovers a fixture session, same as buildCliContext', async () => {
     fixture = await createDiscoveryFixture();
     await writeSessionRecord(fixture, 'stale', {

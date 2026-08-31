@@ -7,15 +7,10 @@
  * **Ports are declared as their types come to exist, not all seven from
  * docs/ARQUITETURA.md's sketch up front.** A port whose signature references a type that doesn't
  * exist yet in this project would mean inventing that type too early just to fill in a signature,
- * or declaring the port with `unknown` — worse than not declaring it. `HandoffGenerator` (S2-T2)
- * and `Storage` (S1-T5, grown further in S1-T7 and S2-T2) are both filled in below now that
- * `GeneratedUnderstanding`/`EarlyWarningState` exist. Still missing:
- *
- * - `Notifier` — implemented in S4-T1. S1-T7's pure rule (notify once per `sessionId`,
- *   never repeating) doesn't need the whole port to be pure; whoever implements S1-T7 decides
- *   the minimal shape that rule needs.
- *
- * Open question about this scope cut: docs/QUESTOES.md Q-004.
+ * or declaring the port with `unknown` — worse than not declaring it. `HandoffGenerator` (S2-T2),
+ * `Storage` (S1-T5, grown further in S1-T7 and S2-T2) and `Notifier` (S4-T1, at the end of this
+ * file) are all filled in below now that `GeneratedUnderstanding`/`EarlyWarningState`/`Notice`
+ * exist.
  */
 import type {
   Config,
@@ -514,4 +509,41 @@ import type { ResumeOutcome } from './types.js';
  */
 export interface SessionResumer {
   resume(sessionId: string, cwd: string, prompt: string): Promise<ResumeOutcome>;
+}
+
+// Own block at the end of the file on purpose (S4-T1), same pattern `ForkCleanup`/`Briefing`/
+// `SessionResumer` above already established (see their own comments): a new interface, appended
+// rather than inserted mid-file, to reduce merge collisions — S4-T2 (`core/schedule.ts`) is a
+// second in-flight task, and its own edits to this file are limited to this file's top comment.
+
+/**
+ * A minimal notice to show outside the terminal (docs/ESPECIFICACAO.md § "Notificações"). Title
+ * and body only — no actions. Spike B (docs/spikes/B-notificacoes.md) measured that action
+ * buttons are inconsistent across the three OSes and expensive on two of them (a registered COM
+ * server, or an external binary that "pode não estar instalado"); docs/ESPECIFICACAO.md's answer
+ * is that no use case ever depends on a click — every notice already names the equivalent command
+ * in `body` ("seeya snooze +30m"), and a click, where it turns out to be cheap and reliable, is
+ * added later as a pure convenience, never the only path (docs/PLANO-DE-ENTREGA.md S4-T1).
+ */
+export interface Notice {
+  readonly title: string;
+  readonly body: string;
+}
+
+/**
+ * Shows `notice` outside the terminal. Implemented in `adapters/notification/` (S4-T1) as a
+ * fallback chain over native-OS backends, degrading to stderr as the guaranteed last resort
+ * (docs/spikes/B-notificacoes.md § "Cadeia de fallback proposta", docs/TESTES.md § "Cadeia de
+ * fallback do notificador": "primeiro disponível vence; nenhum disponível cai para stderr sem
+ * lançar").
+ *
+ * **Never rejects.** A notification is a courtesy, never the product — the same discipline D-003
+ * already applies to a failed generation, applied here to the notice about the day's own result
+ * (docs/ESPECIFICACAO.md § `seeya end-day`: notifying is step 5, after the handoff is already
+ * written and verified, and after termination already ran or didn't). A caller (`cli/`) never
+ * needs a `try`/`catch` around `notify()` — every concrete backend's own failure is caught inside
+ * the adapter's fallback chain before it ever reaches this port's caller.
+ */
+export interface Notifier {
+  notify(notice: Notice): Promise<void>;
 }
