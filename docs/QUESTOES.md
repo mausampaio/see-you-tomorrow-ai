@@ -2374,7 +2374,29 @@ item 3, se o comportamento antigo (processar todas as sessões de um `cwd` compa
 desejado em algum fluxo, ele precisaria de uma flag própria (`--all-matching`?), não do
 `--session` que hoje promete "uma sessão". D) para o item 5, o mantenedor decide quando costurar a
 mensagem de ambiguidade em `format-start-day.ts`.
-**Resposta:** (preenchida pelo PO)
+**Resposta:** **FECHADA — os cinco pontos confirmados pelo mantenedor em 2026-08-30.**
+
+**Item 3, que era o que precisava de aval, tem uma correção de premissa que vale registrar.** A
+questão tratava "capturar todas as sessões daquele `cwd`" como comportamento existente que
+estava sendo removido. O mantenedor foi direto: **resolver todas as sessões nunca foi objetivo.**
+Ou seja, aquilo não era comportamento que alguém decidiu e agora perdemos — era **efeito
+colateral de comparar `cwd` por igualdade de string** numa flag cujo próprio texto de ajuda diz
+"limit to a single session". A mudança não tira uma capacidade; alinha o comportamento com o
+contrato que já estava escrito.
+
+Isso muda a leitura do risco. Não é "mudança de comportamento a compensar depois" — é conserto,
+e um que sob a D-031 também fecha um buraco de custo: uma flag, vinte capturas.
+
+**Ideia registrada para não se perder, e explicitamente NÃO para agora:** um `--sessions` que
+aceite uma lista, para quem realmente quiser várias de uma vez. Sugestão do mantenedor, com a
+ressalva dele mesmo de que não entra neste momento. Fica anotado no Sprint 5 como possibilidade
+a avaliar, não como tarefa aceita — se aparecer necessidade real de uso, ela se justifica
+sozinha; se não aparecer, some sem custo.
+
+**Os outros quatro** — onde a normalização mora (pura, no `core/`, plataforma injetada), o
+prefixo de 8 caracteres com escalonamento só para os que colidem, a segunda chamada de descoberta
+para resolver antes de capturar, e a mensagem faltante do `start-day` ambíguo — confirmados como
+estão. A última foi fechada pela S3-T6, que é dona daquele arquivo.
 
 ---
 
@@ -2412,7 +2434,28 @@ a suíte `guards`, não desta tarefa, e a própria S2-T8 registrou a lição de 
 medir no ambiente real ("medir na máquina do desenvolvedor e publicar é o mesmo erro de sempre, com
 outra roupa") é pior que não mexer. Mudar isso exigiria a mesma disciplina de medição da S2-T7/S2-T8,
 que não é o escopo desta tarefa.
-**Resposta:** (preenchida pelo PO)
+**Resposta:** **Não mexer no orçamento agora. A amostra está confundida, e a confusão é
+identificável.**
+
+Os números levantados (3 de 3 verdes sem as mudanças, 4 de 6 com) foram colhidos enquanto **três
+agentes rodavam em paralelo** na mesma máquina, cada um com o seu próprio contêiner Docker. A
+contenção de CPU que produziu os vermelhos é dessa carga, não do CI — onde cada job tem o runner
+inteiro. E o CI ficou **verde em todas as execuções do dia**, incluindo as três dos merges destas
+mesmas tarefas.
+
+Comparar 3 execuções de linha de base contra 6 com mudanças, sob carga variável e sem controlar
+quantos agentes rodavam em cada uma, não sustenta a conclusão de que os arquivos novos pioraram
+a folga. É a mesma forma de erro que já quase entrou numa decisão antes (D-029, onde a causa
+atribuída não reproduziu quando a versão foi controlada).
+
+**A decisão certa foi a que o agente tomou: não tocar na constante.** Mexer no
+`CHILD_PROCESS_BUDGET_MS` exige a mesma disciplina que a S2-T7 e a S2-T8 estabeleceram — medir no
+ambiente que de fato falha, que é o runner, e consertar a causa em vez de aumentar o número. A
+S2-T8 ganhou margem **baixando** orçamentos, não subindo, porque atacou o cold start.
+
+**O que fazer:** nada agora. Se o `verificar:linux` ficar vermelho **sem agentes em paralelo**,
+ou se o CI ficar vermelho nesse teste, aí existe sinal para medir. Registrado aqui para que o
+próximo vermelho não seja tratado como novidade.
 
 ---
 
