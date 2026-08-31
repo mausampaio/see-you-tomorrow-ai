@@ -146,6 +146,7 @@ const IDS = {
   noToolsFork: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   noJsonSchemaFork: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
   userPromptExtractionFork: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+  noFlagsControlFork: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
 };
 
 const MAX_BUDGET_USD = '0.20';
@@ -377,6 +378,20 @@ function stepBase(state) {
   saveState(state);
 }
 
+/** Control arm, added after the single-flag-dropped arms all read zero cache: replicates round
+ * 1's `arm2` (drop ALL THREE flags) against THIS round's fresh session, to check whether the
+ * environment/cache mechanism itself is capable of a hit right now at all. Without this, a zero
+ * read on every single-flag-dropped arm is ambiguous between "that specific flag breaks the
+ * cache" and "nothing is hitting cache in this session for an unrelated reason". */
+function stepNoFlagsControl(state) {
+  const cwd = ensureCwd(state);
+  const args = buildArgsWithFlags(IDS.noFlagsControlFork, {});
+  const { startedAt, finishedAt } = runClaude('no-flags-control', args, DEEP_PROMPT, cwd);
+  state.noFlagsControlStartedAt = startedAt;
+  state.noFlagsControlFinishedAt = finishedAt;
+  saveState(state);
+}
+
 /** The decisive arm: drop ONLY --system-prompt, keep --tools "" and --json-schema. If the
  * hypothesis is right (system-prompt alone breaks prefix identity because it sits at the absolute
  * start of the prefix), this should read close to full cache like round 1's `arm2` did. */
@@ -559,6 +574,9 @@ function main() {
       break;
     case 'user-prompt-extraction':
       stepUserPromptExtraction(state);
+      break;
+    case 'no-flags-control':
+      stepNoFlagsControl(state);
       break;
     default:
       console.error(
