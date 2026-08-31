@@ -14,6 +14,7 @@ const TRANSCRIPT_RESULT: TranscriptReadResult = {
   facts: {
     lastActivity: new Date('2026-08-16T20:00:00.000Z'),
     lastPrompts: ['do the thing'],
+    assistantMessages: [],
     touchedFiles: ['src/a.ts'],
   },
   rejected: [],

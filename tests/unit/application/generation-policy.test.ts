@@ -24,7 +24,7 @@ describe('selectCaptureMode (D-011/D-013)', () => {
 });
 
 describe('generateUnderstanding (D-003)', () => {
-  const facts = { lastActivity: null, lastPrompts: [], touchedFiles: [] };
+  const facts = { lastActivity: null, lastPrompts: [], assistantMessages: [], touchedFiles: [] };
 
   it('success with a transcript is source: "model"', async () => {
     const session = createSessionWithPid({ hasTranscript: true });

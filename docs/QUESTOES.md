@@ -2727,3 +2727,71 @@ uma sessão sintética pequena?
 
 **Resposta:** em aberto — não bloqueia nada hoje; vale revisitar se um desenho futuro precisar de
 uma estimativa de custo de prefixo mais precisa que "a ordem de grandeza medida aqui".
+
+---
+
+## Q-036 — Volume de texto do assistente no prompt enxuto: custo não discrimina; e falta decidir se persiste
+
+**Tarefa:** S4-T00c (`docs/PLANO-DE-ENTREGA.md`, saída da reavaliação da D-011 sob a D-031).
+**Bloqueia:** não. A implementação seguiu sem persistir (ver abaixo); a pergunta de persistência
+fica para o mantenedor decidir quando/se quiser.
+
+**Contexto.** A tarefa pedia para medir o custo do prompt enxuto com e sem o texto do assistente,
+em pelo menos dois volumes, antes de escolher qualquer número — histórico direto da própria D-011,
+que já errou uma vez estimando sem medir (Spike C: US$ 0,15 estimado; S2-T2 mediu US$ 0,08–0,09 e
+um `--json-schema` que quintuplica o piso em vez de baixá-lo).
+
+**Medido: 4 chamadas reais** (`claude`, `--model haiku`, sessão sintética descartável em
+`%TEMP%`, ambiente saneado D-017, teto de US$ 0,20 por chamada — bem abaixo do teto de 6 do
+brief), com a forma real do gerador enxuto (`--tools ""` + `--system-prompt` + `--json-schema` +
+`--no-session-persistence`, nunca `--resume`). Saída bruta sanitizada em
+`docs/spikes/j-cache-na-captura-raw/lean-*.json`, seção "S4-T00c" do Spike J tem a tabela e o
+método completos.
+
+| chamada | conteúdo do assistente | `cache_read` | `cache_creation` | custo (US$) |
+|---|---|---:|---:|---:|
+| `lean-baseline` (1ª vez) | nenhum | 0 | 0 | 0,0061 |
+| `lean-assistant-small` | 3 msgs, truncadas a 400 car. (~1,7 KB) | 0 | 34.573 | 0,0754 |
+| `lean-assistant-large` | 10 msgs, inteiras (~3,6 KB) | 68.428 | 2.826 | 0,0213 |
+| `lean-baseline` (repetida, mesmo conteúdo da 1ª) | nenhum | 67.821 | 2.463 | 0,0212 |
+
+**Achado principal: volume de texto do assistente não prediz custo.** A chamada com MAIS
+conteúdo (`lean-assistant-large`) saiu mais barata que a com MENOS (`lean-assistant-small`), e
+repetir a chamada MAIS BARATA original (`lean-baseline`, conteúdo idêntico) na sequência ficou
+**3,5× mais cara** que a primeira vez. O que decide o custo aqui não é o que este prompt manda —
+é um efeito de cache compartilhado e por-janela-de-tempo sobre o aparato fixo
+`--tools ""`/`--system-prompt`/`--json-schema`, o mesmo mecanismo que o Achado 4 do Spike J já
+tinha sinalizado como não totalmente explicado (lá, no caminho `--resume`; aqui, reproduzido
+também no caminho enxuto, que nunca usa `--resume`). A primeira chamada "fria" do dia é a mais
+barata (~US$ 0,006); qualquer chamada seguinte dentro de ~1h (Achado 3 do Spike J) parece pegar
+esse aparato já quente e cobra por ele (na forma de `cache_read`, mais barato por token, mas em
+volume suficiente para dominar o custo total) — **independente de quanto texto de assistente
+foi enviado**.
+
+**Consequência para a decisão de volume:** como custo não discrimina entre os volumes testados,
+`MAX_ASSISTANT_MESSAGES = 10` e `MAX_ASSISTANT_MESSAGE_CHARS = 500`
+(`adapters/transcript/facts.ts`) foram escolhidos por qualidade de prompt — simetria com
+`MAX_LAST_PROMPTS` e limitar um turno verboso isolado — não por custo. Documentado no comentário
+das constantes, com esta medição citada.
+
+**Isto não é a mesma pergunta da Q-034/Q-035** (que tratam do `--resume`/captura profunda e da
+interação `--system-prompt`×`--tools ""`), mas é evidência de que o mesmo mecanismo não explicado
+aparece também no caminho enxuto, que a D-011/D-031 tratam como o caminho barato e "sem
+cache". Vale registrar: **não dá para assumir que o enxuto sempre custa o piso de ~US$ 0,006** —
+qualquer captura que não seja a primeira do dia/da janela pode custar de US$ 0,02 a US$ 0,08 pelo
+mesmo motivo, independentemente deste recurso novo. Isso é maior que a S4-T00c sozinha: se o
+`end-day` captura várias sessões numa mesma passada, a segunda em diante pode já estar pagando
+esse custo hoje, antes desta tarefa. Não medido a fundo aqui — o orçamento de chamadas foi usado
+na pergunta desta tarefa — mas fica registrado como suspeita para quem for estimar custo de
+captura em lote.
+
+**A pergunta de persistência, em aberto.** `SessionFacts.assistantMessages` foi implementado para
+alimentar `buildLeanPrompt`, mas **deliberadamente não foi adicionado** a
+`handoffFactsSchema`/`serializeHandoff` (`adapters/storage/handoff-schema.ts`) — não vira chave
+nova em disco. Isso foi uma restrição dada para esta tarefa, não uma conclusão minha. Pode valer
+a pena persistir mais tarde: um handoff salvo hoje não guarda nenhum rastro do texto do
+assistente que alimentou o modelo, então uma auditoria futura ("por que o handoff disse isso?")
+não teria como conferir contra a evidência bruta. Contra persistir: é conteúdo de trabalho real
+(D-027 — chave nova em disco é barata agora, cara depois — mais ainda quando o conteúdo é texto
+livre do assistente, que carrega mais superfície de privacidade que uma lista de prompts do
+usuário). **Resposta:** em aberto — decisão do mantenedor, não do agente.

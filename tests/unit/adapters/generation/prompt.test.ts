@@ -22,6 +22,7 @@ function facts(overrides: Partial<SessionFacts> = {}): SessionFacts {
   return {
     lastActivity: new Date('2026-08-16T10:00:00.000Z'),
     lastPrompts: [],
+    assistantMessages: [],
     touchedFiles: [],
     ...overrides,
   };
@@ -71,6 +72,57 @@ describe('buildLeanPrompt', () => {
     const multiline = 'line one\nline two with "quotes" and % and café';
     const prompt = buildLeanPrompt(session(), facts({ lastPrompts: [multiline] }));
     expect(prompt).toContain(`- ${multiline}`);
+  });
+
+  // S4-T00c/Q-036: the exact defect the D-011 reevaluation found — a status update the assistant
+  // said out loud, that the user never typed back, has to reach the prompt or the handoff has no
+  // way to know "4 done, 6 pending" ever happened (D-025: absence of data, not a false negative).
+  it('includes assistant messages the user never repeated, distinctly labeled from user prompts', () => {
+    const prompt = buildLeanPrompt(
+      session(),
+      facts({
+        lastPrompts: ['where are we, what is left'],
+        assistantMessages: ['4 of 10 tasks are done; 6 remain, starting with the README tomorrow'],
+      }),
+    );
+    expect(prompt).toContain(
+      'What the assistant said it did (oldest first, its own words):\n' +
+        '- 4 of 10 tasks are done; 6 remain, starting with the README tomorrow',
+    );
+    // The two sections never merge into one list — a model reading this has to be able to tell
+    // "the user asked" apart from "the assistant reported" (the brief's own warning: confusing the
+    // two is worse than not having the data at all).
+    expect(prompt).toContain('Recent user prompts (oldest first):\n- where are we, what is left');
+  });
+
+  it('lists assistant messages oldest first, same ordering convention as user prompts', () => {
+    const prompt = buildLeanPrompt(
+      session(),
+      facts({ assistantMessages: ['did the first thing', 'did the second thing'] }),
+    );
+    expect(prompt).toContain(
+      'What the assistant said it did (oldest first, its own words):\n' +
+        '- did the first thing\n- did the second thing',
+    );
+  });
+
+  it('omits the assistant-messages section entirely when there are none, no empty header', () => {
+    const prompt = buildLeanPrompt(session(), facts({ assistantMessages: [] }));
+    expect(prompt).not.toContain('What the assistant said');
+  });
+
+  it('the "no evidence" line only appears when prompts, assistant messages, AND files are all empty', () => {
+    const withOnlyAssistantText = buildLeanPrompt(
+      session(),
+      facts({ lastPrompts: [], assistantMessages: ['did something'], touchedFiles: [] }),
+    );
+    expect(withOnlyAssistantText).not.toContain('No transcript evidence was available');
+
+    const withNothing = buildLeanPrompt(
+      session(),
+      facts({ lastPrompts: [], assistantMessages: [], touchedFiles: [] }),
+    );
+    expect(withNothing).toContain('No transcript evidence was available for this session.');
   });
 });
 

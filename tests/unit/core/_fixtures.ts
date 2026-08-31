@@ -71,6 +71,7 @@ export function createHandoff(overrides: Partial<Handoff> = {}): Handoff {
     facts: {
       lastActivity: new Date('2026-08-16T20:45:00.000Z'),
       lastPrompts: [],
+      assistantMessages: [],
       touchedFiles: [],
       git: null,
     },

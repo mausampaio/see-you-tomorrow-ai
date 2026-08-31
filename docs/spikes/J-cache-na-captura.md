@@ -14,12 +14,20 @@ já basta para zerar o acerto de cache contra a sessão viva, no mesmo padrão (
 configuração inteira. A troca "barato ou estruturado" da Q-034 continua de pé como escolha real,
 não como dilema falso. Ver a seção "S4-T00b" abaixo.
 
-**Data:** 2026-08-30/31 (S4-T00), 2026-08-31 (S4-T00b, ~1h15 depois) · **Versão do Claude Code:**
-2.1.251 · **Plataforma:** Windows 11 · **Tarefa:** S4-T00, S4-T00b · **Origem:** Q-032 (pergunta do
-mantenedor ao ler o Spike I), S4-T00b (Q-034/Q-035, saída do próprio Spike J) ·
-**Decisões/questões afetadas:** D-011 (a reavaliar), D-001 (fronteira verificada, não violada),
-Q-032 (respondida — item 1 e, de graça, item 2), Q-034 (aberta por este spike, **medida e mantida
-em S4-T00b** — a troca é real, não falsa), Q-035 (nova, aberta por S4-T00b)
+**Atualização S4-T00c (2026-08-31, mesmo dia): o mesmo efeito de cache não explicado do Achado 4
+reaparece no modo ENXUTO, que nunca usa `--resume`.** Medindo quanto custa acrescentar texto do
+assistente ao prompt enxuto (Q-036), o volume enviado não previu o custo — a chamada com MAIS
+conteúdo saiu mais barata que a com MENOS, e repetir a MESMA chamada minutos depois custou 3,5×
+mais. Ver a seção "S4-T00c" abaixo.
+
+**Data:** 2026-08-30/31 (S4-T00), 2026-08-31 (S4-T00b, ~1h15 depois; S4-T00c, mesmo dia) ·
+**Versão do Claude Code:** 2.1.251 · **Plataforma:** Windows 11 · **Tarefa:** S4-T00, S4-T00b,
+S4-T00c · **Origem:** Q-032 (pergunta do mantenedor ao ler o Spike I), S4-T00b (Q-034/Q-035, saída
+do próprio Spike J), S4-T00c (Q-036, saída da reavaliação da D-011 sob a D-031) ·
+**Decisões/questões afetadas:** D-011 (a reavaliar, depois reavaliada em 2026-08-31), D-001
+(fronteira verificada, não violada), Q-032 (respondida — item 1 e, de graça, item 2), Q-034 (aberta
+por este spike, **medida e mantida em S4-T00b** — a troca é real, não falsa), Q-035 (nova, aberta
+por S4-T00b), Q-036 (nova, aberta por S4-T00c)
 
 ## Por que este spike existe
 
@@ -455,3 +463,107 @@ cache.
 - **A origem exata do calor que produziu os 70.260 tokens do Achado 4 original** — ver acima.
 - **O mecanismo exato da interação `--system-prompt` × `--tools ""`** — só o tamanho do
   descompasso (8.824 tokens) foi medido, não a causa.
+
+---
+
+## S4-T00c — O texto do assistente no prompt enxuto: o mesmo efeito de cache do Achado 4, agora sem `--resume`
+
+**Tarefa:** S4-T00c, saída direta da reavaliação da D-011 sob a D-031 (2026-08-31): o modo enxuto
+para de descartar o texto do assistente. **Pergunta:** quanto custa acrescentar esse texto ao
+prompt enxuto, em pelo menos dois volumes, antes de escolher qualquer número (`docs/QUESTOES.md`
+Q-036). **Ferramenta:** `scripts/spike-j-measure.mjs`, estendido com três passos novos
+(`lean-baseline`, `lean-assistant-small`, `lean-assistant-large`).
+
+### Por que esta rodada é diferente das anteriores
+
+S4-T00 e S4-T00b mediram a captura **profunda** (`--resume --fork-session`), onde a pergunta é
+identidade de prefixo com uma sessão viva. O modo **enxuto** nunca usa `--resume`: cada chamada é
+uma sessão nova e descartável (`--no-session-persistence`, D-011). Não deveria haver pergunta de
+cache aqui — não existe uma "sessão original" para bater prefixo. A medição mostrou que existe
+mesmo assim.
+
+### Método
+
+Mesmo padrão do resto do spike: sessão sintética descartável (`cwd` único em `%TEMP%`, reutilizado
+pelas três chamadas via `ensureCwd`), ambiente saneado (D-017), `--model haiku`,
+`--max-budget-usd 0,20`, saída bruta sanitizada e commitada a cada braço
+(`docs/spikes/j-cache-na-captura-raw/lean-*.json`). A forma da chamada é a real do gerador enxuto
+(`adapters/generation/args.ts#buildLeanArgs`): `--tools ""`, `--system-prompt` e `--json-schema`
+(strings idênticas às de produção), `--no-session-persistence` — nunca `--resume`.
+
+O conteúdo é um `SessionFacts` inventado (projeto `widget-cli`, dez prompts de usuário sintéticos,
+oito arquivos tocados sintéticos, dez mensagens de assistente sintéticas — uma delas
+propositalmente no formato exato do defeito que esta tarefa conserta: "4 de 10 tarefas feitas, 6
+restantes"). Três braços:
+
+1. `lean-baseline` — o prompt enxuto de hoje, zero texto de assistente (controle).
+2. `lean-assistant-small` — as 3 últimas mensagens do assistente, cada uma truncada a 400
+   caracteres (~1,7 KB adicionados ao prompt).
+3. `lean-assistant-large` — as 10 mensagens inteiras, sem truncar (~3,6 KB adicionados).
+
+Depois dos três, `lean-baseline` foi rodado **de novo**, com o MESMO conteúdo da primeira vez, só
+para checar se alguma coisa tinha mudado no ambiente entre a primeira chamada e as seguintes.
+
+**Total: 4 invocações reais**, bem abaixo do teto de 6. Custo somado: **US$ 0,124** (0,0061 +
+0,0754 + 0,0213 + 0,0212).
+
+### Resultado
+
+| braço | texto de assistente | `cache_read` | `cache_creation` | custo (US$) |
+|---|---|---:|---:|---:|
+| `lean-baseline` (1ª vez) | nenhum | 0 | 0 | 0,0061 |
+| `lean-assistant-small` | 3 msgs, truncadas (~1,7 KB) | 0 | 34.573 | 0,0754 |
+| `lean-assistant-large` | 10 msgs, inteiras (~3,6 KB) | 68.428 | 2.826 | 0,0213 |
+| `lean-baseline` (repetida, conteúdo idêntico à 1ª) | nenhum | 67.821 | 2.463 | 0,0212 |
+
+### O achado: volume não prediz custo — o mesmo mecanismo do Achado 4, agora sem `--resume`
+
+A hipótese ingênua era "mais texto de assistente custa mais". **Não foi isso que se mediu.** A
+chamada com MAIS conteúdo (`lean-assistant-large`, 10 mensagens inteiras) saiu **3,5× mais barata**
+que a com MENOS (`lean-assistant-small`, 3 mensagens truncadas), rodada um minuto antes. E a prova
+decisiva: repetir `lean-baseline` com o **conteúdo idêntico** da primeira vez custou **3,5× mais**
+na segunda vez (US$ 0,0212 contra US$ 0,0061) — nada no prompt mudou entre as duas chamadas.
+
+O padrão bate exatamente com o Achado 4 deste spike (que media o caminho `--resume`): a primeira
+chamada de uma janela é "fria" (sem `cache_creation`, sem `cache_read` — tudo conta como
+`input_tokens` normal, porque o total fica abaixo do piso de cache elegível). A partir da segunda
+chamada dentro da mesma janela (aproximadamente a mesma validade de ~1h que o Achado 3 já tinha
+medido), um bloco de dezenas de milhares de tokens — muito maior que qualquer conteúdo que este
+spike de fato enviou — aparece como `cache_creation` (na primeira vez que aquele bloco aparece) ou
+`cache_read` (nas seguintes), dominando o custo total independentemente do que o prompt realmente
+carregava. **Isto reproduz o Achado 4 num caminho onde, por desenho, não deveria haver cache
+nenhum** (o enxuto nunca usa `--resume`): o mecanismo não é a identidade de prefixo com uma sessão
+específica, é algo ligado ao aparato fixo que `--tools ""`/`--system-prompt`/`--json-schema` aciona
+internamente, e que aparentemente pode ficar "quente" de uma chamada `-p` qualquer para a próxima,
+mesmo sem sessão em comum.
+
+### Consequência para a decisão de volume (Q-036)
+
+Como o custo não discrimina entre os volumes testados — a medição não deu um "cotovelo" de custo
+para escolher N em cima dele —, `MAX_ASSISTANT_MESSAGES = 10` e `MAX_ASSISTANT_MESSAGE_CHARS = 500`
+(`adapters/transcript/facts.ts`) foram escolhidos por qualidade de prompt, não por custo: simetria
+com `MAX_LAST_PROMPTS` (mesma contagem) e um teto por mensagem para impedir que um turno verboso
+isolado (logs colados, diff grande) domine as outras quatro seções do prompt — o away summary do
+Spike I já recomenda pular exatamente esse tipo de conteúdo.
+
+### Consequência mais ampla, fora do escopo desta tarefa
+
+Se este mecanismo de cache compartilhado é real e não específico da S4-T00c, então **a suposição
+de que o modo enxuto sempre custa perto do piso (~US$ 0,006–0,08, conforme D-011/S2-T2) só vale
+para a primeira chamada de uma janela.** Qualquer captura seguinte — por exemplo, a segunda sessão
+capturada na mesma passada de `end-day`, minutos depois da primeira — pode estar pagando um custo
+de US$ 0,02–0,08 pelo mesmo motivo, **antes mesmo desta tarefa acrescentar qualquer texto de
+assistente**. Não medido a fundo aqui (o orçamento de chamadas foi gasto respondendo a pergunta
+desta tarefa, não essa), mas registrado em `docs/QUESTOES.md` Q-036 como suspeita para quem for
+estimar custo de captura em lote.
+
+### O que NÃO foi medido nesta rodada
+
+- **A origem exata do bloco de dezenas de milhares de tokens** — mesma limitação do Achado 4
+  original: não confirmado se é o mesmo aparato em todos os casos, nem por que ele soma valores
+  diferentes entre chamadas (34.573 vs. 68.428 vs. 67.821).
+- **Se o efeito é por conta/dia, por processo, ou por algum outro escopo** — as quatro chamadas
+  desta rodada foram feitas em sequência rápida (poucos minutos), então não dá para distinguir
+  "por conta nas últimas horas" de "por processo `claude` recente" ou outra causa.
+- **Se o mesmo padrão se replica numa sessão de tamanho real** (fixture pequena e sintética aqui,
+  como em todo o resto deste spike).

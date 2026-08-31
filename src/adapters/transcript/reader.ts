@@ -23,9 +23,15 @@ import {
   KNOWN_ENTRY_TYPE_SET,
   entryTypeSchema,
   userEntryTextSchema,
-  assistantEntryToolUseSchema,
+  assistantEntryWithContentSchema,
 } from './schemas.js';
-import { MAX_LAST_PROMPTS, extractPromptText, extractTouchedFiles } from './facts.js';
+import {
+  MAX_LAST_PROMPTS,
+  MAX_ASSISTANT_MESSAGES,
+  extractPromptText,
+  extractAssistantMessageText,
+  extractTouchedFiles,
+} from './facts.js';
 
 /**
  * `parseTranscriptFile`'s result. `maxLineBufferBytes` is diagnostic only — like
@@ -43,6 +49,7 @@ export interface TranscriptParseResult {
 interface Accumulator {
   lastActivity: Date | null;
   readonly lastPrompts: string[];
+  readonly assistantMessages: string[];
   readonly touchedFiles: Set<string>;
   readonly rejected: RejectedDiscoveryRecord[];
   unknownEntryTypeCount: number;
@@ -52,6 +59,7 @@ function newAccumulator(): Accumulator {
   return {
     lastActivity: null,
     lastPrompts: [],
+    assistantMessages: [],
     touchedFiles: new Set(),
     rejected: [],
     unknownEntryTypeCount: 0,
@@ -63,6 +71,14 @@ function pushPrompt(acc: Accumulator, text: string): void {
   acc.lastPrompts.push(text);
   if (acc.lastPrompts.length > MAX_LAST_PROMPTS) {
     acc.lastPrompts.shift();
+  }
+}
+
+/** Same bounded-ring shape as `pushPrompt`, for `SessionFacts.assistantMessages` (S4-T00c). */
+function pushAssistantMessage(acc: Accumulator, text: string): void {
+  acc.assistantMessages.push(text);
+  if (acc.assistantMessages.length > MAX_ASSISTANT_MESSAGES) {
+    acc.assistantMessages.shift();
   }
 }
 
@@ -113,13 +129,17 @@ function processAssistantEntry(
   lineNumber: number,
   parsed: unknown,
 ): void {
-  const result = assistantEntryToolUseSchema.safeParse(parsed);
+  const result = assistantEntryWithContentSchema.safeParse(parsed);
   if (!result.success) {
     const reason = `invalid "assistant" entry: ${z.prettifyError(result.error)}`;
     rejectLine(acc, filePath, lineNumber, parsed, reason);
     return;
   }
   updateLastActivity(acc, result.data.timestamp);
+  const messageText = extractAssistantMessageText(result.data);
+  if (messageText !== null) {
+    pushAssistantMessage(acc, messageText);
+  }
   for (const file of extractTouchedFiles(result.data)) {
     acc.touchedFiles.add(file);
   }
@@ -183,6 +203,7 @@ function toResult(acc: Accumulator, maxLineBufferBytes: number): TranscriptParse
     facts: {
       lastActivity: acc.lastActivity,
       lastPrompts: [...acc.lastPrompts],
+      assistantMessages: [...acc.assistantMessages],
       touchedFiles: [...acc.touchedFiles],
     },
     rejected: acc.rejected,

@@ -132,6 +132,7 @@ describe('generateBriefingMarkdown — git facts', () => {
       facts: {
         lastActivity: null,
         lastPrompts: [],
+        assistantMessages: [],
         touchedFiles: [],
         git: {
           branch: 'main',
@@ -162,6 +163,7 @@ describe('generateBriefingMarkdown — git facts', () => {
       facts: {
         lastActivity: null,
         lastPrompts: [],
+        assistantMessages: [],
         touchedFiles: [],
         git: {
           branch: 'main',
@@ -181,6 +183,7 @@ describe('generateBriefingMarkdown — git facts', () => {
       facts: {
         lastActivity: null,
         lastPrompts: [],
+        assistantMessages: [],
         touchedFiles: [],
         git: { branch: null, dirty: false, modifiedFiles: [], commitsToday: [], worktrees: [] },
       },

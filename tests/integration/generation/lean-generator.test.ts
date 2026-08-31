@@ -57,6 +57,7 @@ function facts(overrides: Partial<SessionFacts> = {}): SessionFacts {
   return {
     lastActivity: new Date('2026-08-16T10:00:00.000Z'),
     lastPrompts: [],
+    assistantMessages: [],
     touchedFiles: [],
     ...overrides,
   };

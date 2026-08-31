@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   extractPromptText,
+  extractAssistantMessageText,
   extractTouchedFiles,
   MAX_LAST_PROMPTS,
+  MAX_ASSISTANT_MESSAGES,
+  MAX_ASSISTANT_MESSAGE_CHARS,
 } from '../../../../src/adapters/transcript/facts.js';
 import {
   userEntryTextSchema,
-  assistantEntryToolUseSchema,
+  assistantEntryWithContentSchema,
 } from '../../../../src/adapters/transcript/schemas.js';
 
 /**
@@ -47,9 +50,16 @@ const BASE_ASSISTANT_FIELDS = {
   timestamp: '2026-08-16T20:41:12.000Z',
 };
 
-function assistantEntry(content: string | ReadonlyArray<Record<string, unknown>>) {
-  const raw = { ...BASE_ASSISTANT_FIELDS, message: { role: 'assistant', content } };
-  return assistantEntryToolUseSchema.parse(raw);
+function assistantEntry(
+  content: string | ReadonlyArray<Record<string, unknown>>,
+  overrides: { isSidechain?: boolean } = {},
+) {
+  const raw = {
+    ...BASE_ASSISTANT_FIELDS,
+    isSidechain: overrides.isSidechain ?? false,
+    message: { role: 'assistant', content },
+  };
+  return assistantEntryWithContentSchema.parse(raw);
 }
 
 describe('extractPromptText', () => {
@@ -129,5 +139,75 @@ describe('MAX_LAST_PROMPTS', () => {
   it('is a positive, finite bound', () => {
     expect(MAX_LAST_PROMPTS).toBeGreaterThan(0);
     expect(Number.isFinite(MAX_LAST_PROMPTS)).toBe(true);
+  });
+});
+
+// S4-T00c/Q-036: this is the defect the D-011 reevaluation found — before this function existed,
+// nothing in adapters/transcript/ ever read the text of an assistant entry at all.
+describe('extractAssistantMessageText', () => {
+  it('joins the text of every text block, same as extractPromptText', () => {
+    const entry = assistantEntry([
+      { type: 'text', text: 'First, I did X.' },
+      { type: 'text', text: 'Then Y.' },
+    ]);
+
+    expect(extractAssistantMessageText(entry)).toBe('First, I did X.\nThen Y.');
+  });
+
+  it('reads the text alongside a tool_use block in the same entry (a real mixed turn)', () => {
+    const entry = assistantEntry([
+      { type: 'text', text: '4 of 10 tasks are done; 6 remain.' },
+      { type: 'tool_use', name: 'Edit', input: { file_path: '/code/example-project/a.ts' } },
+    ]);
+
+    expect(extractAssistantMessageText(entry)).toBe('4 of 10 tasks are done; 6 remain.');
+  });
+
+  it('returns null for a pure tool-use entry with no text block at all', () => {
+    const entry = assistantEntry([
+      { type: 'tool_use', name: 'Edit', input: { file_path: '/code/example-project/a.ts' } },
+    ]);
+
+    expect(extractAssistantMessageText(entry)).toBeNull();
+  });
+
+  it('returns null for a sub-agent turn, even with real text — internal narration, not said to the user', () => {
+    const entry = assistantEntry([{ type: 'text', text: 'Subagent internal note.' }], {
+      isSidechain: true,
+    });
+
+    expect(extractAssistantMessageText(entry)).toBeNull();
+  });
+
+  it('returns the trimmed string directly when content is a plain string', () => {
+    const entry = assistantEntry('  Working on it.  ');
+
+    expect(extractAssistantMessageText(entry)).toBe('Working on it.');
+  });
+
+  it(`truncates a message longer than MAX_ASSISTANT_MESSAGE_CHARS (${String(MAX_ASSISTANT_MESSAGE_CHARS)})`, () => {
+    const long = 'x'.repeat(MAX_ASSISTANT_MESSAGE_CHARS + 200);
+    const entry = assistantEntry([{ type: 'text', text: long }]);
+
+    const result = extractAssistantMessageText(entry);
+    expect(result).not.toBeNull();
+    expect(result?.startsWith('x'.repeat(MAX_ASSISTANT_MESSAGE_CHARS))).toBe(true);
+    expect(result?.length).toBeLessThan(long.length);
+  });
+
+  it('does not truncate a message at or under the cap', () => {
+    const exact = 'y'.repeat(MAX_ASSISTANT_MESSAGE_CHARS);
+    const entry = assistantEntry([{ type: 'text', text: exact }]);
+
+    expect(extractAssistantMessageText(entry)).toBe(exact);
+  });
+});
+
+describe('MAX_ASSISTANT_MESSAGES / MAX_ASSISTANT_MESSAGE_CHARS', () => {
+  it('are positive, finite bounds', () => {
+    expect(MAX_ASSISTANT_MESSAGES).toBeGreaterThan(0);
+    expect(Number.isFinite(MAX_ASSISTANT_MESSAGES)).toBe(true);
+    expect(MAX_ASSISTANT_MESSAGE_CHARS).toBeGreaterThan(0);
+    expect(Number.isFinite(MAX_ASSISTANT_MESSAGE_CHARS)).toBe(true);
   });
 });

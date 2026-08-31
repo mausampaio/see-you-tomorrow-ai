@@ -151,6 +151,202 @@ const IDS = {
 
 const MAX_BUDGET_USD = '0.20';
 
+// S4-T00c (docs/PLANO-DE-ENTREGA.md, Q-036): measures the LEAN generator's prompt
+// (adapters/generation/prompt.ts#buildLeanPrompt), not the deep/--resume path the arms above
+// measure. Lean never uses --resume/--fork-session at all (args.ts#buildLeanArgs), so there is no
+// cache-identity question here — every lean call is a fresh, unrelated session by design (D-011's
+// "--no-session-persistence"). What's being measured instead is the plain cost slope of adding
+// assistant text to the prompt, at two volumes, against the current five-fact baseline (D-011's
+// reevaluation, 2026-08-31).
+//
+// Ten synthetic assistant turns, entirely invented (AGENTS.md § "Este projeto é de código
+// aberto" — no real transcript content, ever, in this repo). Deliberately mirrors the real defect
+// this task fixes (docs/DECISOES.md D-011 reevaluation): message 6 states "4 done, 6 pending" the
+// way a real away-summary turn would, and is never repeated by the (also synthetic) user prompts
+// below — that asymmetry is exactly what made the real handoff blind before this task.
+const SYNTHETIC_ASSISTANT_MESSAGES = [
+  'Set up the initial project scaffold: package.json, tsconfig, and a placeholder src/index.ts ' +
+    'with a no-op main function.',
+  'Implemented the CSV parser for the import command. It handles quoted fields and embedded ' +
+    'commas correctly. Added three unit tests covering the happy path, an empty file, and a ' +
+    'file with a trailing blank line.',
+  'Refactored the sort comparator used by the `list` command. The previous version inverted ' +
+    'ascending and descending order when two items had equal keys, which only showed up with the ' +
+    'synthetic dataset of 500 rows once duplicates were introduced. Fixed the tie-break to fall ' +
+    'back to insertion order, added a regression test with three duplicate keys, and confirmed ' +
+    'the output now matches the expected fixture byte for byte. Also cleaned up a leftover ' +
+    'console.log that had been left in from debugging.',
+  'Wired the --verbose flag through to the logger. No behavior change otherwise.',
+  'Investigated the flaky integration test for the export path. Root cause was a race between ' +
+    'the temp file write and the read-back — added an explicit flush before reading. Test has ' +
+    'now passed ten times in a row locally.',
+  'Status check before wrapping up for today: of the ten tasks on the board, four are done — ' +
+    'the CSV parser, the sort fix, the verbose flag, and the flaky test fix. Six are still open: ' +
+    'the README update, the integration tests for the export path, the retry logic for network ' +
+    'calls, the config validation error messages, the Windows path handling for the --output ' +
+    'flag, and the final pass on removing dead code in the old parser module. Planning to start ' +
+    "with the README update tomorrow since it's the smallest of the six.",
+  'Added config validation: an unknown key in config.json now produces a clear error naming the ' +
+    'key and the file path, instead of being silently ignored. Three tests added for a missing ' +
+    'required field, an unknown key, and a value of the wrong type.',
+  'Deleted the old parser module — nothing else in the codebase imported it anymore, confirmed ' +
+    'with a full-repo grep before removing.',
+  'Worked through the Windows path handling issue for --output. Paths with a drive letter and ' +
+    'backslashes were being mangled by a naive string split on /. Switched to ' +
+    'node:path.parse/.join throughout that command, added a test that runs the same assertions ' +
+    'with both a Windows-style and POSIX-style path by passing the platform hint explicitly, and ' +
+    'confirmed neither branch is skipped when the suite runs on a single OS.',
+  'Started the retry logic for network calls: exponential backoff with a cap at three attempts. ' +
+    'Not wired into the actual HTTP client yet — just the standalone withRetry helper and its ' +
+    'unit tests so far. Will connect it to the client tomorrow.',
+];
+
+const SYNTHETIC_USER_PROMPTS = [
+  'set up the project scaffold',
+  'add a csv import command',
+  'the list command sorts wrong when there are duplicates, can you check',
+  'add a verbose flag',
+  'the export test keeps failing randomly, look into it',
+  'where are we, what is left',
+  'config.json should reject unknown keys',
+  'remove the old parser module, nothing uses it anymore',
+  'the --output flag breaks on windows paths',
+  'start on retrying failed network calls',
+];
+
+const SYNTHETIC_TOUCHED_FILES = [
+  'src/cli/import.ts',
+  'src/core/sort.ts',
+  'src/adapters/logger.ts',
+  'src/adapters/export.ts',
+  'src/core/config-validation.ts',
+  'src/core/parser-legacy.ts',
+  'src/cli/output-path.ts',
+  'src/adapters/http/retry.ts',
+];
+
+/**
+ * Same label this task's `prompt.ts` change uses for the assistant-text section (S4-T00c) —
+ * kept identical here on purpose, so the measured prompt is byte-for-byte what production sends,
+ * not an approximation of it. Explicitly names the source ("the assistant said", not the user) —
+ * the brief's own warning: confusing the two would be worse than not having the data at all.
+ * @type {string}
+ */
+const ASSISTANT_SECTION_TITLE = 'What the assistant said it did (oldest first, its own words)';
+
+/**
+ * @param {string} text
+ * @param {number} maxChars
+ * @returns {string}
+ */
+function truncateForMeasurement(text, maxChars) {
+  return text.length > maxChars ? `${text.slice(0, maxChars)} […]` : text;
+}
+
+/**
+ * Builds the lean prompt's stdin text (mirrors `adapters/generation/prompt.ts#buildLeanPrompt`
+ * exactly, by hand, since this .mjs tool doesn't import TypeScript — same reasoning as
+ * `GENERATION_SYSTEM_PROMPT`/`UNDERSTANDING_JSON_SCHEMA` above being copied, not imported).
+ *
+ * @param {string[]} assistantMessages Empty for the baseline (no-assistant-text) arm.
+ * @returns {string}
+ */
+function buildLeanStdinForMeasurement(assistantMessages) {
+  const lines = [
+    'Project: widget-cli (synthetic, S4-T00c measurement)',
+    'Working directory: /tmp/seeya-spike-j00c-synthetic',
+    'Last known activity: 2026-08-31T14:00:00.000Z',
+    'Recent user prompts (oldest first):',
+    ...SYNTHETIC_USER_PROMPTS.map((p) => `- ${p}`),
+    'Files touched:',
+    ...SYNTHETIC_TOUCHED_FILES.map((f) => `- ${f}`),
+  ];
+  if (assistantMessages.length > 0) {
+    lines.push(`${ASSISTANT_SECTION_TITLE}:`);
+    lines.push(...assistantMessages.map((m) => `- ${m}`));
+  }
+  return lines.join('\n');
+}
+
+/**
+ * Lean's own CLI shape (args.ts#buildLeanArgs): `--tools ""`, our system prompt, our JSON schema,
+ * `--no-session-persistence` — never `--resume`/`--fork-session` (lean is always a fresh session
+ * by design, D-011), so there is no cache/prefix-identity question for this measurement at all.
+ * @returns {string[]}
+ */
+function buildLeanCliArgsForMeasurement() {
+  return [
+    '-p',
+    '--model',
+    'haiku',
+    '--output-format',
+    'json',
+    '--tools',
+    '',
+    '--system-prompt',
+    GENERATION_SYSTEM_PROMPT,
+    '--json-schema',
+    UNDERSTANDING_JSON_SCHEMA,
+    '--no-session-persistence',
+    '--max-budget-usd',
+    MAX_BUDGET_USD,
+  ];
+}
+
+/** Baseline: today's real lean prompt shape, zero assistant text (control arm).
+ * @param {SpikeState} state */
+function stepLeanBaseline(state) {
+  const cwd = ensureCwd(state);
+  const stdin = buildLeanStdinForMeasurement([]);
+  console.log(`[lean-baseline] stdin length: ${stdin.length} chars`);
+  const { startedAt, finishedAt } = runClaude(
+    'lean-baseline',
+    buildLeanCliArgsForMeasurement(),
+    stdin,
+    cwd,
+  );
+  state.leanBaselineStartedAt = startedAt;
+  state.leanBaselineFinishedAt = finishedAt;
+  saveState(state);
+}
+
+/** Small volume: last 3 assistant messages, each truncated to 400 chars — the "short/truncated"
+ * end of the range under test.
+ * @param {SpikeState} state */
+function stepLeanAssistantSmall(state) {
+  const cwd = ensureCwd(state);
+  const last3 = SYNTHETIC_ASSISTANT_MESSAGES.slice(-3).map((m) => truncateForMeasurement(m, 400));
+  const stdin = buildLeanStdinForMeasurement(last3);
+  console.log(`[lean-assistant-small] stdin length: ${stdin.length} chars`);
+  const { startedAt, finishedAt } = runClaude(
+    'lean-assistant-small',
+    buildLeanCliArgsForMeasurement(),
+    stdin,
+    cwd,
+  );
+  state.leanAssistantSmallStartedAt = startedAt;
+  state.leanAssistantSmallFinishedAt = finishedAt;
+  saveState(state);
+}
+
+/** Large volume: all 10 assistant messages, untruncated — the "many/long" end of the range,
+ * matching `MAX_LAST_PROMPTS`'s own count for symmetry.
+ * @param {SpikeState} state */
+function stepLeanAssistantLarge(state) {
+  const cwd = ensureCwd(state);
+  const stdin = buildLeanStdinForMeasurement(SYNTHETIC_ASSISTANT_MESSAGES);
+  console.log(`[lean-assistant-large] stdin length: ${stdin.length} chars`);
+  const { startedAt, finishedAt } = runClaude(
+    'lean-assistant-large',
+    buildLeanCliArgsForMeasurement(),
+    stdin,
+    cwd,
+  );
+  state.leanAssistantLargeStartedAt = startedAt;
+  state.leanAssistantLargeFinishedAt = finishedAt;
+  saveState(state);
+}
+
 /**
  * @param {NodeJS.ProcessEnv} base
  * @returns {NodeJS.ProcessEnv}
@@ -594,10 +790,22 @@ function main() {
     case 'no-flags-control':
       stepNoFlagsControl(state);
       break;
+    // S4-T00c (Q-036): lean-prompt assistant-text volume measurement, unrelated to the
+    // --resume/cache arms above — see the constants' own comments just above these steps.
+    case 'lean-baseline':
+      stepLeanBaseline(state);
+      break;
+    case 'lean-assistant-small':
+      stepLeanAssistantSmall(state);
+      break;
+    case 'lean-assistant-large':
+      stepLeanAssistantLarge(state);
+      break;
     default:
       console.error(
         'Usage: node scripts/spike-j-measure.mjs ' +
-          '<turn1|arm1|arm2|arm3|arm4|turn1b|base|no-system-prompt|no-tools|no-json-schema|user-prompt-extraction>',
+          '<turn1|arm1|arm2|arm3|arm4|turn1b|base|no-system-prompt|no-tools|no-json-schema|' +
+          'user-prompt-extraction|lean-baseline|lean-assistant-small|lean-assistant-large>',
       );
       process.exitCode = 1;
   }

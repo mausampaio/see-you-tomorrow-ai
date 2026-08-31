@@ -111,6 +111,37 @@ Cada adapter contra o mundo real, mas num mundo de mentira controlado.
 - **`notification/`**: cada backend com o binário externo falsificado; verificar os argumentos
   montados, não o toast aparecendo.
 
+## Medir custo de chamada real: controle o calor do cache
+
+**Três medições de custo neste projeto já foram confundidas pela mesma coisa**, e a terceira só
+foi reconhecida porque as duas anteriores estavam escritas:
+
+| medição | o que aconteceu |
+|---|---|
+| Spike J, Achado 4 | a configuração de produção leu **70.260** tokens de cache quando a hipótese era zero |
+| Spike J, S4-T00b | a **mesma** configuração leu **zero** no dia seguinte |
+| Spike J, S4-T00c | duas chamadas de conteúdo **idêntico** custaram US$ 0,0061 e US$ 0,0212 — 3,5x |
+
+**A causa é acerto de cache por atividade não relacionada da conta.** Qualquer chamada anterior
+daquele dia — outro teste, outra sessão, outra tarefa — pode deixar quente um bloco que a sua
+medição vai ler de graça. E o efeito não é pequeno: ele **inverteu a ordem** de dois braços na
+S4-T00c, onde a chamada com **mais** conteúdo saiu **3,5x mais barata** que a com menos.
+
+**Consequência prática: um número de custo isolado não significa nada.** Ao medir custo de
+chamada real:
+
+- **repita o braço de referência no fim**, com conteúdo idêntico ao do início — se os dois
+  divergirem, o experimento inteiro está confundido e o resto dos números não sustenta
+  comparação;
+- **leia `usage.cache_read_input_tokens` e `cache_creation_input_tokens`**, não só o custo em
+  dólar: eles mostram *por que* o preço foi aquele;
+- **rode os braços próximos no tempo**, para o relógio não virar uma segunda variável;
+- e diga no documento **se o controle bateu ou não**. Medição confundida, reconhecida, vale;
+  medição confundida apresentada como limpa, não.
+
+**O que isto NÃO diz:** que o piso de custo do modo enxuto medido na S2-T2 (US$ 0,08–0,09) esteja
+errado. Diz que ele é **um ponto sob condições desconhecidas de calor**, e que planejar custo de
+produção em cima dele é mais frágil do que parecia. Ver Q-036.
 ## E2E — poucos e caros
 
 Rodam o binário `seeya` compilado, com `HOME`/`USERPROFILE` apontando para `tmpdir` e um

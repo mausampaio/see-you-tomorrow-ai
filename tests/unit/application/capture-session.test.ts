@@ -77,6 +77,7 @@ describe('captureSession — handoff assembly', () => {
       const facts = {
         lastActivity: null,
         lastPrompts: [],
+        assistantMessages: [],
         touchedFiles: [],
         git: unchangedGitFacts,
       };
@@ -209,6 +210,7 @@ describe('captureSession — handoff assembly', () => {
               facts: {
                 lastActivity: new Date(NOW.getTime() - 5_000),
                 lastPrompts: [],
+                assistantMessages: [],
                 touchedFiles: [],
               },
               rejected: [],
@@ -240,6 +242,7 @@ describe('captureSession — handoff assembly', () => {
               facts: {
                 lastActivity: new Date(NOW.getTime() - 600_000),
                 lastPrompts: [],
+                assistantMessages: [],
                 touchedFiles: [],
               },
               rejected: [],
@@ -540,6 +543,7 @@ describe('captureSession — dry-run (S2-T5)', () => {
     const facts = {
       lastActivity: null,
       lastPrompts: [],
+      assistantMessages: [],
       touchedFiles: [],
       git: unchangedGitFacts,
     };

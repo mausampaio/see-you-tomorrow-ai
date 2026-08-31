@@ -23,15 +23,25 @@ function bulletedSection(title: string, items: readonly string[]): string[] {
 }
 
 /**
+ * S4-T00c/Q-036: labeled distinctly from `bulletedSection`'s other callers on purpose — this is
+ * the one section here that is NOT something the user asked for, and the whole point of adding it
+ * (the D-011 reevaluation, docs/DECISOES.md) is the case where the assistant reports work the user
+ * never repeats back. A model that read this section as "what the user asked for" would produce
+ * exactly the kind of confidently-wrong handoff D-025 forbids, so the title names the speaker
+ * explicitly instead of a neutral "Notes" or "Messages".
+ */
+const ASSISTANT_MESSAGES_TITLE = 'What the assistant said it did (oldest first, its own words)';
+
+/**
  * The lean generator's prompt (D-011): everything `SessionFacts` (S1-T4) knows about the session,
  * laid out as plain labeled text — never JSON, since the model's job here is to read prose and
  * write prose/structured output back, not to round-trip a data structure. `session` supplies the
  * two identity fields `SessionFacts` alone can't (`name`, `cwd`) — see `core/ports.ts#HandoffGenerator`.
  *
- * When neither prompts nor touched files were found (D-013's "no transcript" case, still routed
- * through the lean generator when some other evidence justified calling it at all), the prompt
- * says so plainly instead of silently reading as "the model just wasn't told about them" (D-025's
- * spirit: absence of evidence is stated, not hidden).
+ * When nothing at all was found (D-013's "no transcript" case, still routed through the lean
+ * generator when some other evidence justified calling it at all), the prompt says so plainly
+ * instead of silently reading as "the model just wasn't told about them" (D-025's spirit: absence
+ * of evidence is stated, not hidden).
  */
 export function buildLeanPrompt(session: DiscoveredSession, facts: SessionFacts): string {
   const lines = [`Project: ${session.name}`, `Working directory: ${session.cwd}`];
@@ -40,8 +50,13 @@ export function buildLeanPrompt(session: DiscoveredSession, facts: SessionFacts)
     lines.push(activity);
   }
   lines.push(...bulletedSection('Recent user prompts (oldest first)', facts.lastPrompts));
+  lines.push(...bulletedSection(ASSISTANT_MESSAGES_TITLE, facts.assistantMessages));
   lines.push(...bulletedSection('Files touched', facts.touchedFiles));
-  if (facts.lastPrompts.length === 0 && facts.touchedFiles.length === 0) {
+  const nothingFound =
+    facts.lastPrompts.length === 0 &&
+    facts.assistantMessages.length === 0 &&
+    facts.touchedFiles.length === 0;
+  if (nothingFound) {
     lines.push('No transcript evidence was available for this session.');
   }
   return lines.join('\n');

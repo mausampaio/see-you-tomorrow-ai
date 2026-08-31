@@ -3,7 +3,7 @@ import {
   assistantEntrySchema,
   userEntrySchema,
   userEntryTextSchema,
-  assistantEntryToolUseSchema,
+  assistantEntryWithContentSchema,
   entryTypeSchema,
   KNOWN_ENTRY_TYPES,
   KNOWN_ENTRY_TYPE_SET,
@@ -212,7 +212,7 @@ describe('userEntryTextSchema (S1-T4)', () => {
   });
 });
 
-describe('assistantEntryToolUseSchema (S1-T4)', () => {
+describe('assistantEntryWithContentSchema (S1-T4, extended S4-T00c/Q-036 for text)', () => {
   const validEntry = {
     parentUuid: '11111111-1111-4111-8111-111111111111',
     isSidechain: false,
@@ -228,7 +228,7 @@ describe('assistantEntryToolUseSchema (S1-T4)', () => {
   };
 
   it('keeps name and input.file_path for a write-tool tool_use block', () => {
-    const result = assistantEntryToolUseSchema.parse(validEntry);
+    const result = assistantEntryWithContentSchema.parse(validEntry);
 
     expect(result.message.content).toEqual([
       { type: 'tool_use', name: 'Edit', input: { file_path: '/code/example/a.ts' } },
@@ -236,7 +236,7 @@ describe('assistantEntryToolUseSchema (S1-T4)', () => {
   });
 
   it('falls back to the generic {type} shape for a tool_use whose name is not a write tool', () => {
-    const result = assistantEntryToolUseSchema.parse({
+    const result = assistantEntryWithContentSchema.parse({
       ...validEntry,
       message: {
         role: 'assistant',
@@ -245,5 +245,32 @@ describe('assistantEntryToolUseSchema (S1-T4)', () => {
     });
 
     expect(result.message.content).toEqual([{ type: 'tool_use' }]);
+  });
+
+  it('keeps the text field a plain contentBlockSchema parse would have stripped (S4-T00c)', () => {
+    const result = assistantEntryWithContentSchema.parse({
+      ...validEntry,
+      message: { role: 'assistant', content: [{ type: 'text', text: '4 done, 6 pending' }] },
+    });
+
+    expect(result.message.content).toEqual([{ type: 'text', text: '4 done, 6 pending' }]);
+  });
+
+  it('keeps both a text block and a write tool_use block from the same entry', () => {
+    const result = assistantEntryWithContentSchema.parse({
+      ...validEntry,
+      message: {
+        role: 'assistant',
+        content: [
+          { type: 'text', text: 'updated the parser' },
+          { type: 'tool_use', name: 'Edit', input: { file_path: '/code/example/a.ts' } },
+        ],
+      },
+    });
+
+    expect(result.message.content).toEqual([
+      { type: 'text', text: 'updated the parser' },
+      { type: 'tool_use', name: 'Edit', input: { file_path: '/code/example/a.ts' } },
+    ]);
   });
 });

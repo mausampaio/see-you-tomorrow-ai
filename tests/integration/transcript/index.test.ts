@@ -74,7 +74,7 @@ describe('TranscriptFileReader.readFacts — no transcript found (D-013)', () =>
     const result = await reader.readFacts(fakeSession({ hasTranscript: false }));
 
     expect(result).toStrictEqual({
-      facts: { lastActivity: null, lastPrompts: [], touchedFiles: [] },
+      facts: { lastActivity: null, lastPrompts: [], assistantMessages: [], touchedFiles: [] },
       rejected: [],
       unknownEntryTypeCount: 0,
     });
@@ -87,6 +87,11 @@ describe('TranscriptFileReader.readFacts — no transcript found (D-013)', () =>
 
     const result = await reader.readFacts(fakeSession({ hasTranscript: false }));
 
-    expect(result.facts).toStrictEqual({ lastActivity: null, lastPrompts: [], touchedFiles: [] });
+    expect(result.facts).toStrictEqual({
+      lastActivity: null,
+      lastPrompts: [],
+      assistantMessages: [],
+      touchedFiles: [],
+    });
   });
 });

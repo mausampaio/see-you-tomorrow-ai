@@ -27,6 +27,7 @@ const SAMPLE_HANDOFF: Handoff = {
   facts: {
     lastActivity: new Date('2026-08-16T20:41:11.000Z'),
     lastPrompts: ['do the thing'],
+    assistantMessages: [],
     touchedFiles: ['src/a.ts'],
     git: {
       branch: 'main',
@@ -90,12 +91,44 @@ describe('StorageAdapter#readHandoff', () => {
         ...SAMPLE_HANDOFF,
         source: 'noTranscript',
         sources: ['registry'],
-        facts: { lastActivity: null, lastPrompts: [], touchedFiles: [], git: null },
+        facts: {
+          lastActivity: null,
+          lastPrompts: [],
+          assistantMessages: [],
+          touchedFiles: [],
+          git: null,
+        },
       };
       const storage = new StorageAdapter(seeyaHome);
       await storage.saveHandoff('2026-08-16', handoff);
       const readBack = await storage.readHandoff('2026-08-16', handoff.sessionId);
       expect(readBack).toEqual(handoff);
+    } finally {
+      await rm(seeyaHome, { recursive: true, force: true });
+    }
+  });
+
+  // S4-T00c/Q-036: assistantMessages feeds the lean prompt but is not a disk key (a maintainer
+  // decision, not an oversight — see core/types.ts#SessionFacts.assistantMessages's docstring and
+  // adapters/storage/handoff-schema.ts#parseHandoffFacts). This is the regression test for that
+  // exclusion: saving a handoff whose facts DO carry assistant text must read back empty, not
+  // reconstruct or persist it.
+  it('never persists facts.assistantMessages, even when present when saving (Q-036)', async () => {
+    const seeyaHome = await makeTmpDir();
+    try {
+      const handoff: Handoff = {
+        ...SAMPLE_HANDOFF,
+        facts: { ...SAMPLE_HANDOFF.facts, assistantMessages: ['4 done, 6 pending'] },
+      };
+      const storage = new StorageAdapter(seeyaHome);
+      await storage.saveHandoff('2026-08-16', handoff);
+      const raw = await readFile(
+        path.join(seeyaHome, 'days', '2026-08-16', 'sessions', `${handoff.sessionId}.json`),
+        'utf8',
+      );
+      expect(raw).not.toContain('4 done, 6 pending');
+      const readBack = await storage.readHandoff('2026-08-16', handoff.sessionId);
+      expect(readBack?.facts.assistantMessages).toEqual([]);
     } finally {
       await rm(seeyaHome, { recursive: true, force: true });
     }

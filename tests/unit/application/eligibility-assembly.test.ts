@@ -13,6 +13,7 @@ const NOW = new Date('2026-08-16T21:00:00.000Z');
 const NO_EVIDENCE_FACTS: HandoffFacts = {
   lastActivity: null,
   lastPrompts: [],
+  assistantMessages: [],
   touchedFiles: [],
   git: null,
 };
@@ -143,12 +144,14 @@ describe('evaluateFullEligibility (D-026 anti-duplication)', () => {
       const previousFacts: HandoffFacts = {
         lastActivity: null,
         lastPrompts: [],
+        assistantMessages: [],
         touchedFiles: [],
         git: { branch: 'main', dirty: false, modifiedFiles: [], commitsToday: [], worktrees: [] },
       };
       const currentFacts: HandoffFacts = {
         lastActivity: null,
         lastPrompts: [],
+        assistantMessages: [],
         touchedFiles: [],
         git: {
           branch: 'main',
