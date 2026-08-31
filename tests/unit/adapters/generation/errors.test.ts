@@ -23,15 +23,22 @@ describe('GenerationError', () => {
     expect(error.message).toContain('1234');
   });
 
-  it('nonZeroExit: message includes the exit code and stderr', () => {
-    const error = new GenerationError({ kind: 'nonZeroExit', exitCode: 7, stderr: 'boom' });
+  it('nonZeroExit: message includes the exit code, stderr and stdout', () => {
+    const error = new GenerationError({
+      kind: 'nonZeroExit',
+      exitCode: 7,
+      stderr: 'boom',
+      stdout: 'this is not json {{{',
+    });
     expect(error.message).toContain('7');
     expect(error.message).toContain('boom');
+    expect(error.message).toContain('this is not json {{{');
   });
 
-  it('nonZeroExit: empty stderr is reported explicitly, not silently omitted', () => {
-    const error = new GenerationError({ kind: 'nonZeroExit', exitCode: 1, stderr: '' });
-    expect(error.message).toContain('(empty)');
+  it('nonZeroExit: empty stderr and stdout are reported explicitly, not silently omitted', () => {
+    const error = new GenerationError({ kind: 'nonZeroExit', exitCode: 1, stderr: '', stdout: '' });
+    const emptyMentions = error.message.match(/\(empty\)/g) ?? [];
+    expect(emptyMentions).toHaveLength(2);
   });
 
   it('invalidJson: message includes the parse error and the raw text', () => {
@@ -62,14 +69,44 @@ describe('GenerationError', () => {
     expect(error.message).toContain('missing understanding');
   });
 
-  it('modelReportedError: message includes the subtype and the result text', () => {
+  it('modelReportedError: message includes the exit code, the subtype and the result text', () => {
     const error = new GenerationError({
       kind: 'modelReportedError',
       subtype: 'error_max_turns',
       result: 'gave up after 50 turns',
+      exitCode: 0,
     });
+    expect(error.message).toContain('0');
     expect(error.message).toContain('error_max_turns');
     expect(error.message).toContain('gave up after 50 turns');
+  });
+
+  it('modelReportedError: distinguishes a clean exit from a non-zero one reporting the same subtype', () => {
+    const cleanExit = new GenerationError({
+      kind: 'modelReportedError',
+      subtype: 'error_max_turns',
+      result: 'gave up after 50 turns',
+      exitCode: 0,
+    });
+    const nonZeroExit = new GenerationError({
+      kind: 'modelReportedError',
+      subtype: 'error_max_turns',
+      result: 'gave up after 50 turns',
+      exitCode: 1,
+    });
+    expect(cleanExit.message).not.toBe(nonZeroExit.message);
+  });
+
+  it('modelReportedError: result is capped so an oversized model payload cannot bloat the on-disk handoff', () => {
+    const oversizedResult = 'x'.repeat(5_000);
+    const error = new GenerationError({
+      kind: 'modelReportedError',
+      subtype: 'error_during_execution',
+      result: oversizedResult,
+      exitCode: 1,
+    });
+    expect(error.message.length).toBeLessThan(oversizedResult.length);
+    expect(error.message).toContain('more characters omitted');
   });
 
   it('carries the structured reason for programmatic matching, not just the message', () => {

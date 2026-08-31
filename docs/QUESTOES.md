@@ -2890,3 +2890,79 @@ tabela de "Identificadores que vão para disco" cita só o conceito, não os nom
 campos (`skipped`, `snoozeMinutesTotal`, `firedLeadTimesInMinutes`, `endOfDayFired`) e os nomes de
 função são meus, sem correspondente literal em nenhum documento. Nenhum dos dois vira chave em
 disco nesta tarefa (ver item 6).
+
+---
+
+## Q-039 — Três escolhas feitas fazendo S4-T00d (leitura do envelope em saída ≠ 0), e um segundo lugar onde evidência já em mãos é descartada
+
+**Tarefa:** S4-T00d
+**Bloqueia:** não — as três escolhas seguiram a solução mínima com o porquê no próprio código
+(`src/adapters/generation/errors.ts`, `src/adapters/generation/run-generation.ts`); registro para
+confirmação, no mesmo espírito de Q-021/Q-023/Q-037. O achado adicional (último item) não foi
+consertado, por pedido explícito da tarefa de não ampliar o alcance sem decisão do mantenedor.
+
+**Contexto.** A tarefa pedia para, em saída ≠ 0, tentar ler o `stdout` como envelope
+`--output-format json` antes de desistir para `nonZeroExit`, e deixava três decisões comigo.
+
+**1) `modelReportedError` ganhou `exitCode: number`, sempre presente, nunca opcional.** Cheguei a
+considerar campo opcional (só preenchido quando a chamada veio do ramo de saída ≠ 0), mas as duas
+chamadas de `runGeneration` (a de saída limpa e a nova, de saída ≠ 0) sempre têm o código de saída
+em mãos — não é dado às vezes ausente, é dado sempre conhecido. Um campo opcional para algo sempre
+conhecido teria sido exatamente o anti-padrão que D-024 pede para evitar (campo opcional cobrindo
+uma distinção que devia estar no tipo). A mensagem final passou a nomear o `exitCode` nos dois
+casos, sem afirmar qual dos dois "explica" o outro (D-025) — só relata os dois fatos observados,
+lado a lado.
+**Opções:** A) `exitCode` obrigatório, sempre o valor real (o que implementei). B) campo opcional,
+presente só no caminho de saída ≠ 0. C) não distinguir os dois casos (perderia a distinção que o
+próprio pedido da tarefa levantou como possivelmente relevante).
+**Minha escolha:** A.
+
+**2) O corte de tamanho do `result` mora em `errors.ts#describe()`, não em `run-generation.ts`.**
+A tarefa alertava que `result` pode carregar saída do modelo e vai parar em `generationError`, que
+é gravado no handoff em disco. Cortei em 500 caracteres, mas o corte acontece ao RENDERIZAR a
+mensagem (`describe()`), não ao construir o `GenerationFailureReason`. Assim, `error.reason.result`
+continua carregando o valor completo e sem corte para quem faz pattern-matching programático
+(`error.reason.kind === 'modelReportedError'`), e só o texto que efetivamente vai para o disco
+(`error.message`, usado por `application/generation-policy.ts#deterministicOutcome`) fica limitado.
+O limite e o motivo estão comentados em `errors.ts`, em cima da constante `MAX_MODEL_RESULT_CHARS`.
+**Opções:** A) truncar em `describe()`, preservando `reason.result` íntegro (o que implementei).
+B) truncar já em `run-generation.ts`, armazenando a versão cortada dentro do `reason` — mais simples,
+mas perde o `result` completo para sempre, mesmo para quem só quer inspecionar a estrutura, não a
+mensagem.
+**Minha escolha:** A — nenhum teste ou caller hoje precisa do `result` completo, mas cortá-lo na
+origem destruiria informação que `describe()` sozinho já resolve sem destruir nada.
+
+**3) O `stdout` bruto de `nonZeroExit` ficou SEM corte de tamanho, ao contrário do `result` de
+`modelReportedError`.** A tarefa só pediu limite explicitamente para o `result` (que carrega saída
+do MODELO); o `stdout` ilegível de `nonZeroExit` seguiu o mesmo padrão que `invalidJson#raw` já
+tinha antes desta tarefa — incluído por inteiro, sem corte. Não medi o quão grande esse `stdout`
+pode ficar na prática (é justamente o caso em que não conseguimos nem interpretá-lo como o
+envelope conhecido), então não tenho evidência para escolher um limite — inventar um agora seria
+o mesmo erro que a D-011 já cometeu uma vez (estimar sem medir).
+**Opções:** A) sem corte, igual a `invalidJson` (o que implementei). B) mesmo corte de 500
+caracteres do `result`. C) um limite maior, específico para stdout bruto.
+**Minha escolha:** A — por consistência com o precedente já existente e por falta de medição que
+justifique um número diferente.
+
+**Achado à parte, não consertado: `spawn-claude.ts`'s `timeout` reason descarta o mesmo tipo de
+evidência que esta tarefa concertou para `nonZeroExit`.** Ao ler os quatro arquivos pedidos, notei
+que `spawnClaude` acumula `stdout`/`stderr` em variáveis de closure enquanto o processo roda, mas o
+ramo de timeout (`AbortSignal.timeout` disparando o evento `'error'` como abort) rejeita só com
+`{ kind: 'timeout', timeoutMs }` — o que quer que já tivesse chegado em `stdout`/`stderr` antes do
+`SIGTERM` é descartado, exatamente a mesma classe de "saída ≠ 0 descarta o envelope antes de olhar"
+que motivou esta tarefa, só que no caminho de timeout em vez do de saída ≠ 0. Uma chamada que
+estourou o orçamento de tempo perto do fim de um turno longo (o cenário de hipótese de orçamento
+que esta própria tarefa foi instruída a NÃO perseguir) é justamente o tipo de falha em que já
+existiria stdout parcial útil para diagnóstico. Não consertei — está fora do que a tarefa pediu, e
+o próprio `AGENTS.md` pede para abrir questão em vez de ampliar escopo sozinho. Registro aqui para
+o mantenedor decidir se `timeout` também deveria carregar o `stdout`/`stderr` parcial coletado até
+o abort.
+
+**Nota à parte, não é pergunta:** `npm run verificar:linux` oscilou verde/vermelho três vezes
+seguidas nesta tarefa (vermelho, vermelho — desta vez também `layer-matrix.test.ts`, não só
+`eslint-restrictions.test.ts` —, verde), sempre com a mesma assinatura de Q-030a
+(`CHILD_PROCESS_BUDGET_MS` estourado em arquivos de `guards/` sem relação nenhuma com
+`adapters/generation/`). Bate exactly com o cenário que a Q-030a já previu: **esta tarefa rodou em
+paralelo com a S4-T1**, então a contenção de CPU entre os dois contêineres Docker é exatamente a
+causa já registrada lá. Não abri questão nova — Q-030a já cobre o padrão e já diz o que fazer (nada,
+a menos que fique vermelho sem agente em paralelo ou no CI).
