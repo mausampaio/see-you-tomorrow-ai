@@ -6,10 +6,20 @@ real medido (~4x mais barato) vem de abrir mão do papel de extrator que a D-011
 consertar exatamente o problema que abrir mão dele reintroduz. Não morre aqui, mas o próximo
 passo é um desenho novo, não o daemon "captura ao esfriar" que a Q-032 cogitou.**
 
-**Data:** 2026-08-30/31 · **Versão do Claude Code:** 2.1.251 · **Plataforma:** Windows 11 ·
-**Tarefa:** S4-T00 · **Origem:** Q-032 (pergunta do mantenedor ao ler o Spike I) ·
+**Atualização S4-T00b (2026-08-31, mesmo dia): a saída de escape que a Q-034 buscava não existe.**
+A hipótese era que só o `--system-prompt` quebrava a identidade de prefixo, e que largar só ele
+(mantendo `--tools ""` e `--json-schema`, logo mantendo saída estruturada) recuperaria cache. **Foi
+medido e refutado**: largar qualquer um dos três flags sozinho — não só o `--system-prompt` —
+já basta para zerar o acerto de cache contra a sessão viva, no mesmo padrão (`cache_read=0`) que a
+configuração inteira. A troca "barato ou estruturado" da Q-034 continua de pé como escolha real,
+não como dilema falso. Ver a seção "S4-T00b" abaixo.
+
+**Data:** 2026-08-30/31 (S4-T00), 2026-08-31 (S4-T00b, ~1h15 depois) · **Versão do Claude Code:**
+2.1.251 · **Plataforma:** Windows 11 · **Tarefa:** S4-T00, S4-T00b · **Origem:** Q-032 (pergunta do
+mantenedor ao ler o Spike I), S4-T00b (Q-034/Q-035, saída do próprio Spike J) ·
 **Decisões/questões afetadas:** D-011 (a reavaliar), D-001 (fronteira verificada, não violada),
-Q-032 (respondida — item 1 e, de graça, item 2), Q-034 (nova, aberta por este spike)
+Q-032 (respondida — item 1 e, de graça, item 2), Q-034 (aberta por este spike, **medida e mantida
+em S4-T00b** — a troca é real, não falsa), Q-035 (nova, aberta por S4-T00b)
 
 ## Por que este spike existe
 
@@ -272,3 +282,176 @@ custo de captura).
 - **Item 3 (validade efetiva)** — parcialmente respondido: confirmado quente até 18 minutos, tier
   de escrita é 1h em toda chamada observada; a borda exata de expiração não foi medida (ver "o que
   NÃO foi medido").
+
+---
+
+## S4-T00b — Nenhum dos três flags é dispensável sozinho: a hipótese do `--system-prompt` refutada
+
+**Tarefa:** S4-T00b, aprovada pelo mantenedor em 2026-08-31 como saída direta deste spike (não um
+Spike K novo — mesma pergunta, mais resolução). **Ferramenta:** `scripts/spike-j-measure.mjs`,
+estendido com seis novos passos (`turn1b`, `base`, `no-system-prompt`, `no-tools`,
+`no-json-schema`, `no-flags-control`) em vez de um script separado.
+
+### Por que esta rodada existe
+
+O Achado 2 comparou **os três flags juntos** (`--tools ""`, `--system-prompt`, `--json-schema`)
+contra **nenhum deles**. Isso faz a Q-034 parecer uma escolha forçada entre barato e estruturado
+só se os três forem igualmente culpados — e o Achado 4 já tinha achado um sinal de que talvez não
+fossem: a configuração atual (os três juntos) leu 70.260 tokens de cache quando a hipótese era
+zero. A hipótese testada aqui: o `--system-prompt` sozinho é o culpado, por ficar no início
+absoluto do prefixo montado internamente; se for, dá para largar só ele — mantendo `--tools ""` e
+`--json-schema`, e portanto a saída estruturada — sem abrir mão do cache.
+
+### Método
+
+Mesmo padrão do resto do spike: sessão sintética descartável, `cwd` único reaproveitado por todas
+as seis chamadas desta rodada (`ensureCwd` do script, mesmo mecanismo que manteve o `cwd`
+constante em S4-T00), ambiente saneado (D-017), `--model haiku`, `--max-budget-usd 0.20` por
+chamada, saída bruta sanitizada e commitada arm a arm.
+
+**Sessão original nova** (`turn1b`, codinome ONYX-77): a sessão `IDS.original` de S4-T00 tinha
+sido criada ~1h15 antes do início desta rodada — perto demais do limite do tier de 1h que o
+Achado 3 mediu (quente aos 18 min, não medido além disso) para servir de âncora sem introduzir
+dúvida sobre o relógio. Uma sessão nova, criada no início desta rodada e resumida por todos os
+braços seguintes em rápida sucessão (todos os seis dentro de ~5,5 minutos — ver timestamps
+abaixo), remove essa dúvida por construção, ao custo de não poder comparar `cache_read` deste
+`turn1b` diretamente com o `IDS.original` de S4-T00 (não é o mesmo prefixo de conteúdo).
+
+**Correção de método, registrada porque o commit que a acompanhou errou o número:** os commits
+desta rodada descreveram a sessão de S4-T00 como "um dia" mais antiga. Não é — os timestamps do
+arquivo de estado (`turn1StartedAt` etc.) mostram que a S4-T00 rodou às 02:20–02:41 UTC do mesmo
+dia, e esta rodada começou às 03:37 UTC, **~1h15 depois**, não um dia. O motivo de abrir uma sessão
+nova continua válido (proximidade do limite de 1h do tier), só a magnitude do intervalo estava
+errada nos commits — corrigida aqui, que é o documento de registro.
+
+**Seis braços, na ordem executada** (todos com `--resume <original2> --fork-session`, variando só
+os três flags e, no controle, nenhum):
+
+1. `turn1b` — cria a sessão original nova.
+2. `base` — os três flags juntos (âncora desta rodada; compara contra o `arm1` de S4-T00).
+3. `no-system-prompt` — sem `--system-prompt`, com `--tools ""` e `--json-schema` (**braço
+   decisivo**).
+4. `no-tools` — sem `--tools ""`, com `--system-prompt` e `--json-schema`.
+5. `no-json-schema` — sem `--json-schema`, com `--tools ""` e `--system-prompt`.
+6. `no-flags-control` — nenhum dos três (repete a forma do `arm2` de S4-T00, mas contra a sessão
+   `original2` desta rodada). Acrescentado **depois** de ver os braços 3–5 zerarem `cache_read`:
+   sem este controle, um zero em todo braço seria ambíguo entre "esse flag quebra o cache" e "nada
+   está acertando cache nesta sessão por outro motivo". Consumiu a sexta e última chamada do teto
+   de 6.
+
+**Total: 6 invocações reais do `claude`**, no teto do brief. Custo somado: **US$ 0,2245**
+(0,0106 + 0,0754 + 0,0220 + 0,0377 + 0,0749 + 0,0039 — ver `total_cost_usd` em cada
+`docs/spikes/j-cache-na-captura-raw/<passo>.json`). A variante "instrução de extração no prompt do
+usuário" **não foi medida**: o brief só pedia essa sétima medição condicionalmente ao braço
+decisivo confirmar a hipótese, e ele a refutou (ver abaixo) — gastá-la teria estourado o teto sem
+uma pergunta que ela ainda respondesse.
+
+### Resultado
+
+| braço | flags presentes | `cache_read` | `cache_creation` | custo (US$) |
+|---|---|---:|---:|---:|
+| `turn1b` (cria a sessão) | nenhuma | 20.414 | 3.465 | 0,0106 |
+| `base` | tools + system-prompt + json-schema | **0** | 36.968 | 0,0754 |
+| `no-system-prompt` (decisivo) | tools + json-schema | **0** | 10.277 | 0,0220 |
+| `no-tools` | system-prompt + json-schema | **0** | 17.867 | 0,0377 |
+| `no-json-schema` | tools + system-prompt | **0** | 36.821 | 0,0749 |
+| `no-flags-control` | nenhuma | **23.879** | 206 | 0,0039 |
+
+### O braço decisivo: hipótese refutada, não confirmada
+
+`no-system-prompt` largou só o `--system-prompt`, mantendo `--tools ""` e `--json-schema` — a
+aposta era que isso bastaria para recuperar cache, como o `arm2` de S4-T00 (largar os três) tinha
+recuperado quase 100% contra a sessão viva. **Não foi isso que se mediu:** `cache_read=0`, igual ao
+`base` com os três flags presentes. Largar só o `--system-prompt` não recupera nada de cache contra
+a sessão viva.
+
+**Isto não é um resultado ambíguo por causa do ambiente.** O braço de controle
+(`no-flags-control`, largando os três, rodado por último e contra a mesma sessão `original2`) leu
+**exatamente 23.879 tokens** de cache — a soma inteira do que `turn1b` tinha escrito e lido
+(3.465 + 20.414), reproduzindo com precisão o padrão do Achado 2. Isso prova que o mecanismo de
+cache e o ambiente desta rodada estavam funcionando normalmente no mesmo intervalo de tempo em que
+`no-system-prompt`, `no-tools` e `no-json-schema` leram zero — os três zeros são sinal real, não
+artefato de sessão fria ou de conta sem atividade recente.
+
+**Conclusão medida, com cuidado para não generalizar além do dado:** toda combinação de **dois dos
+três flags** testada aqui (`no-system-prompt`: tools+schema; `no-tools`: system-prompt+schema;
+`no-json-schema`: tools+system-prompt) leu **zero** cache contra a mesma sessão viva que o braço de
+controle, com os três largados, leu quase por inteiro. A hipótese do brief — que largar só o
+`--system-prompt` bastaria para recuperar cache, porque só ele ficaria no início absoluto do
+prefixo — está **refutada** no sentido que importa para a Q-034: largar só o `--system-prompt`
+**não** recupera cache algum, exatamente como largar só o `--tools ""` ou só o `--json-schema`
+também não recuperam (mesmo padrão de zero nos três casos). **O que não foi isolado**: se cada flag
+seria suficiente para zerar o cache **completamente sozinho** (sem nenhum dos outros dois presente)
+não foi medido — só se sabe que **dois presentes já bastam** para zerar, em qualquer das três
+combinações testadas. Para a pergunta prática da Q-034 (dá para largar só um e manter os outros
+dois para saída estruturada?), isso já é suficiente: a resposta é não, para qualquer um dos três
+escolhido como o único a cair.
+
+### Achado 4, delimitado: o bloco grande não é gatilhado pelo `--json-schema`
+
+A hipótese registrada no Achado 4 original — "o aparato interno que o `--json-schema` aciona
+carrega um bloco fixo" — **não se sustenta** contra os números desta rodada:
+
+- `base` (os três) escreveu 36.968 tokens novos.
+- `no-json-schema` (larga só o schema, mantém tools + system-prompt) escreveu **36.821** —
+  **147 tokens a menos**, quase exatamente o tamanho literal do JSON do próprio schema
+  (`UNDERSTANDING_JSON_SCHEMA` tem pouco mais de 100 tokens de texto). Ou seja: largar
+  `--json-schema` só tira o texto do schema em si, não revela bloco fixo nenhum por trás dele.
+
+O peso está em outro lugar:
+
+- `--system-prompt` sozinho vale **26.691 tokens** de diferença (`base` 36.968 menos
+  `no-system-prompt` 10.277).
+- `--tools ""` sozinho vale **19.101 tokens** (`base` 36.968 menos `no-tools` 17.867).
+- Somados, esses dois deltas dão 45.792 — **8.824 tokens a mais** que o total real do `base`
+  (36.968). Ou seja, os efeitos **não são aditivos**: ter `--system-prompt` e `--tools ""` juntos
+  custa menos do que a soma do que cada um custa isoladamente contra o par com schema. Há uma
+  interação real entre os dois — plausivelmente algo como o aparato que remove as ferramentas
+  reagindo de forma diferente quando o system prompt também é customizado — mas **o mecanismo
+  exato não foi isolado**: faltaria uma medição com `--tools ""` sozinho (sem system-prompt nem
+  schema) e outra com `--system-prompt` sozinho para decompor os dois efeitos por completo, e o
+  orçamento de 6 chamadas já estava no teto.
+
+**Sobre o número original do Achado 4 (70.260 tokens lidos):** esta rodada não o reproduz nem o
+contradiz diretamente — `base` aqui leu **zero**, não 70.260, rodando a mesma combinação de flags.
+Isso é consistente com a própria ressalva que o Achado 4 já registrava ("pode já estar quente por
+atividade anterior no dia, não é propriedade garantida da configuração"): sem essa atividade
+externa presente nesta rodada, o braço equivalente não encontrou nada para ler. **O que fica de
+pé:** a hipótese "há reuso possível para a configuração atual, mas ele depende de calor externo,
+não é uma propriedade determinística dos três flags". **O que cai:** a hipótese mais específica de
+que esse calor, quando presente, seria atribuível ao `--json-schema` — os números desta rodada
+apontam para `--system-prompt`/`--tools ""` (e a interação entre os dois) como os candidatos mais
+pesados, não o schema. **O que continua sem explicação:** de onde exatamente vinha o calor que
+produziu 70.260 no Achado 4 original — não foi medido de novo porque exigiria reproduzir o mesmo
+estado de conta/dia que já não existe mais.
+
+### Consequência para a Q-034: a troca sobrevive
+
+A pergunta era se dava para ter cache barato **e** saída estruturada na mesma captura, movendo só
+a instrução de extração para o prompt do usuário. **A resposta medida é não, pelo menos não por
+este caminho:** como nenhum dos três flags é dispensável sozinho, e a variante "prompt do usuário"
+só faria sentido largando o `--system-prompt` (mantendo os outros dois, que já são suficientes
+para zerar o cache sozinhos), a variante nunca chegou a ser medida — não há razão para esperar que
+ela ajude, dado que `--tools ""` e `--json-schema` quebram o cache com ou sem `--system-prompt`
+presente. **A Q-034 continua uma escolha real, não um dilema falso**: cache quase total exige
+abrir mão dos três flags (Achado 2), e manter **qualquer dois** deles já é suficiente para perder
+o cache por completo (esta rodada). As ideias A/B/D listadas na Q-034 continuam sendo os caminhos
+que restam; a ideia C ("testar se `--json-schema` sozinho preserva identidade de prefixo") está
+respondida na forma testável aqui — mantido junto de outro flag, não preserva. Se ele preservaria
+**totalmente sozinho** (sem `--tools ""` nem `--system-prompt`) não foi medido (ver "o que NÃO foi
+medido"), mas deixou de ser a pergunta prática: a D-011 não usa `--json-schema` isolado, usa os
+três juntos, e é essa combinação (ou qualquer subconjunto de dois) que este spike mostrou zerar o
+cache.
+
+### O que NÃO foi medido nesta rodada
+
+- **Cada flag isoladamente** (sem os outros dois). As três combinações testadas aqui são sempre
+  "dois dos três" — não há dado direto de quanto cada flag pesa sozinho contra uma sessão sem
+  nenhum dos três, só as diferenças par a par contra `base`, que já revelam a interação
+  não-aditiva mas não a decompõem.
+- **A variante "instrução no prompt do usuário"** (a que motivou toda a rodada) — não medida
+  porque o braço decisivo já refutou a premissa que a justificava. Não é um item pendente: é uma
+  medição que deixou de fazer sentido.
+- **A origem exata do calor que produziu os 70.260 tokens do Achado 4 original** — ver acima.
+- **O mecanismo exato da interação `--system-prompt` × `--tools ""`** — só o tamanho do
+  descompasso (8.824 tokens) foi medido, não a causa.

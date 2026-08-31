@@ -1088,7 +1088,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       "gerar por dentro". Qualquer desenho que saia daqui precisa mostrar que não gasta o
       contexto da sessão viva nem interrompe o turno dela.
 
-- [ ] **S4-T00b — Qual dos três flags quebra a identidade de prefixo?** Aprovada pelo mantenedor
+- [~] **S4-T00b — Qual dos três flags quebra a identidade de prefixo?** Aprovada pelo mantenedor
       em 2026-08-31, saída do Spike J. **Pode dissolver a Q-034 em vez de forçar a escolha.**
       *O que o Spike J não isolou:* ele comparou **os três flags juntos** (`--tools ""`,
       `--system-prompt` próprio, `--json-schema`) contra **nenhum deles**. A Q-034 só é um dilema
@@ -1106,6 +1106,16 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Custo:* 3 a 4 chamadas. O Spike J inteiro custou US$ 0,048 com cinco.
       *Entrega:* atualizar o **Spike J** com uma seção nova, não criar um spike K — é a mesma
       pergunta, medida com mais resolução. E dizer, na Q-034, se a troca sobrevive ou não.
+      **Medido em 2026-08-31 (`docs/spikes/J-cache-na-captura.md`, seção "S4-T00b", 6 chamadas
+      reais, US$ 0,2245).** Hipótese **refutada**: largar só o `--system-prompt` leu **zero**
+      cache contra a sessão viva — o mesmo resultado que largar só `--tools ""` ou só
+      `--json-schema` também produziu. Um braço de controle (os três largados) confirmou que o
+      mecanismo de cache estava funcionando normalmente na mesma janela — os zeros são sinal
+      real. O Achado 4 foi parcialmente delimitado: o bloco grande de tokens não é gatilhado pelo
+      `--json-schema` (removê-lo muda o total por ~150 tokens, do tamanho do próprio schema); o
+      peso está em `--system-prompt`/`--tools ""` e numa interação não-aditiva entre os dois
+      (Q-035, nova, aberta). **A Q-034 sobrevive** como escolha real entre barato e estruturado —
+      não é um dilema falso.
 
 - [ ] **S4-T0 — A evidência não pode ficar presa ao `cwd` de lançamento.** Aprovada pelo
       mantenedor em 2026-08-30. **O problema, observado no primeiro teste real:** a sessão subiu

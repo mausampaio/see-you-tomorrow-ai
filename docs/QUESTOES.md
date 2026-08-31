@@ -2652,3 +2652,51 @@ como está), e usar só o Achado 3 (o relógio é mais generoso que 5 minutos) p
 cadência do daemon, sem tentar também ganhar o desconto de prefixo nesta rodada do Sprint 4.
 
 **Resposta:** em aberto — decisão do mantenedor/PO, não do agente de medição.
+
+**Atualização S4-T00b (2026-08-31), acrescentada — não substitui o que está acima.** A ideia C
+desta lista foi testada: **a troca sobrevive, não desaparece.** A hipótese de que só o
+`--system-prompt` quebrava a identidade de prefixo — o que abriria uma saída barata sem
+sacrificar a estrutura, largando só ele e movendo a instrução de extração para o prompt do
+usuário — **foi medida e refutada** (`docs/spikes/J-cache-na-captura.md`, seção "S4-T00b").
+Largar só o `--system-prompt` (mantendo `--tools ""` e `--json-schema`) leu **zero** cache contra
+a sessão viva, o mesmo resultado que largar só o `--tools ""` ou só o `--json-schema` sozinhos
+também produziu — os três, em qualquer par que sobre dois deles, já bastam para perder o cache
+por completo. Um braço de controle (largando os três, mesma sessão, mesma janela de tempo) leu o
+cache quase por inteiro, confirmando que os zeros acima são sinal real, não ambiente frio.
+
+Isso fecha a ideia C: não há atalho barato escondido em largar um flag só. As opções que
+continuam de pé são A, B e D, sem novidade medida sobre elas nesta rodada. A pergunta original
+("existe forma de conseguir os dois na mesma captura?") continua **em aberto** para decisão do
+mantenedor/PO — o que mudou é que a resposta não vem de graça: qualquer caminho que preserve os
+dois vai precisar de algo mais elaborado que "largar um flag" (as ideias A/B), não de um ajuste
+de posição do prompt.
+
+## Q-035 — Por que `--system-prompt` e `--tools ""` juntos custam menos cache do que a soma dos dois isolados?
+
+**Tarefa:** S4-T00b (spike, `docs/spikes/J-cache-na-captura.md`, seção "S4-T00b").
+**Bloqueia:** não. É uma curiosidade de mecanismo que sobrou da medição, não uma decisão pendente
+de produto.
+
+**Contexto.** Ao decompor os 36.968 tokens que a configuração completa (`--tools ""` +
+`--system-prompt` + `--json-schema`) escreve de novo quando não há cache para ler, os deltas
+marginais de cada flag não somam ao total observado:
+
+- `--system-prompt` sozinho (contra o par tools+schema): **26.691** tokens de diferença.
+- `--tools ""` sozinho (contra o par system-prompt+schema): **19.101** tokens de diferença.
+- Soma dos dois: 45.792 — **8.824 tokens a mais** que o total real da configuração completa
+  (36.968).
+
+Ou seja, ter os dois presentes ao mesmo tempo custa **menos** do que a soma do que cada um custa
+isoladamente (contra o par que já tem o terceiro). Há uma interação real entre `--system-prompt` e
+`--tools ""`, mas o mecanismo não foi isolado — faltariam medições com cada flag **totalmente
+sozinho** (sem os outros dois) para decompor o efeito por completo, e o orçamento de 6 chamadas da
+S4-T00b já estava no teto quando isso apareceu.
+
+**A pergunta.** O que exatamente `--system-prompt` e `--tools ""` compartilham ou disputam no
+aparato interno do Claude Code que faz a combinação dos dois custar menos que a soma? É constante
+o suficiente para valer a pena medir com mais precisão antes de qualquer desenho que dependa do
+tamanho exato do prefixo (ex.: estimar custo de captura por sessão), ou é ruído de uma amostra de
+uma sessão sintética pequena?
+
+**Resposta:** em aberto — não bloqueia nada hoje; vale revisitar se um desenho futuro precisar de
+uma estimativa de custo de prefixo mais precisa que "a ordem de grandeza medida aqui".
