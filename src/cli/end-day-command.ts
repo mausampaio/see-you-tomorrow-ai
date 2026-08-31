@@ -16,11 +16,13 @@
  * ambiguity refusable instead of already-acted-on.
  */
 import { endDay } from '../application/end-day.js';
-import type { EndDayDeps } from '../application/types.js';
+import type { EndDayDeps, EndDayResult } from '../application/types.js';
 import type { Config, DiscoveredSession } from '../core/types.js';
+import type { Notifier } from '../core/ports.js';
 import { normalizeCwdForComparison, type PathPlatformHint } from '../core/cwd-normalization.js';
 import { resolveSessionReference, type SessionReference } from './session-reference.js';
 import { formatEndDayReport } from './format-end-day.js';
+import { buildEndDayNotice } from './end-day-notice.js';
 
 export interface EndDayCommandOptions {
   readonly dryRun: boolean;
@@ -102,13 +104,43 @@ function formatVanishedMatchMessage(session: string, resolvedName: string): stri
   );
 }
 
+/** Backward-compatible default for `runEndDayCommand`'s `notifier` parameter — same reasoning
+ * `EndDayOptions`'s own docstring already gives for `dryRun`/`sessionFilter` being optional: every
+ * existing call site (unit tests, earlier tasks' own acceptance) keeps compiling unchanged, now
+ * with a notifier that does nothing rather than one that touches the real OS. `cli/index.ts`
+ * (D-020's composition root) always passes the real one. */
+const SILENT_NOTIFIER: Notifier = { notify: () => Promise.resolve() };
+
+/**
+ * `docs/ESPECIFICACAO.md` § `seeya end-day`, step 5 ("Notifica o resultado"). Never lets a broken
+ * `Notifier` abort the command — `core/ports.ts#Notifier`'s own contract says `notify()` never
+ * rejects, and the real `ChainNotifier` (`adapters/notification/`) honors that, but this `catch`
+ * is defense in depth for any OTHER `Notifier` a caller might inject (tests, a future adapter),
+ * matching the same belt-and-suspenders discipline `application/end-day.ts#runForkCleanup` already
+ * uses for a different courtesy step.
+ */
+async function notifyEndDayResult(notifier: Notifier, result: EndDayResult): Promise<void> {
+  const notice = buildEndDayNotice(result);
+  if (notice === null) {
+    return;
+  }
+  try {
+    await notifier.notify(notice);
+  } catch {
+    // A notification failing must never derail the day's own ending (Q-007's same discipline,
+    // applied to the notifier itself rather than to termination).
+  }
+}
+
 export async function runEndDayCommand(
   deps: EndDayDeps,
   config: Config,
   options: EndDayCommandOptions,
+  notifier: Notifier = SILENT_NOTIFIER,
 ): Promise<string> {
   if (options.session === undefined) {
     const result = await endDay(deps, { dryRun: options.dryRun });
+    await notifyEndDayResult(notifier, result);
     return formatEndDayReport(result, config);
   }
   const discovery = await deps.sessionProvider.list();
@@ -127,5 +159,6 @@ export async function runEndDayCommand(
   if (result.sessionsInScope === 0) {
     return formatVanishedMatchMessage(options.session, match.item.name);
   }
+  await notifyEndDayResult(notifier, result);
   return formatEndDayReport(result, config);
 }

@@ -17,6 +17,11 @@ import {
   type CapturedClaudeCall,
   type FakeClaudeFixture,
 } from '../integration/generation/_fixtures.js';
+import {
+  createFakeNotificationCommandsFixture,
+  removeFakeNotificationCommandsFixture,
+  type FakeNotificationCommandsFixture,
+} from './_fake-notification-commands.js';
 
 export interface E2eHome {
   readonly root: string;
@@ -30,6 +35,10 @@ export interface E2eHome {
    * than a second, weaker fake — see this file's own comment on `createFakeClaude` below). S2-T5
    * onward controls its behavior per-test through `FAKE_CLAUDE_*` env vars passed to `runSeeya`. */
   readonly claudeFixture: FakeClaudeFixture;
+  /** S4-T1: fakes `powershell.exe`/`notify-send`/`osascript` so `seeya end-day`'s real `Notifier`
+   * (wired in `cli/composition.ts`) never shows a real OS notification while this suite runs — see
+   * `_fake-notification-commands.ts`'s own top comment. */
+  readonly notificationCommandsFixture: FakeNotificationCommandsFixture;
 }
 
 /**
@@ -65,6 +74,7 @@ export async function createE2eHome(): Promise<E2eHome> {
   // `claudeFixture.dir` is the wrong one to use for that (measured: without this fix, `PATH`
   // resolution silently fell through to a REAL `claude.exe` elsewhere on this machine's PATH).
   const fakeClaudeDir = path.dirname(claudeFixture.binaryPath);
+  const notificationCommandsFixture = await createFakeNotificationCommandsFixture();
   return {
     root,
     homeDir,
@@ -74,11 +84,13 @@ export async function createE2eHome(): Promise<E2eHome> {
     projectsDir,
     fakeClaudeDir,
     claudeFixture,
+    notificationCommandsFixture,
   };
 }
 
 export async function removeE2eHome(home: E2eHome): Promise<void> {
   await removeFakeClaudeFixture(home.claudeFixture);
+  await removeFakeNotificationCommandsFixture(home.notificationCommandsFixture);
   // S2-T5's own end-day journeys spawn a real fake `claude` INSIDE a project directory under
   // `home.root` (its `cwd`) — on Windows, the OS can hold a directory handle open for a few
   // milliseconds after the spawned process's `close` event already fired (observed here, not
@@ -154,6 +166,12 @@ export interface SeeyaResult {
  * from ITS OWN `process.env` (`adapters/generation/env.ts#buildGenerationEnv`), which is exactly
  * the env this harness gives the `seeya` process here, and none of these four names are in
  * D-017's stripped list, so they survive the sanitization untouched.
+ *
+ * `PATH` also shadows the real native notification command (S4-T1,
+ * `_fake-notification-commands.ts`) ahead of whatever real one exists on the host running this
+ * suite — every `seeya end-day` run past this point spawns the REAL `Notifier`
+ * (`cli/composition.ts`), and without this, the process running this very test would show a real
+ * OS notification.
  */
 export function runSeeya(
   home: E2eHome,
@@ -167,7 +185,11 @@ export function runSeeya(
         ...extraEnv,
         HOME: home.homeDir,
         USERPROFILE: home.homeDir,
-        PATH: `${home.fakeClaudeDir}${path.delimiter}${process.env.PATH ?? ''}`,
+        PATH: [
+          home.fakeClaudeDir,
+          home.notificationCommandsFixture.dir,
+          process.env.PATH ?? '',
+        ].join(path.delimiter),
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
