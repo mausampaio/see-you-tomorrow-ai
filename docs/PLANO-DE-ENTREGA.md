@@ -1197,6 +1197,45 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       consertado (o `timeout` de `spawn-claude.ts` descarta o mesmo tipo de evidência, só que no
       caminho de timeout) registrados na Q-039.
 
+- [ ] **S4-T00e — Captura que falhou não pode bloquear a retentativa do dia.** Achada pelo
+      mantenedor em 2026-08-31, testando à mão. **Antes do daemon**, que vai chamar a captura em
+      laço e multiplicar o efeito.
+
+      **O que aconteceu.** A primeira captura falhou (orçamento) e caiu para determinístico —
+      D-003 funcionando, o dia não abortou. Na segunda tentativa, com o problema já corrigido, a
+      sessão veio **inelegível por `duplicateToday`** e o comando gravou **0 handoffs**. Para
+      testar de novo foi preciso **apagar `~/.seeya/days/<dia>/` na mão**.
+
+      **A causa.** `application/eligibility-assembly.ts` lê o handoff anterior do dia
+      (`Storage.readHandoff`) e compara assinaturas de evidência (D-026) **sem olhar o campo**
+      `source`. Um handoff `deterministic` — onde o modelo **não rodou** — conta como "já
+      capturado hoje".
+
+      **É o mesmo raciocínio da Q-026, uma camada acima.** Lá, `pendingItems` vazio num handoff
+      determinístico não podia contar como "nada pendente", porque ausência de análise não é
+      veredito. Aqui, um handoff determinístico não pode contar como "já capturado", **pela mesma
+      razão**: ele é o registro de que a análise **não aconteceu**. Tratá-lo como conclusão
+      transforma ausência em estado concluído — D-025 aplicado à elegibilidade.
+
+      **E o custo real é maior que o incômodo do teste.** Em produção, uma falha passageira —
+      orçamento, rede, modelo indisponível — consome em silêncio a única captura daquela sessão no
+      dia. O fallback da D-003 existe para o dia não se perder; do jeito que está, a **camada de
+      entendimento** se perde de qualquer forma, até amanhã.
+
+      *Escopo:* só handoff com `source: "model"` bloqueia por duplicidade. `deterministic` e
+      `noTranscript` deixam a sessão elegível de novo — a retentativa só pode melhorar o que está
+      lá. A comparação de assinatura (D-026) continua igual; o que muda é **quais handoffs
+      anteriores contam**.
+
+      *Cuidado que não pode ser ignorado:* o daemon chama isto **em laço**. Se o modelo estiver
+      falhando de forma persistente, "determinístico não bloqueia" vira retentativa a cada ciclo,
+      gastando dinheiro sem melhorar nada. **Esta tarefa não resolve isso** — o limite de
+      retentativas por sessão por dia é do daemon (S4-T3), e precisa estar escrito lá antes de o
+      laço existir. Registre a dependência nas duas pontas.
+
+      *Aceite:* sessão com handoff determinístico do mesmo dia e evidência inalterada volta a ser
+      elegível; com handoff `model` e evidência inalterada, continua `duplicateToday`.
+
 - [ ] **S4-T0 — A evidência não pode ficar presa ao `cwd` de lançamento.** Aprovada pelo
       mantenedor em 2026-08-30. **O problema, observado no primeiro teste real:** a sessão subiu
       de `C:\Users\<usuario>` e o trabalho aconteceu numa pasta criada durante a conversa. O
