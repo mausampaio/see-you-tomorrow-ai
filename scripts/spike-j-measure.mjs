@@ -8,6 +8,17 @@
  *   node scripts/spike-j-measure.mjs arm2
  *   node scripts/spike-j-measure.mjs arm3   (run again with arm4/arm5/... for extra wait points)
  *
+ * S4-T00b (docs/spikes/J-cache-na-captura.md's new section, Q-034/Q-035): which single flag among
+ * `--tools ""`/`--system-prompt`/`--json-schema` actually breaks prefix identity, run against a
+ * FRESH original session (`turn1b`/`IDS.original2`) since round 1's session is a day stale:
+ *
+ *   node scripts/spike-j-measure.mjs turn1b
+ *   node scripts/spike-j-measure.mjs base                  (all three flags, anchors round 1's arm1)
+ *   node scripts/spike-j-measure.mjs no-system-prompt       (the decisive arm)
+ *   node scripts/spike-j-measure.mjs no-tools
+ *   node scripts/spike-j-measure.mjs no-json-schema
+ *   node scripts/spike-j-measure.mjs user-prompt-extraction (only if no-system-prompt confirms)
+ *
  * Each step is a SEPARATE process invocation on purpose: the "measure the clock" arms need a real
  * wait between them, and per docs/FLUXO-DE-AGENTES.md's "commite cedo, nunca espere notificação",
  * the operator (agent) sleeps SYNCHRONOUSLY between steps and reads the clock itself — this script
@@ -96,6 +107,22 @@ const DEEP_PROMPT =
   'Based on the full conversation above, produce a short handoff: what was being worked on, ' +
   'what is left pending, and a short plan for the next session.';
 
+// S4-T00b: turn1's synthetic codename for the SECOND original session, distinct from the first
+// round's PLUM-42 so raw output from the two rounds is never ambiguous about which base it read.
+const TURN1B_PROMPT =
+  'This is a disposable session for a cache-behavior measurement, not a real project. Remember ' +
+  'this fact: the test codename is ONYX-77. Reply with exactly one short plain sentence ' +
+  'confirming you noted it. Do not ask questions, do not use any tool.';
+
+// S4-T00b's decisive-arm-adjacent measurement (Q-034): if dropping ONLY --system-prompt turns out
+// to restore prefix identity (the hypothesis under test), the practically interesting variant is
+// whether moving the extractor instruction into the USER prompt — keeping --json-schema and
+// --tools "" active, so output stays structured — also keeps that cache hit. This is
+// GENERATION_SYSTEM_PROMPT's own text, relocated, plus the same handoff request DEEP_PROMPT makes.
+const USER_PROMPT_WITH_EXTRACTION_INSTRUCTION =
+  `${GENERATION_SYSTEM_PROMPT} Based on the full conversation above, produce the requested JSON: ` +
+  'what was being worked on, what is left pending, and a short plan for the next session.';
+
 const TURN1_PROMPT =
   'This is a disposable session for a cache-behavior measurement, not a real project. Remember ' +
   'this fact: the test codename is PLUM-42. Reply with exactly one short plain sentence ' +
@@ -109,6 +136,16 @@ const IDS = {
   arm2Fork: '88888888-8888-4888-8888-888888888888',
   arm3Fork: '99999999-9999-4999-8999-999999999999',
   arm4Fork: '55555555-5555-4555-8555-555555555555',
+  // S4-T00b (this file's second round, docs/spikes/J-cache-na-captura.md's new section): a FRESH
+  // original session, not a reuse of `original` above. A day passed since the first round — cache
+  // from `original` is long past even the generous 1h tier Achado 3 measured, and the arms below
+  // need to run close in time to each other, anchored to a fresh base, not to yesterday's session.
+  original2: '22222222-2222-4222-8222-222222222222',
+  baseFork: '33333333-3333-4333-8333-333333333333',
+  noSystemPromptFork: '44444444-4444-4444-8444-444444444444',
+  noToolsFork: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  noJsonSchemaFork: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+  userPromptExtractionFork: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
 };
 
 const MAX_BUDGET_USD = '0.20';
@@ -265,6 +302,132 @@ function commonDeepResumeArgs(forkId) {
   ];
 }
 
+/**
+ * S4-T00b: builds the deep-resume args with any subset of the three prefix-shaping flags
+ * (`--tools ""`, `--system-prompt`, `--json-schema`), always in production's own relative order
+ * (args.ts#buildCommonArgs: tools, system-prompt, json-schema, THEN --resume/--fork-session), so
+ * "drop one flag" arms differ from `base` by exactly one omission, nothing reordered.
+ *
+ * @param {string} forkId
+ * @param {{ tools?: boolean, systemPrompt?: boolean, jsonSchema?: boolean }} include
+ * @returns {string[]}
+ */
+function buildArgsWithFlags(forkId, include) {
+  /** @type {string[]} */
+  const shapingFlags = [];
+  if (include.tools) {
+    shapingFlags.push('--tools', '');
+  }
+  if (include.systemPrompt) {
+    shapingFlags.push('--system-prompt', GENERATION_SYSTEM_PROMPT);
+  }
+  if (include.jsonSchema) {
+    shapingFlags.push('--json-schema', UNDERSTANDING_JSON_SCHEMA);
+  }
+  return [
+    '-p',
+    '--model',
+    'haiku',
+    '--output-format',
+    'json',
+    ...shapingFlags,
+    '--resume',
+    IDS.original2,
+    '--fork-session',
+    '--session-id',
+    forkId,
+    '--max-budget-usd',
+    MAX_BUDGET_USD,
+  ];
+}
+
+/** Fresh original session for the S4-T00b round (see IDS.original2's comment). */
+function stepTurn1b(state) {
+  const cwd = ensureCwd(state);
+  const args = [
+    '-p',
+    '--model',
+    'haiku',
+    '--output-format',
+    'json',
+    '--session-id',
+    IDS.original2,
+    '--max-budget-usd',
+    MAX_BUDGET_USD,
+  ];
+  const { startedAt, finishedAt } = runClaude('turn1b', args, TURN1B_PROMPT, cwd);
+  state.turn1bStartedAt = startedAt;
+  state.turn1bFinishedAt = finishedAt;
+  saveState(state);
+}
+
+/** `base`: today's real deep-capture shape again (all three flags), run close in time to the
+ * single-flag-dropped arms below so the clock never confounds the comparison (unlike reusing
+ * round 1's `arm1`, a day stale by the time this round runs). Anchors against round 1's `arm1`. */
+function stepBase(state) {
+  const cwd = ensureCwd(state);
+  const args = buildArgsWithFlags(IDS.baseFork, {
+    tools: true,
+    systemPrompt: true,
+    jsonSchema: true,
+  });
+  const { startedAt, finishedAt } = runClaude('base', args, DEEP_PROMPT, cwd);
+  state.baseStartedAt = startedAt;
+  state.baseFinishedAt = finishedAt;
+  saveState(state);
+}
+
+/** The decisive arm: drop ONLY --system-prompt, keep --tools "" and --json-schema. If the
+ * hypothesis is right (system-prompt alone breaks prefix identity because it sits at the absolute
+ * start of the prefix), this should read close to full cache like round 1's `arm2` did. */
+function stepNoSystemPrompt(state) {
+  const cwd = ensureCwd(state);
+  const args = buildArgsWithFlags(IDS.noSystemPromptFork, { tools: true, jsonSchema: true });
+  const { startedAt, finishedAt } = runClaude('no-system-prompt', args, DEEP_PROMPT, cwd);
+  state.noSystemPromptStartedAt = startedAt;
+  state.noSystemPromptFinishedAt = finishedAt;
+  saveState(state);
+}
+
+/** Drop ONLY --tools "" (default tool set active), keep --system-prompt and --json-schema. */
+function stepNoTools(state) {
+  const cwd = ensureCwd(state);
+  const args = buildArgsWithFlags(IDS.noToolsFork, { systemPrompt: true, jsonSchema: true });
+  const { startedAt, finishedAt } = runClaude('no-tools', args, DEEP_PROMPT, cwd);
+  state.noToolsStartedAt = startedAt;
+  state.noToolsFinishedAt = finishedAt;
+  saveState(state);
+}
+
+/** Drop ONLY --json-schema, keep --tools "" and --system-prompt. Achado 4's own candidate flag:
+ * if the fixed internal apparatus --json-schema triggers is what reads the mystery 70,260 tokens,
+ * this arm's cache_read should collapse relative to `base`. */
+function stepNoJsonSchema(state) {
+  const cwd = ensureCwd(state);
+  const args = buildArgsWithFlags(IDS.noJsonSchemaFork, { tools: true, systemPrompt: true });
+  const { startedAt, finishedAt } = runClaude('no-json-schema', args, DEEP_PROMPT, cwd);
+  state.noJsonSchemaStartedAt = startedAt;
+  state.noJsonSchemaFinishedAt = finishedAt;
+  saveState(state);
+}
+
+/** The variant Q-034 actually needs, run ONLY if `no-system-prompt` confirms the hypothesis:
+ * extractor instruction moved to the USER prompt (stdin), --system-prompt dropped, --tools "" and
+ * --json-schema both kept — structured output AND (if the hypothesis holds) prefix identity. */
+function stepUserPromptExtraction(state) {
+  const cwd = ensureCwd(state);
+  const args = buildArgsWithFlags(IDS.userPromptExtractionFork, { tools: true, jsonSchema: true });
+  const { startedAt, finishedAt } = runClaude(
+    'user-prompt-extraction',
+    args,
+    USER_PROMPT_WITH_EXTRACTION_INSTRUCTION,
+    cwd,
+  );
+  state.userPromptExtractionStartedAt = startedAt;
+  state.userPromptExtractionFinishedAt = finishedAt;
+  saveState(state);
+}
+
 /** @param {SpikeState} state */
 function stepTurn1(state) {
   const cwd = ensureCwd(state);
@@ -377,8 +540,31 @@ function main() {
     case 'arm4':
       stepArmRepeat(state, 'arm4', IDS.arm4Fork);
       break;
+    // S4-T00b arms (docs/spikes/J-cache-na-captura.md's new section) — separate fresh original
+    // session (IDS.original2), see that constant's comment.
+    case 'turn1b':
+      stepTurn1b(state);
+      break;
+    case 'base':
+      stepBase(state);
+      break;
+    case 'no-system-prompt':
+      stepNoSystemPrompt(state);
+      break;
+    case 'no-tools':
+      stepNoTools(state);
+      break;
+    case 'no-json-schema':
+      stepNoJsonSchema(state);
+      break;
+    case 'user-prompt-extraction':
+      stepUserPromptExtraction(state);
+      break;
     default:
-      console.error('Usage: node scripts/spike-j-measure.mjs <turn1|arm1|arm2|arm3|arm4>');
+      console.error(
+        'Usage: node scripts/spike-j-measure.mjs ' +
+          '<turn1|arm1|arm2|arm3|arm4|turn1b|base|no-system-prompt|no-tools|no-json-schema|user-prompt-extraction>',
+      );
       process.exitCode = 1;
   }
 }
