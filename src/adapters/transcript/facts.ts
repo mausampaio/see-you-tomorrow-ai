@@ -1,9 +1,9 @@
 /**
- * Pure extraction of the two facts that need a content block, not just an entry's top-level
- * fields: the text of a user prompt, and the file paths a write-capable tool touched. No I/O
- * here — `reader.ts` does the streaming and calls these per parsed entry, which is why this file
- * is covered by unit tests (docs/TESTES.md § Unidade: "a lógica pura de `transcript/`"), not
- * integration ones.
+ * Pure extraction of the facts that need a content block, not just an entry's top-level fields:
+ * the text of a user prompt, the text of an assistant message (S4-T00c), and the file paths a
+ * write-capable tool touched. No I/O here — `reader.ts` does the streaming and calls these per
+ * parsed entry, which is why this file is covered by unit tests (docs/TESTES.md § Unidade: "a
+ * lógica pura de `transcript/`"), not integration ones.
  */
 import type { UserEntryWithText, AssistantEntryWithContent } from './schemas.js';
 
