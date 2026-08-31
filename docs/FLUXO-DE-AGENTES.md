@@ -81,6 +81,28 @@ Não altera documento de autoridade. Não decide comportamento não especificado
 Entrega esperada por tarefa: branch, código, testes da faixa, `npm run verificar` verde, tarefa
 marcada `[~]`, e um resumo curto do que fez e do que deixou fora.
 
+### Commite cedo, e nunca fique esperando notificação
+
+**Trabalho não commitado numa worktree de agente pode desaparecer inteiro.** Se o agente para e
+fica ocioso, o sistema considera a tarefa encerrada e **recolhe a worktree** — o que estiver só
+no disco de trabalho vai junto, sem aviso.
+
+Aconteceu em 2026-08-30 com a **S4-T00**: o agente rodou os dois primeiros braços da medição,
+gastou invocações reais do `claude` (dinheiro do mantenedor), e então parou dizendo que ia
+"aguardar a notificação do `sleep` em segundo plano". Essa notificação **não vem**. Quando fui
+cutucá-lo, a worktree já estava **vazia** e o branch dele apontava para o commit do `main`: zero
+commits, zero arquivos, medição perdida. No mesmo dia, a **S3-T4** caiu na mesma armadilha e só
+escapou porque eu a cutuquei antes da limpeza.
+
+**Duas regras, e as duas são baratas:**
+
+1. **Commite assim que houver resultado**, ainda que parcial e ainda que o portão não passe (use
+   um commit de trabalho e amarre depois). Medição bruta em arquivo commitado sobrevive; a mesma
+   medição na sua cabeça, não.
+2. **Nunca pare esperando ser avisado de algo que você mesmo disparou.** Para marcar tempo, leia
+   o relógio: registre o instante de referência e, antes do passo seguinte, confirme que o
+   intervalo passou. Espera passiva por notificação é o mesmo que travar.
+
 ## Revisor — Sonnet 5, contexto limpo
 
 Recebe apenas: o diff da tarefa, `AGENTS.md`, o trecho relevante da spec e o item do plano.
