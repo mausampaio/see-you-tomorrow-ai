@@ -13,7 +13,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.build.json",
     "test": "vitest run --project unit --project integration --project guards",
     "pretest:e2e": "npm run build",
     "test:e2e": "vitest run --project e2e",

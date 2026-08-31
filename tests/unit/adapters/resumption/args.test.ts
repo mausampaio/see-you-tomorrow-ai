@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   buildFallbackArgs,
   buildResumeArgs,
+  describeFallbackAttempt,
+  describeResumeAttempt,
   FALLBACK_KICKOFF_PROMPT,
   RESUME_PROMPT_ARG_LIMIT_CHARS,
 } from '../../../../src/adapters/resumption/args.js';
@@ -48,5 +50,29 @@ describe('buildFallbackArgs — D-004 single fallback mechanism', () => {
 describe('RESUME_PROMPT_ARG_LIMIT_CHARS', () => {
   it('sits well under the Windows ~32,767-UTF-16-unit command-line ceiling (Spike H)', () => {
     expect(RESUME_PROMPT_ARG_LIMIT_CHARS).toBeLessThan(32_767 / 4);
+  });
+});
+
+describe('describeResumeAttempt — S3-T7, Q-029: the flags, never the plan text', () => {
+  it('shows the binary, the flag, the session id, and the prompt LENGTH only', () => {
+    const prompt = 'Yesterday you were...';
+    const description = describeResumeAttempt('claude', 'session-1', prompt);
+    expect(description).toBe(`claude --resume session-1 <prompt: ${prompt.length} chars>`);
+  });
+
+  it('never contains the prompt text itself, even for a prompt that would be easy to spot', () => {
+    const secretLookingPlan = 'finish the OAuth token refresh bug before standup';
+    const description = describeResumeAttempt('claude', 'session-1', secretLookingPlan);
+    expect(description).not.toContain(secretLookingPlan);
+    expect(description).toContain(`${secretLookingPlan.length} chars`);
+  });
+});
+
+describe('describeFallbackAttempt — S3-T7, Q-029', () => {
+  it('shows the binary, the flag, the real path, and the fixed kickoff prompt in full', () => {
+    const description = describeFallbackAttempt('claude', '/tmp/seeya/tmp/resume-fallback-x.txt');
+    expect(description).toBe(
+      `claude --append-system-prompt-file /tmp/seeya/tmp/resume-fallback-x.txt "${FALLBACK_KICKOFF_PROMPT}"`,
+    );
   });
 });

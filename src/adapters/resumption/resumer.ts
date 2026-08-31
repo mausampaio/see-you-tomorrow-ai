@@ -7,7 +7,13 @@
  */
 import type { SessionResumer } from '../../core/ports.js';
 import type { ResumeFallbackReason, ResumeOutcome } from '../../core/types.js';
-import { buildFallbackArgs, buildResumeArgs, RESUME_PROMPT_ARG_LIMIT_CHARS } from './args.js';
+import {
+  buildFallbackArgs,
+  buildResumeArgs,
+  describeFallbackAttempt,
+  describeResumeAttempt,
+  RESUME_PROMPT_ARG_LIMIT_CHARS,
+} from './args.js';
 import { removeFallbackContextFile, writeFallbackContextFile } from './context-file.js';
 import { buildResumptionEnv } from './env.js';
 import {
@@ -41,13 +47,25 @@ interface ResumeCallContext {
   readonly fastFailureGraceMs: number;
 }
 
-/** A fallback attempt that itself fails fast means nothing actually opened — throwing here (never
- * a `ResumeOutcome` claiming a fresh session started) is D-025 applied to an action instead of a
- * fact: an outcome that didn't happen must never be reported as if it had. */
-function describeReasonForError(reason: ResumeFallbackReason): string {
-  return reason.kind === 'resumeFailed'
-    ? `the original --resume attempt failed with exit code ${reason.exitCode}`
-    : `the plan was ${reason.promptLength} characters, over the ${reason.limitChars}-character limit`;
+/**
+ * Describes the primary `--resume` attempt for the error thrown when the fallback ALSO fails
+ * (S3-T7, Q-029). Two shapes, because the primary attempt itself has two shapes:
+ * `resumeFailed` means `claude --resume` actually ran and exited non-zero — show the argv it ran
+ * with (redacted per `describeResumeAttempt`) plus that exit code. `promptTooLarge` means the
+ * primary attempt was never even tried (`resume()` routes straight to `fallback()` before calling
+ * `runInteractive` at all) — saying so plainly matters as much as the other branch: claiming an
+ * attempt that never happened would be exactly the D-025 violation this task exists to avoid on
+ * the "fact" side, done instead on the "action" side.
+ */
+function describePrimaryAttempt(context: ResumeCallContext, reason: ResumeFallbackReason): string {
+  if (reason.kind === 'promptTooLarge') {
+    return (
+      `skipped — the plan was ${reason.promptLength} characters, over the ` +
+      `${reason.limitChars}-character limit`
+    );
+  }
+  const argv = describeResumeAttempt(context.claudeBinary, context.sessionId, context.prompt);
+  return `${argv} (exited with code ${reason.exitCode})`;
 }
 
 function isFastFailure(result: InteractiveRunResult): boolean {
@@ -122,10 +140,25 @@ export class ClaudeSessionResumer implements SessionResumer {
       await removeFallbackContextFile(contextFilePath);
     }
     if (isFastFailure(result)) {
+      // S3-T7 (Q-029): this used to say only "Check that claude is on PATH and that <cwd> still
+      // exists" — true as a sanity check, but presented as THE explanation when it usually isn't
+      // one. D-004's fallback carries the plan via `--append-system-prompt-file`, a flag
+      // `claude --help` has never documented (Spike H) and that the maintainer chose to keep
+      // using "until it breaks" (Q-029) rather than build machinery around a moving target. When
+      // it does break, `claude` rejects the argument and exits fast — indistinguishable, from
+      // exit code alone, from a missing binary or a deleted `cwd`. Showing the argv actually
+      // attempted (flags only, per `describeResumeAttempt`/`describeFallbackAttempt` — the plan
+      // text itself never belongs in an exception) lets whoever reads this identify a renamed or
+      // removed flag without being told a cause the evidence doesn't establish (D-025): this
+      // reports what was tried and what happened, and leaves PATH/cwd as one thing to rule out,
+      // not the diagnosis.
       throw new Error(
         `Fallback session for "${sessionId}" (${cwd}) also failed to start (claude exited with ` +
-          `code ${result.exitCode}) after ${describeReasonForError(reason)}. Check that "claude" ` +
-          `is on PATH and that "${cwd}" still exists.`,
+          `code ${result.exitCode}).\n` +
+          `  primary attempt:  ${describePrimaryAttempt(context, reason)}\n` +
+          `  fallback attempt: ${describeFallbackAttempt(claudeBinary, contextFilePath)}\n` +
+          `If "claude" is on PATH and "${cwd}" still exists, check next whether the installed ` +
+          `claude version still recognizes the flags shown above.`,
       );
     }
     return { sessionId, cwd, fellBack: reason };

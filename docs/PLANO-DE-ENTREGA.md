@@ -1035,7 +1035,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       (`start-day-selection.ts`) deixava implícitas. Sem laço de nova tentativa (mantido de
       S3-T3); código de saída continua 0. Escolhas registradas em `docs/QUESTOES.md` Q-031.
 
-- [ ] **S3-T7 — Mensagem de falha do fallback com o argv, e build que limpa o destino.** Saída da
+- [~] **S3-T7 — Mensagem de falha do fallback com o argv, e build que limpa o destino.** Saída da
       Q-029, aprovada em 2026-08-30. **O problema, hoje:** se o
       `--append-system-prompt-file` sumir ou mudar de nome numa versão futura — e o mantenedor
       está certo de que isso é questão de tempo —, o `claude` recusa o argumento, sai rápido com
