@@ -1117,7 +1117,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       (Q-035, nova, aberta). **A Q-034 sobrevive** como escolha real entre barato e estruturado —
       não é um dilema falso.
 
-- [ ] **S4-T00c — O modo enxuto para de jogar fora o texto do assistente.** Saída da reavaliação
+- [~] **S4-T00c — O modo enxuto para de jogar fora o texto do assistente.** Saída da reavaliação
       da **D-011** sob a **D-031**, em 2026-08-31. **É o conserto do defeito que o primeiro teste
       real expôs.**
       *O defeito:* `buildLeanPrompt` manda ao modelo projeto, `cwd`, última atividade, **os dez
