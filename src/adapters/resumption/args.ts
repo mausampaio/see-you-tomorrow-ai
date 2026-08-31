@@ -43,3 +43,28 @@ export const FALLBACK_KICKOFF_PROMPT =
 export function buildFallbackArgs(contextFilePath: string): string[] {
   return ['--append-system-prompt-file', contextFilePath, FALLBACK_KICKOFF_PROMPT];
 }
+
+/**
+ * Human-readable form of `buildResumeArgs`'s argv, for `resumer.ts`'s error message when both
+ * attempts fail (S3-T7, Q-029). **Shows the flag and the prompt's length, never the prompt
+ * itself** — `prompt` can be up to `RESUME_PROMPT_ARG_LIMIT_CHARS` (4096) characters, and dumping
+ * yesterday's plan into an exception would trade the original problem (a message pointing at the
+ * wrong cause) for a new one (a wall of text hiding it). What identifies "the flag `claude`
+ * stopped accepting" is which flags were passed, not what their values were.
+ */
+export function describeResumeAttempt(
+  claudeBinary: string,
+  sessionId: string,
+  prompt: string,
+): string {
+  return `${claudeBinary} --resume ${sessionId} <prompt: ${prompt.length} chars>`;
+}
+
+/**
+ * Human-readable form of `buildFallbackArgs`'s argv, for the same error message. `contextFilePath`
+ * and `FALLBACK_KICKOFF_PROMPT` are both short and fixed (never user plan text), so — unlike
+ * `describeResumeAttempt` — there is nothing here that needs redacting.
+ */
+export function describeFallbackAttempt(claudeBinary: string, contextFilePath: string): string {
+  return `${claudeBinary} --append-system-prompt-file ${contextFilePath} "${FALLBACK_KICKOFF_PROMPT}"`;
+}

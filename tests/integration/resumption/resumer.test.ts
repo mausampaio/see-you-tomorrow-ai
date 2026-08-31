@@ -121,34 +121,72 @@ describe('ClaudeSessionResumer — S3-T2', () => {
     expect(calls[0]?.contextFileContent).toBe(oversized);
   });
 
-  it('throws when the fallback ALSO fails fast — never reports a fresh session that never opened', async () => {
-    process.env['FAKE_CLAUDE_EXIT_CODE'] = '1';
-    process.env['FAKE_CLAUDE_EXIT_DELAY_MS'] = '10';
-    const resumer = new ClaudeSessionResumer({
-      seeyaHome,
-      claudeBinary: fixture.binaryPath,
-      fastFailureGraceMs: 2_000,
-    });
+  it(
+    'throws when the fallback ALSO fails fast — never reports a fresh session that never ' +
+      'opened, and the message carries the argv actually attempted (S3-T7, Q-029), never the ' +
+      'plan text itself',
+    async () => {
+      process.env['FAKE_CLAUDE_EXIT_CODE'] = '1';
+      process.env['FAKE_CLAUDE_EXIT_DELAY_MS'] = '10';
+      const resumer = new ClaudeSessionResumer({
+        seeyaHome,
+        claudeBinary: fixture.binaryPath,
+        fastFailureGraceMs: 2_000,
+      });
+      const plan = 'a short plan the user would not want dumped into an exception';
 
-    await expect(resumer.resume('session-1', PROJECT_CWD, 'a short plan')).rejects.toThrow(
-      /also failed to start/,
-    );
-  });
+      let thrown: Error | undefined;
+      try {
+        await resumer.resume('session-1', PROJECT_CWD, plan);
+      } catch (error) {
+        thrown = error as Error;
+      }
 
-  it('throws with the promptTooLarge reason in the message when THAT fallback also fails fast', async () => {
-    process.env['FAKE_CLAUDE_EXIT_CODE'] = '1';
-    process.env['FAKE_CLAUDE_EXIT_DELAY_MS'] = '10';
-    const oversized = 'x'.repeat(RESUME_PROMPT_ARG_LIMIT_CHARS + 1);
-    const resumer = new ClaudeSessionResumer({
-      seeyaHome,
-      claudeBinary: fixture.binaryPath,
-      fastFailureGraceMs: 2_000,
-    });
+      expect(thrown?.message).toMatch(/also failed to start/);
+      const message = thrown?.message ?? '';
+      // The flags actually passed to each attempt — the evidence that lets a reader identify a
+      // renamed/removed flag instead of chasing PATH (this task's whole point).
+      expect(message).toContain('--resume');
+      expect(message).toContain('--append-system-prompt-file');
+      expect(message).toContain(fixture.binaryPath);
+      // The plan's length is fine to show; the plan's own text is not (D-015's ceiling is 4096
+      // chars — dumping it would trade one unreadable message for another).
+      expect(message).toContain(`${plan.length} chars`);
+      expect(message).not.toContain(plan);
+      // Reformulated, not removed (S3-T7): PATH/cwd stays as something to rule out, but the
+      // message no longer states it as the cause.
+      expect(message).toContain(PROJECT_CWD);
+      expect(message).toMatch(/on PATH/);
+    },
+  );
 
-    await expect(resumer.resume('session-1', PROJECT_CWD, oversized)).rejects.toThrow(
-      /over the 4096-character limit/,
-    );
-  });
+  it(
+    'throws with the promptTooLarge reason in the message when THAT fallback also fails fast — ' +
+      'and says the primary attempt was skipped, never inventing one that never ran (D-025)',
+    async () => {
+      process.env['FAKE_CLAUDE_EXIT_CODE'] = '1';
+      process.env['FAKE_CLAUDE_EXIT_DELAY_MS'] = '10';
+      const oversized = 'x'.repeat(RESUME_PROMPT_ARG_LIMIT_CHARS + 1);
+      const resumer = new ClaudeSessionResumer({
+        seeyaHome,
+        claudeBinary: fixture.binaryPath,
+        fastFailureGraceMs: 2_000,
+      });
+
+      let thrown: Error | undefined;
+      try {
+        await resumer.resume('session-1', PROJECT_CWD, oversized);
+      } catch (error) {
+        thrown = error as Error;
+      }
+
+      expect(thrown?.message).toMatch(/over the 4096-character limit/);
+      const message = thrown?.message ?? '';
+      expect(message).toContain('skipped');
+      expect(message).not.toContain('--resume');
+      expect(message).toContain('--append-system-prompt-file');
+    },
+  );
 
   it('sanitizes the child env (D-017), even when nothing else about the call needs it', async () => {
     process.env['FAKE_CLAUDE_EXIT_CODE'] = '0';
