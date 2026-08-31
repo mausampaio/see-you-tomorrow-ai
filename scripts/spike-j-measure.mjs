@@ -27,12 +27,32 @@
  * `claude -p --output-format json` emits — is swept by `sanitizeForCommit` below along with any
  * home-directory path, as a belt-and-suspenders measure the pre-commit guard would otherwise catch
  * anyway (scripts/verificar-termos-locais.mjs).
+ *
+ * JSDoc types throughout, not just tidiness: `eslint .` runs typed lint rules over every file it
+ * doesn't ignore (eslint.config.js), including this one — an untyped parameter here is inferred
+ * `any` and cascades into `no-unsafe-*` everywhere it flows, the same class of error the rest of
+ * this project avoids with real TypeScript.
  */
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+/** @typedef {{ cwd?: string } & Record<string, string | number | undefined>} SpikeState */
+/**
+ * @typedef {Object} ClaudeUsage
+ * @property {unknown} [input_tokens]
+ * @property {unknown} [cache_creation_input_tokens]
+ * @property {unknown} [cache_read_input_tokens]
+ * @property {unknown} [cache_creation]
+ */
+/**
+ * @typedef {Object} ClaudeResult
+ * @property {unknown} [total_cost_usd]
+ * @property {ClaudeUsage} [usage]
+ * @property {Record<string, unknown>} [modelUsage]
+ */
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const RAW_DIR = path.join(REPO_ROOT, 'docs', 'spikes', 'j-cache-na-captura-raw');
@@ -93,6 +113,10 @@ const IDS = {
 
 const MAX_BUDGET_USD = '0.20';
 
+/**
+ * @param {NodeJS.ProcessEnv} base
+ * @returns {NodeJS.ProcessEnv}
+ */
 function sanitizeEnv(base) {
   const env = { ...base };
   for (const name of INHERITED_SESSION_VARS) {
@@ -114,6 +138,9 @@ function sanitizeEnv(base) {
  * matched a single backslash and silently let that occurrence through into a file already written
  * to disk (never committed — caught before `git add`, see the raw-file re-check in the spike's own
  * method section). `\\{1,2}` below matches either form.
+ *
+ * @param {string} rawStdout
+ * @returns {string}
  */
 function sanitizeForCommit(rawStdout) {
   let text = rawStdout.replace(
@@ -128,17 +155,25 @@ function sanitizeForCommit(rawStdout) {
   return text;
 }
 
+/** @returns {SpikeState} */
 function loadState() {
   if (!existsSync(STATE_FILE)) {
     return {};
   }
-  return JSON.parse(readFileSync(STATE_FILE, 'utf8'));
+  /** @type {unknown} */
+  const parsed = JSON.parse(readFileSync(STATE_FILE, 'utf8'));
+  return /** @type {SpikeState} */ (parsed);
 }
 
+/** @param {SpikeState} state */
 function saveState(state) {
   writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), 'utf8');
 }
 
+/**
+ * @param {SpikeState} state
+ * @returns {string}
+ */
 function ensureCwd(state) {
   if (state.cwd && existsSync(state.cwd)) {
     return state.cwd;
@@ -154,20 +189,28 @@ function ensureCwd(state) {
  * docs/spikes/j-cache-na-captura-raw/<label>.json, and prints the two numbers this whole spike is
  * about. Throws loudly on a non-zero exit or unparseable JSON (CLAUDE.md § "O erro clássico neste
  * projeto": a schema/parse failure here is a finding, not something to loosen).
+ *
+ * @param {string} label
+ * @param {string[]} args
+ * @param {string} stdinContent
+ * @param {string} cwd
+ * @returns {{ startedAt: string, finishedAt: string, parsed: ClaudeResult }}
  */
 function runClaude(label, args, stdinContent, cwd) {
   const startedAt = new Date().toISOString();
   console.log(`[${label}] starting at ${startedAt}`);
   console.log(`[${label}] args: claude ${args.join(' ')}`);
-  const result = spawnSync('claude', args, {
-    cwd,
-    env: sanitizeEnv(process.env),
-    input: stdinContent,
-    encoding: 'utf8',
-    shell: false,
-    timeout: 120_000,
-    maxBuffer: 16 * 1024 * 1024,
-  });
+  const result = /** @type {import('node:child_process').SpawnSyncReturns<string>} */ (
+    spawnSync('claude', args, {
+      cwd,
+      env: sanitizeEnv(process.env),
+      input: stdinContent,
+      encoding: 'utf8',
+      shell: false,
+      timeout: 120_000,
+      maxBuffer: 16 * 1024 * 1024,
+    })
+  );
   const finishedAt = new Date().toISOString();
   if (result.status !== 0) {
     console.error(`[${label}] exit=${String(result.status)}`);
@@ -179,13 +222,15 @@ function runClaude(label, args, stdinContent, cwd) {
   const sanitized = sanitizeForCommit(result.stdout);
   writeFileSync(path.join(RAW_DIR, `${label}.json`), sanitized, 'utf8');
 
-  let parsed;
+  /** @type {unknown} */
+  let parsedUnknown;
   try {
-    parsed = JSON.parse(result.stdout);
+    parsedUnknown = JSON.parse(result.stdout);
   } catch (error) {
     console.error(`[${label}] stdout was not valid JSON — raw output still saved for inspection.`);
     throw error;
   }
+  const parsed = /** @type {ClaudeResult} */ (parsedUnknown);
   const usage = parsed.usage ?? {};
   console.log(`[${label}] finished at ${finishedAt}`);
   console.log(`[${label}] total_cost_usd=${String(parsed.total_cost_usd)}`);
@@ -199,6 +244,10 @@ function runClaude(label, args, stdinContent, cwd) {
   return { startedAt, finishedAt, parsed };
 }
 
+/**
+ * @param {string} forkId
+ * @returns {string[]}
+ */
 function commonDeepResumeArgs(forkId) {
   return [
     '-p',
@@ -216,6 +265,7 @@ function commonDeepResumeArgs(forkId) {
   ];
 }
 
+/** @param {SpikeState} state */
 function stepTurn1(state) {
   const cwd = ensureCwd(state);
   const args = [
@@ -235,9 +285,13 @@ function stepTurn1(state) {
   saveState(state);
 }
 
-/** Arm 1 — today's real deep-capture shape (D-011): our system prompt, `--tools ""`, our JSON
+/**
+ * Arm 1 — today's real deep-capture shape (D-011): our system prompt, `--tools ""`, our JSON
  * schema, `--fork-session`. Different prefix from the live session by construction (Q-032): a
- * cache hit here would be surprising. */
+ * cache hit here would be surprising.
+ *
+ * @param {SpikeState} state
+ */
 function stepArm1(state) {
   const cwd = ensureCwd(state);
   const base = commonDeepResumeArgs(IDS.arm1Fork);
@@ -257,10 +311,14 @@ function stepArm1(state) {
   saveState(state);
 }
 
-/** Arm 2 — same resume, WITHOUT our shaping flags: no `--system-prompt`, no `--tools ""`, no
+/**
+ * Arm 2 — same resume, WITHOUT our shaping flags: no `--system-prompt`, no `--tools ""`, no
  * `--json-schema`. Hypothesis under test (Q-032 item 2): this prefix matches the live session's
  * own (default Claude Code system prompt + default tools), so run immediately after turn1/arm1 to
- * test prefix identity while the cache is still hot. */
+ * test prefix identity while the cache is still hot.
+ *
+ * @param {SpikeState} state
+ */
 function stepArm2(state) {
   const cwd = ensureCwd(state);
   const args = commonDeepResumeArgs(IDS.arm2Fork);
@@ -270,19 +328,26 @@ function stepArm2(state) {
   saveState(state);
 }
 
-/** Arm 3 (and arm4, arm5, ... via extra labels) — Arm 2's exact shape again, run as a SEPARATE
+/**
+ * Arm 3 (and arm4, arm5, ... via extra labels) — Arm 2's exact shape again, run as a SEPARATE
  * script invocation after the operator has slept synchronously for some interval since arm2
  * finished. Prints elapsed minutes since arm2 so the caller can confirm the intended wait actually
- * elapsed (docs/FLUXO-DE-AGENTES.md: read the clock, don't assume). */
+ * elapsed (docs/FLUXO-DE-AGENTES.md: read the clock, don't assume).
+ *
+ * @param {SpikeState} state
+ * @param {string} label
+ * @param {string} forkId
+ */
 function stepArmRepeat(state, label, forkId) {
-  if (!state.arm2FinishedAt) {
+  const arm2FinishedAt = state.arm2FinishedAt;
+  if (!arm2FinishedAt) {
     throw new Error(`${label}: run "arm2" first — no arm2FinishedAt in state.`);
   }
   const cwd = ensureCwd(state);
-  const elapsedMs = Date.now() - new Date(state.arm2FinishedAt).getTime();
+  const elapsedMs = Date.now() - new Date(arm2FinishedAt).getTime();
   console.log(
     `[${label}] elapsed since arm2 finished: ${(elapsedMs / 60000).toFixed(2)} minutes ` +
-      `(arm2 finished at ${state.arm2FinishedAt})`,
+      `(arm2 finished at ${arm2FinishedAt})`,
   );
   const args = commonDeepResumeArgs(forkId);
   const { startedAt, finishedAt } = runClaude(label, args, DEEP_PROMPT, cwd);

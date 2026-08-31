@@ -1068,7 +1068,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
 ## Sprint 4 — Automatizar
 
-- [ ] **S4-T00 — Medir se a captura pega carona no cache.** Aprovada pelo mantenedor em
+- [~] **S4-T00 — Medir se a captura pega carona no cache.** Aprovada pelo mantenedor em
       2026-08-30 ao fechar a Q-032: "acho importante saber disso desde já". **Vem antes da
       S4-T0 e da S4-T1** porque é a resposta que decide a forma do daemon.
       *O que medir, e só isto por enquanto:* o custo de uma captura profunda **logo depois** de

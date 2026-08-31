@@ -2601,3 +2601,54 @@ Se o item 1 mostrar diferença grande, os itens 2 e 3 (identidade de prefixo, va
 passam a valer a pena. Se não mostrar, a ideia morre barato e o daemon segue como está desenhado.
 
 Entra como **S4-T00**, antes da S4-T0 e da S4-T1.
+
+---
+
+## Q-034 — Identidade de prefixo economiza de verdade, mas devolve o problema que a D-011 resolveu. Como reconciliar?
+
+**Tarefa:** S4-T00 (spike, `docs/spikes/J-cache-na-captura.md`).
+**Bloqueia:** não. Bloqueia um desenho futuro (S4-T0/S4-T1) que queira perseguir a economia
+medida, não a S4-T00 em si — que termina neste registro.
+
+**Contexto.** O Spike J mediu, com uma sessão sintética descartável e cinco chamadas reais
+(US$ 0,048 no total), os três itens que a Q-032 tinha deixado em aberto. Dois resultados centrais:
+
+1. Remover os três flags que moldam o prefixo da captura profunda (`--tools ""`,
+   `--system-prompt`, `--json-schema`) recupera identidade de prefixo com a sessão original e
+   consegue acerto de cache **quase total** — 23.879 de 24.080 tokens vieram de cache no braço que
+   testou isso, contra a configuração atual (que lê bem menos, proporcionalmente, do que escreve).
+   Custou **4,3x menos** rodando a mesma tarefa segundos depois.
+2. Mas esses três flags existem precisamente porque, sem eles, a saída volta a ser a persona
+   conversacional padrão do Claude Code — o Spike C mediu isso produzindo 2.349 tokens de prosa
+   livre terminando numa oferta de "transformar isto num artefato", e a saída sem os flags neste
+   spike (`docs/spikes/j-cache-na-captura-raw/arm2.json`) confirma o padrão: Markdown livre, não
+   o JSON estruturado que `--json-schema` garante e que `extractUnderstanding`
+   (`run-generation.ts`) depende para funcionar sem cair para o handoff determinístico.
+
+**A pergunta.** Existe alguma forma de conseguir os dois — identidade de prefixo (barata, lê
+cache) **e** saída estruturada e confiável (D-003, D-011) — na mesma captura? Ou são
+mutuamente exclusivas por desenho, e a decisão é escolher uma?
+
+**Ideias que enxergo, nenhuma medida:**
+
+A) **Duas chamadas.** Uma barata, com prefixo padrão (sem os três flags), só para obter o texto
+livre de entendimento; uma segunda, pequena, que pega esse texto e pede a ele mesmo (ou a um
+modelo ainda mais barato) para estruturá-lo em JSON. Dobra o número de chamadas por captura, mas
+cada uma é menor; não medido se o total fica abaixo do custo de uma chamada só com os três flags
+e cache frio.
+
+B) **Aceitar prosa e fazer parsing tolerante no `seeya`**, sem exigir JSON do modelo — abandona a
+garantia de schema que `--json-schema` dá, trocando por um extrator de texto livre mais frágil
+(regex/heurística) rodando fora do modelo. Vai contra o espírito da D-003 ("entendimento pelo
+modelo", não heurística nossa tentando reconstruir estrutura de prosa).
+
+C) **Testar se `--json-schema` sozinho (sem `--system-prompt`/`--tools ""`) preserva identidade de
+prefixo o bastante para valer o desconto**, já que o Achado 4 do Spike J mostrou a config completa
+lendo mais cache do que o esperado por um mecanismo ainda não explicado — pode ser que só o
+`--json-schema` isolado já capture parte do ganho sem abrir mão de tanto.
+
+D) **Não perseguir isto agora** — aceitar que a captura profunda continua com os três flags (D-011
+como está), e usar só o Achado 3 (o relógio é mais generoso que 5 minutos) para informar a
+cadência do daemon, sem tentar também ganhar o desconto de prefixo nesta rodada do Sprint 4.
+
+**Resposta:** em aberto — decisão do mantenedor/PO, não do agente de medição.
