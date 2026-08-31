@@ -1,3 +1,14 @@
+﻿# ATENÇÃO AO SALVAR ESTE ARQUIVO: ele precisa de BOM UTF-8.
+#
+# O Windows PowerShell 5.1 (`powershell.exe`, o que existe por padrão no Windows) lê `.ps1`
+# como ANSI quando não há BOM. Este arquivo tem travessões e acentos; sem o BOM eles viram
+# mojibake, e o mojibake de um travessão dentro de string com aspas duplas quebra o parser
+# inteiro — o erro que aparece é "'}' de fechamento ausente", apontando para chaves que estão
+# perfeitamente balanceadas. Foi assim que este script falhou na primeira execução real.
+#
+# Se o seu editor salvar sem BOM, ou o arquivo passar por uma ferramenta que o remova, isto
+# volta a quebrar. Alternativa, se algum dia o BOM for inconveniente: manter o arquivo em
+# ASCII puro.
 # Manual validation tool for docs/PLANO-DE-ENTREGA.md S4-T1's open question: does a Windows toast
 # button with activationType="protocol" actually reach a registered `seeya://` URI handler when
 # clicked? docs/spikes/B-notificacoes.md flagged this as "candidata preferida" but UNTESTED — it
