@@ -1088,6 +1088,25 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       "gerar por dentro". Qualquer desenho que saia daqui precisa mostrar que não gasta o
       contexto da sessão viva nem interrompe o turno dela.
 
+- [ ] **S4-T00b — Qual dos três flags quebra a identidade de prefixo?** Aprovada pelo mantenedor
+      em 2026-08-31, saída do Spike J. **Pode dissolver a Q-034 em vez de forçar a escolha.**
+      *O que o Spike J não isolou:* ele comparou **os três flags juntos** (`--tools ""`,
+      `--system-prompt` próprio, `--json-schema`) contra **nenhum deles**. A Q-034 só é um dilema
+      se os três forem igualmente culpados — e há evidência de que não são: o **Achado 4** mediu
+      a configuração atual lendo **70.260 tokens de cache** quando a hipótese era zero. Reuso
+      grande acontece mesmo com os três presentes, e isso não bate com "os três quebram".
+      *A hipótese a testar:* o culpado é o `--system-prompt` sozinho, por ficar no começo absoluto
+      do prefixo. Se for, dá para **manter a saída estruturada** e ainda assim acertar o cache —
+      movendo a instrução de extração para o prompt do usuário em vez do prompt de sistema.
+      *Escopo:* largar um flag por vez a partir da configuração atual, medindo `cache_read` e
+      `cache_creation` (em `usage`, snake_case — ver Achado 1 do Spike J). Reaproveitar
+      `scripts/spike-j-measure.mjs` em vez de escrever outro. Explicar, ou pelo menos delimitar,
+      o Achado 4 — hoje é o único número do spike sem explicação, e é o que impede qualquer
+      redesenho de saber de onde a captura parte.
+      *Custo:* 3 a 4 chamadas. O Spike J inteiro custou US$ 0,048 com cinco.
+      *Entrega:* atualizar o **Spike J** com uma seção nova, não criar um spike K — é a mesma
+      pergunta, medida com mais resolução. E dizer, na Q-034, se a troca sobrevive ou não.
+
 - [ ] **S4-T0 — A evidência não pode ficar presa ao `cwd` de lançamento.** Aprovada pelo
       mantenedor em 2026-08-30. **O problema, observado no primeiro teste real:** a sessão subiu
       de `C:\Users\<usuario>` e o trabalho aconteceu numa pasta criada durante a conversa. O
