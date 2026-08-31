@@ -2795,3 +2795,98 @@ não teria como conferir contra a evidência bruta. Contra persistir: é conteú
 (D-027 — chave nova em disco é barata agora, cara depois — mais ainda quando o conteúdo é texto
 livre do assistente, que carrega mais superfície de privacidade que uma lista de prompts do
 usuário). **Resposta:** em aberto — decisão do mantenedor, não do agente.
+
+---
+
+## Q-037 — Seis escolhas feitas fazendo S4-T2 (`core/schedule.ts`), registradas para confirmação
+
+**Tarefa:** S4-T2
+**Bloqueia:** não — as seis seguiram a solução mínima com o porquê escrito no próprio código
+(comentários citados abaixo), conforme AGENTS.md ("decida, escreva o porquê, registre se ficar
+ambíguo"); registro para o review confirmar ou corrigir, no mesmo espírito de Q-016/Q-017/Q-021.
+
+**Contexto.** `docs/ESPECIFICACAO.md` § "Comportamento do daemon" descreve o QUE deve acontecer
+(aviso prévio, encerramento, atraso por suspensão) mas é silenciosa sobre vários detalhes de
+implementação que uma regra pura precisa decidir para existir. As seis abaixo:
+
+**1) Hora que não existe (entrada do horário de verão) — não rejeito, deixo a plataforma
+normalizar, e documento o resultado medido.** `resolveEndOfDayInstant("02:30", diaDeEntrada)`
+com um `"02:30"` que nunca acontece naquele dia (relógios pulam de 02:00 para 03:00) — medido no
+Node/V8 deste projeto (`TZ=America/New_York`, 2026-03-08): o resultado é **03:30**, não 01:30 e
+não uma exceção. `docs/ARQUITETURA.md` § "Fusos e horários" já diz que a conversão para instante
+"trata mudança de horário de verão de graça" delegando ao fuso do sistema — interpretei isso como
+"não construa uma tabela de transições própria dentro do `core/`", e documentei o comportamento
+medido em vez de tentar corrigi-lo ou rejeitá-lo. Raciocínio completo no comentário de
+`resolveEndOfDayInstant` (`src/core/schedule.ts`).
+**Opções:** A) aceitar a normalização nativa (avança para depois do buraco) como o comportamento
+do produto, documentada e testada. B) `core/` deveria detectar a hora inexistente e escolher
+outra regra (ex.: usar sempre o instante ANTES do buraco). C) deveria ser erro de config, recusado
+na leitura (mas isso pertenceria a `adapters/storage/config-schema.ts`, não a este módulo, e o
+`"02:30"` só se torna "impossível" em função do calendário — não dá para essa validação viver
+onde a config é lida, sem repetir a tabela de transições que a opção A evita).
+**Minha escolha:** A.
+
+**2) Hora que acontece duas vezes (saída do horário de verão) — mesma resposta: aceito a
+escolha nativa (a ocorrência mais cedo, ainda em horário de verão) em vez de desambiguar
+sozinho.** Medido (`TZ=America/New_York`, 2026-11-01, `"01:30"`): resolve para a instância às
+05:30 UTC (UTC-4, ainda DST), nunca a das 06:30 UTC (UTC-5). Não há informação disponível numa
+string `"HH:MM"` que justificasse escolher a ocorrência tardia em vez da nativa.
+**Opções:** A) aceitar a escolha nativa (mais cedo). B) uma config adicional para desambiguar
+("primeira ou segunda ocorrência").
+**Minha escolha:** A — B seria uma chave de config nova para um caso que ocorre uma vez por ano,
+sem pedido na spec.
+
+**3) `delayMs`, não `late: boolean`, no caso `endOfDay`.** A spec pede "aviso de que houve atraso"
+quando a máquina estava suspensa, mas não define o que conta como "atraso" (30s de folga do poll
+normal já seria "atraso" tecnicamente). Em vez de escolher um limiar arbitrário dentro do
+`core/`, devolvo o `delayMs` bruto (`now - effectiveEndOfDay`) e deixo quem consome (a notificação,
+S4-T1/S4-T3) decidir a partir do número real se e como avisar. Ver o comentário de
+`ScheduleDecision` em `src/core/schedule.ts`.
+**Opções:** A) `delayMs` bruto (o que implementei). B) `core/` escolhe um limiar (ex.: >2min =
+atraso) e devolve um booleano ou um terceiro `kind` (`endOfDayLate`).
+**Minha escolha:** A — um limiar exige um número que não está em documento nenhum, e um booleano
+apagaria a distinção que a spec pede para preservar (instrução literal da tarefa recebida).
+
+**4) Ordem de prioridade quando mais de uma antecedência está vencida ao mesmo tempo (máquina
+suspensa através de duas marcas de aviso).** A spec não cobre o caso. Decidi por ordem
+**decrescente de minutos** (30 antes de 15), independente da ordem em `leadTimesInMinutes` na
+config — é a ordem em que os dois teriam disparado de verdade se o daemon não tivesse dormido.
+Cada chamada dispara só UMA antecedência vencida; a próxima chamada (poll seguinte) pega a outra.
+Ver `findDueLeadTime` em `src/core/schedule.ts`.
+**Opções:** A) ordem decrescente por minutos (o que implementei). B) ordem literal do array de
+config. C) disparar todas de uma vez (mudaria `ScheduleDecision` para carregar uma lista).
+**Minha escolha:** A — C mudaria a forma do tipo para um caso raro (só acontece com suspensão
+cobrindo duas marcas), e o "poll seguinte pega a outra" já resolve sem essa complexidade.
+
+**5) `endOfDayFired` é permanente pelo resto do dia local, mesmo com adiamento pedido depois.**
+Uma vez que o encerramento de fato ocorreu, nenhum adiamento subsequente reabre o dia (não há
+como desencerrar sessões já capturadas). `docs/TESTES.md` não pede esse caso explicitamente, mas
+me pareceu a única leitura consistente de D-006 ("não há limite de adiamentos") — o limite não é
+de quantidade, é de que adiar só faz sentido **antes** do encerramento acontecer. Testado em
+`schedule.test.ts` ("a snooze requested after already closing cannot reopen the day").
+**Opções:** A) `alreadyEnded` é permanente e ignora adiamento (o que implementei). B) um adiamento
+depois do encerramento deveria de alguma forma reverter/reabrir (não vejo como isso faria sentido
+sem re-executar `endDay`, fora do escopo deste módulo).
+**Minha escolha:** A.
+
+**6) A virada de meia-noite (reset de `DayState`) é resolvida DENTRO do `core/`, comparando
+`state.day` com `core/day.ts#localDayString(now)`, em vez de esperar que a S4-T3/S4-T4 façam o
+reset ao ler de disco (ex.: um arquivo por dia, como `resumed.json`).** `docs/TESTES.md` lista
+"virada de meia-noite zerando o estado do dia" como um caso obrigatório de teste **de unidade**
+(sem I/O) — isso só é possível se o reset for lógica pura, e não uma consequência de como o
+armazenamento futuro chaveia o arquivo em disco. `DayState` carrega seu próprio campo `day` para
+isso (ver o comentário em `core/types.ts`); nenhum método de `Storage` foi acrescentado
+(`saveState`/`readState` ficam para S4-T3/S4-T4, conforme a tarefa pediu explicitamente para não
+inventar chave em disco).
+**Opções:** A) reset dentro do `core/`, com `day` embutido no tipo (o que implementei). B) esperar
+a S4-T3/S4-T4 decidirem a chave de disco e fazer o reset lá (mas isso deixaria o caso obrigatório
+do `docs/TESTES.md` sem como ser testado nesta tarefa).
+**Minha escolha:** A.
+
+**Nomes novos, ainda fora do glossário do `AGENTS.md`:** `DayState`, `ScheduleDecision`,
+`decideSchedule`, `applySnooze`, `applySkipToday`, `computeEffectiveEndOfDay`,
+`resolveEndOfDayInstant`, `emptyDayState`. `DayState` já estava reservado (chega em S4-T2,
+tabela de "Identificadores que vão para disco" cita só o conceito, não os nomes de campo) — os
+campos (`skipped`, `snoozeMinutesTotal`, `firedLeadTimesInMinutes`, `endOfDayFired`) e os nomes de
+função são meus, sem correspondente literal em nenhum documento. Nenhum dos dois vira chave em
+disco nesta tarefa (ver item 6).

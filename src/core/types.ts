@@ -498,3 +498,48 @@ export interface ResumeOutcome {
    * reused for both triggers above, never a second one. */
   readonly fellBack: false | ResumeFallbackReason;
 }
+
+// Own block at the end of the file on purpose (S4-T2), same reasoning as every addition above
+// this one: a second in-flight task (S4-T1, `adapters/notification`) doesn't touch `core/types.ts`
+// at all, so there is no concurrent editor to collide with here today, but keeping the habit costs
+// nothing and keeps the file's own history consistent.
+
+/**
+ * Per-local-day scheduling bookkeeping (D-006, `core/schedule.ts`) — what the daemon (S4-T3) has
+ * to remember across poll cycles, and what `seeya snooze`/`seeya skip-today` (S4-T4) mutate, so
+ * that a pure decision function never repeats a lead-time notification or an end-of-day closure
+ * it already produced, and so "adiar" accumulates instead of resetting (D-006: "não há limite de
+ * adiamentos"). AGENTS.md § "Idioma" reserves the disk shape (`estado.json`, cited by D-006's own
+ * text) and the `Storage.saveState` method name for whoever wires real persistence — that's
+ * S4-T3/S4-T4, not this task (docs/QUESTOES.md Q-037): this is the *domain* type only, the same
+ * way `core/ports.ts`'s own top comment already explains for every port this project declared
+ * before its adapter existed.
+ *
+ * **Carries its own `day`, unlike `EarlyWarningState` above.** That state is "once per artifact,
+ * forever" (S1-T7) and never resets; this one is explicitly "por dia" (D-006), and
+ * `core/schedule.ts`'s functions all compare `day` against `core/day.ts#localDayString(now)`
+ * before trusting the rest of the fields — a state object left over from yesterday (whatever
+ * `Storage` implementation ends up handing back one) is treated as `emptyDayState(today)` instead
+ * of carrying a stale skip/snooze/already-fired flag past local midnight. This is a mandatory
+ * `docs/TESTES.md` case ("virada de meia-noite zerando o estado do dia") and has to hold
+ * regardless of how S4-T3/S4-T4 end up keying the file on disk — see `core/schedule.ts`'s own
+ * docstring for why that reset can't wait for the storage layer to exist.
+ */
+export interface DayState {
+  readonly day: Day;
+  /** "pular hoje" (D-006) — set by `seeya skip-today`, overrides everything else for the rest of
+   * this local day (`core/schedule.ts#decideSchedule` checks it first). */
+  readonly skipped: boolean;
+  /** Sum of every `seeya snooze` increment applied today, in minutes — cumulative, never reset
+   * except by the day turning over (D-006: "não há limite de adiamentos"). Added to the nominal
+   * `endOfDayTime` instant, never re-interpreted as a new wall-clock time of its own. */
+  readonly snoozeMinutesTotal: number;
+  /** Which of `Config.leadTimesInMinutes`' values already produced a notification today — the
+   * memory a stateless daemon poll (every 30s, docs/ESPECIFICACAO.md) needs so the same lead-time
+   * warning doesn't fire on every tick it's crossed on. */
+  readonly firedLeadTimesInMinutes: readonly number[];
+  /** Whether today's end-of-day closure has already been produced. Sticky for the rest of the
+   * local day once `true` — a day that already closed doesn't reopen because of a later snooze
+   * (there is nothing left to delay). */
+  readonly endOfDayFired: boolean;
+}

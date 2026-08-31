@@ -1,4 +1,9 @@
-import type { Handoff, SessionWithPid, SessionWithoutPid } from '../../../src/core/types.js';
+import type {
+  Config,
+  Handoff,
+  SessionWithPid,
+  SessionWithoutPid,
+} from '../../../src/core/types.js';
 
 /**
  * Factories for `DiscoveredSession` for the `core/` tests (S1-T1). Synthetic values — UUIDs with
@@ -79,6 +84,32 @@ export function createHandoff(overrides: Partial<Handoff> = {}): Handoff {
     pendingItems: [],
     tomorrowPlan: [],
     generationError: null,
+    ...overrides,
+  };
+}
+
+/**
+ * Minimal, complete `Config` for `schedule.test.ts` (S4-T2) — same "everything at a plain,
+ * unremarkable default" spirit as `createHandoff` above. Values match
+ * `tests/unit/application/_fakes.ts#DEFAULT_TEST_CONFIG` (not imported from there: that file
+ * lives under `tests/unit/application/`, and `core/`'s own test suite doesn't reach across test
+ * directories any more than `src/core/` reaches into `src/application/`) except `endOfDayTime`,
+ * which schedule tests almost always want to set explicitly, so it defaults here to a concrete
+ * `"19:30"` rather than the production default of `null` — a `Config` a schedule test builds
+ * without overriding `endOfDayTime` is a `Config` that means to have a schedule.
+ */
+export function createConfig(overrides: Partial<Config> = {}): Config {
+  return {
+    endOfDayTime: '19:30',
+    leadTimesInMinutes: [30, 15],
+    relevanceHours: 12,
+    idleMinutes: 45,
+    captureModel: 'sonnet',
+    budgetPerSessionUsd: 0.25,
+    captureConcurrency: 3,
+    ignore: [],
+    projectPolicy: {},
+    forkCleanupDays: 7,
     ...overrides,
   };
 }
