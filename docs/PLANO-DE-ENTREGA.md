@@ -1164,8 +1164,29 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       **Q-007:** quando `canTerminate: true` estiver ligado e a terminação não acontecer (depois da
       S1-T2b: quando não há console para anexar), o aviso diz **qual sessão não foi encerrada e por
       captura — o handoff foi gravado; só a terminação não ocorreu.
-- [ ] **S4-T2 — `core/schedule`.** Puro: dado config + estado + agora, o que deve acontecer.
+- [~] **S4-T2 — `core/schedule`.** Puro: dado config + estado + agora, o que deve acontecer.
       É aqui que moram os testes de horário de verão e de máquina suspensa.
+      **Implementado em 2026-08-31:** `src/core/schedule.ts` — `resolveEndOfDayInstant` (a
+      conversão `"HH:MM"` + dia + fuso, D-019, delegando DST inteiramente à plataforma: hora
+      inexistente na entrada do horário de verão normaliza para depois do buraco, hora ambígua na
+      saída resolve para a ocorrência mais cedo — os dois medidos com `TZ=America/New_York`,
+      2026-03-08/2026-11-01, ambos documentados no comentário da função e na Q-037 item 1/2, nunca
+      uma tabela de transições própria), `computeEffectiveEndOfDay` (soma o adiamento acumulado,
+      `null` quando `endOfDayTime` é `null`), `emptyDayState`/`applySnooze`/`applySkipToday` (D-006,
+      cumulativos, resetando por `core/day.ts#localDayString` na virada de dia) e `decideSchedule`
+      — a união discriminada `ScheduleDecision` (D-024) com seis casos (`disabled`, `skipped`,
+      `alreadyEnded`, `waiting`, `leadTimeWarning` com qual antecedência, `endOfDay` com `delayMs`
+      bruto em vez de um `late: boolean` que apagaria a distinção que a spec pede, Q-037 item 3) e
+      `nextState` (mesmo padrão de `core/early-warnings.ts`: a marca de "já notificado"/"já
+      encerrado" volta junto da decisão, e só o caller persiste depois de agir de verdade). `DayState`
+      (`core/types.ts`) é só o tipo de domínio — nenhum método novo em `Storage`/`core/ports.ts`,
+      por pedido explícito da tarefa (a persistência real é S4-T3/S4-T4). Seis escolhas sem resposta
+      literal na spec registradas em `docs/QUESTOES.md` Q-037 (resolução das duas transições de
+      horário de verão, `delayMs` em vez de booleano, ordem de prioridade quando duas antecedências
+      vencem juntas após suspensão, `alreadyEnded` permanente mesmo com adiamento pedido depois, e o
+      reset de virada de dia vivendo no `core/` em vez de esperar a chave de disco de S4-T3/S4-T4).
+      29 testes em `tests/unit/core/schedule.test.ts`, incluindo os dois dias de virada de horário
+      de verão com `TZ` forçado e restaurado. `npm run verificar` e `npm run verificar:linux` verdes.
 - [ ] **S4-T3 — Daemon.** Loop, lockfile de instância única, recuperação de disparo atrasado.
       **Sobe desanexado do shell que o chamou** (D-005, emendado): `detached` + `stdio` ignorado
       + `unref()`. Não é comando em segundo plano — sobrevive a fechar a janela e a deslogar.
