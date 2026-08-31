@@ -1140,6 +1140,45 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* uma sessão onde o assistente diz o que fez e o usuário nunca repete produz
       handoff que registra o que foi feito — o caso exato que falhou no teste real.
 
+- [ ] **S4-T00d — A falha de geração precisa dizer o que o `claude` respondeu.** Achada pelo
+      mantenedor em 2026-08-31, testando à mão a captura nova da S4-T00c. **Faça antes do daemon:**
+      ele vai chamar a captura em laço, e uma falha cega repetida N vezes é pior que uma.
+
+      **O que aconteceu.** A captura falhou e o handoff caiu para determinístico — a D-003
+      funcionando, o dia não abortou. Mas o que ficou gravado foi:
+
+      ```
+      generationError: claude exited with code 1, expected 0. stderr: (empty)
+      ```
+
+      **A causa está no ordenamento, não numa mensagem mal escrita.** O `spawn-claude.ts` coleta
+      `stdout` **e** `stderr`. Mas o ramo `nonZeroExit` de `errors.ts` monta a mensagem só com o
+      `stderr` — e a chamada usa `--output-format json`, onde o `claude` reporta erro **no stdout**,
+      como envelope com `is_error`/`subtype`/`result`. Saída ≠ 0 faz o código pegar o ramo cego e
+      **descartar o envelope antes de olhar para ele**.
+
+      **O conserto usa maquinaria que já existe.** `GenerationFailureReason` já tem a variante
+      `modelReportedError` (`subtype` + `result`), que é muito mais informativa. Em saída ≠ 0,
+      **tente ler o stdout como envelope primeiro**; se ele trouxer `is_error`, reporte
+      `modelReportedError`. Só quando o stdout não for envelope válido caia no `nonZeroExit` — e aí
+      **incluindo o stdout bruto**, como o ramo `invalidJson` já faz com o dele.
+
+      *Cuidado de tamanho:* `result` pode carregar saída do modelo. Limite o que entra na mensagem —
+      ela vai para `generationError`, que **é gravado no handoff em disco**.
+      *Cuidado de privacidade:* essa mesma superfície já existe (o handoff guarda conteúdo de
+      trabalho), então não é fronteira nova — mas nada de stdout real em fixture do repositório.
+
+      *Aceite:* falha com saída ≠ 0 **e** envelope no stdout produz mensagem que nomeia o
+      `subtype` e o `result`, não "(empty)". Teste com os dois casos: envelope presente e stdout
+      ilegível.
+
+      *Fora de escopo:* descobrir **por que** aquela chamada específica falhou. A hipótese é
+      orçamento — `captureModel` tem default `sonnet` e `budgetPerSessionUsd` default US$ 0,25, e
+      a S3-T4 mediu que `--model sonnet` dispara um classificador haiku interno antes do turno
+      real, cobrando os dois. **Mas é hipótese**, e é exatamente o que esta tarefa existe para
+      tornar visível na próxima vez. Se os defaults precisarem mudar, isso é decisão de produto
+      com a evidência na mão, não palpite agora.
+
 - [ ] **S4-T0 — A evidência não pode ficar presa ao `cwd` de lançamento.** Aprovada pelo
       mantenedor em 2026-08-30. **O problema, observado no primeiro teste real:** a sessão subiu
       de `C:\Users\<usuario>` e o trabalho aconteceu numa pasta criada durante a conversa. O
