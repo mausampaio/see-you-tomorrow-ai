@@ -37,9 +37,31 @@ Exibir é fácil; saber **qual botão foi clicado** é o problema real.
 | Binário auxiliar (SnoreToast, via node-notifier) | Funciona: roda síncrono e devolve a ação. Custa uma dependência com binário embarcado. |
 | `activationType="protocol"` + esquema de URI próprio | **Candidata preferida.** Registra `seeya://` em `HKCU\Software\Classes`; o botão dispara `seeya://adiar30`, que o Windows resolve chamando o próprio CLI. Sem COM, sem processo residente esperando. |
 
-**A abordagem por protocolo não foi testada** — validar o clique exige interação humana e ela
-depende de uma escrita no registro que não fiz sem autorização. Fica como validação manual em
-S4-T1.
+> **VALIDADO (2026-08-31, pelo mantenedor).** A abordagem por protocolo **funciona**. O toast foi
+> exibido com um botão `activationType="protocol"`, o clique foi dado por um humano numa área de
+> trabalho real, e o handler registrado em `HKCUSoftwareClassesseeya` foi invocado pelo
+> Windows. Ferramenta: `scripts/validate-windows-toast-protocol.ps1`.
+>
+> **O que o handler recebeu, literalmente: `seeya://snooze30/`** — com **barra no fim**. O Windows
+> normaliza o URI antes de repassar. Quem for interpretar essas URIs um dia **não pode comparar por
+> igualdade exata** com `seeya://snooze30`: a barra extra faria o casamento falhar em silêncio.
+> Registrado aqui porque é o tipo de detalhe que só aparece medindo, e que custa uma tarde para
+> quem redescobrir sozinho.
+>
+> **Isso não muda nada do que já foi entregue.** O contrato do `Notifier` (S4-T1) é **título e
+> corpo**, sem ações, e foi construído sem depender deste resultado. O que a validação faz é abrir
+> a porta: botão de ação passa de "candidata não testada" para **caminho viável**, e quais ações
+> fazem sentido no aviso prévio (adiar 15/30, pular hoje) vira decisão de produto quando alguém
+> quiser tomá-la — não escopo aberto agora.
+>
+> **Pré-requisito de método, aprendido do jeito difícil:** o script falhou na primeira execução
+> real com `"'}' de fechamento ausente"`, chaves perfeitamente balanceadas. Era UTF-8 **sem BOM**:
+> o Windows PowerShell 5.1 lê `.ps1` como ANSI sem BOM, e travessão virando mojibake dentro de
+> string com aspas duplas quebra o parser. Ver o comentário no topo do script.
+
+**Registro histórico, antes da validação acima:** a abordagem por protocolo não foi testada no
+spike original — validar o clique exige interação humana e depende de uma escrita no registro que
+não foi feita sem autorização. Ficou como validação manual em S4-T1.
 
 ## macOS — documentado, não verificado
 
