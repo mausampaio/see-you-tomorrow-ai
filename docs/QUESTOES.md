@@ -2671,6 +2671,33 @@ mantenedor/PO — o que mudou é que a resposta não vem de graça: qualquer cam
 dois vai precisar de algo mais elaborado que "largar um flag" (as ideias A/B), não de um ajuste
 de posição do prompt.
 
+**Resposta:** **FECHADA — a troca é real, e a otimização fica engavetada. Mantém-se a
+configuração atual (prefixo próprio, saída estruturada).**
+
+**O que decide não é o preço unitário, é a D-031.** Ela encolhe o conjunto candidato de ~40
+sessões por dia para um punhado de sessões vivas. Nessa escala, 4,3x sobre um custo que já é de
+centavos por sessão não paga o que custaria conquistá-lo: o único caminho medido para o cache
+é abrir mão da saída estruturada, e recuperá-la exigiria **uma segunda chamada** de extração.
+Isso é um segundo mecanismo — e este projeto já recusou exatamente essa forma na D-004, onde a
+regra ficou sendo **um fallback, não dois**.
+
+**A S4-T00b fechou a saída de escape que eu tinha esperança de achar.** A ideia era largar só o
+`--system-prompt` e manter `--tools ""`/`--json-schema` — barato **e** estruturado. Medido:
+largar **qualquer um dos três sozinho** já zera o acerto. Não havia dilema falso a dissolver.
+
+**O que fica registrado como restrição de desenho, e vale mais que a economia:** a configuração
+atual leu 70.260 tokens de cache numa rodada e **zero** na seguinte, com a mesma forma de
+chamada. Ou seja, **ela às vezes se beneficia de cache por atividade não relacionada da conta, e
+nunca de forma confiável.** Nenhum redesenho pode assumir que a captura parte quente.
+
+**Quando reabrir:** se o custo de captura passar a doer na escala real da D-031 — isto é, se as
+sessões vivas de um dia de trabalho somarem o suficiente para alguém reparar. Aí a medição já
+está feita, com números dos dois lados, e a conversa começa de onde parou em vez do zero.
+
+**O que realmente decide a qualidade da captura não é isto.** É a **D-011 sob a D-031** — enxuto
+contra profundo —, e essa reavaliação é o próximo passo. O cache era otimização de custo em cima
+dela; a cegueira do modo enxuto é o que muda o produto.
+
 ## Q-035 — Por que `--system-prompt` e `--tools ""` juntos custam menos cache do que a soma dos dois isolados?
 
 **Tarefa:** S4-T00b (spike, `docs/spikes/J-cache-na-captura.md`, seção "S4-T00b").

@@ -1117,6 +1117,29 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       (Q-035, nova, aberta). **A Q-034 sobrevive** como escolha real entre barato e estruturado —
       não é um dilema falso.
 
+- [ ] **S4-T00c — O modo enxuto para de jogar fora o texto do assistente.** Saída da reavaliação
+      da **D-011** sob a **D-031**, em 2026-08-31. **É o conserto do defeito que o primeiro teste
+      real expôs.**
+      *O defeito:* `buildLeanPrompt` manda ao modelo projeto, `cwd`, última atividade, **os dez
+      últimos prompts do usuário** e arquivos tocados. O `processAssistantEntry`
+      (`adapters/transcript/reader.ts`) extrai das entradas do assistente **só** timestamp e
+      caminhos de arquivo — o **texto** do assistente é descartado e nunca chega a existir em
+      `SessionFacts`. Foi por isso que a captura perdeu o "4 concluídas, 6 pendentes": a frase
+      estava lá, dita pelo modelo, num turno de assistente. O modelo da captura não falhou —
+      foi honesto sobre evidência que não tinha (D-025).
+      *Escopo:* o texto do assistente passa a ser extraído e a chegar ao prompt do enxuto.
+      *A parte que não pode ser chutada:* **quanto**. Mensagem de assistente é longa, e escolher
+      "os últimos N" por analogia repetiria exatamente o erro que esta decisão já cometeu — a
+      primeira D-011 estimou US$ 0,15 e a medição da S2-T2 achou US$ 0,08–0,09 e um
+      `--json-schema` que **quintuplica** o piso, o oposto do suposto. **Meça o custo com e sem,**
+      e escolha o volume com número na mão. O `scripts/spike-j-measure.mjs` já sabe ler
+      `usage.cache_read_input_tokens`/`cache_creation_input_tokens` e custo por chamada.
+      *Cuidado de privacidade:* texto de assistente é conteúdo de trabalho real. Ele já vai para
+      o handoff em `~/.seeya/`, então não é fronteira nova — mas nada disso pode vazar para o
+      repositório em fixture ou teste (o portão de termos locais existe para isso).
+      *Aceite:* uma sessão onde o assistente diz o que fez e o usuário nunca repete produz
+      handoff que registra o que foi feito — o caso exato que falhou no teste real.
+
 - [ ] **S4-T0 — A evidência não pode ficar presa ao `cwd` de lançamento.** Aprovada pelo
       mantenedor em 2026-08-30. **O problema, observado no primeiro teste real:** a sessão subiu
       de `C:\Users\<usuario>` e o trabalho aconteceu numa pasta criada durante a conversa. O
