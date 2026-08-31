@@ -1035,7 +1035,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       (`start-day-selection.ts`) deixava implícitas. Sem laço de nova tentativa (mantido de
       S3-T3); código de saída continua 0. Escolhas registradas em `docs/QUESTOES.md` Q-031.
 
-- [ ] **S3-T7 — A mensagem de falha do fallback precisa mostrar o argv tentado.** Saída da
+- [ ] **S3-T7 — Mensagem de falha do fallback com o argv, e build que limpa o destino.** Saída da
       Q-029, aprovada em 2026-08-30. **O problema, hoje:** se o
       `--append-system-prompt-file` sumir ou mudar de nome numa versão futura — e o mantenedor
       está certo de que isso é questão de tempo —, o `claude` recusa o argumento, sai rápido com
@@ -1049,6 +1049,20 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       roda interativo — ele nunca vai cobrir o caminho real. A escolha registrada na Q-029 é
       seguir com `--append` até quebrar; esta tarefa é o que garante que, quando quebrar, dê para
       saber por quê em vez de caçar PATH.
+
+      *Segunda parte, aprovada junto em 2026-08-30: o `build` precisa limpar o destino antes de
+      compilar.* Hoje o script é só `tsc -p tsconfig.build.json`, e o `tsc` escreve por cima sem
+      apagar o que sobrou. A tradução do projeto para inglês deixou `dist/adaptadores`,
+      `dist/aplicacao`, `dist/nucleo` e `dist/agendador` convivendo com os diretórios atuais por
+      duas semanas, na máquina do mantenedor, sem ninguém ver.
+      **O que torna isto mais que arrumação:** o `package.json` declara `files: ["dist"]`, então
+      um `npm publish` empacota **o que estiver ali** — código morto em português iria junto, num
+      projeto que vai abrir o código. O mantenedor já limpou à mão; isto é o que impede a sobra
+      de voltar na próxima renomeação.
+      *Escopo:* apagar `dist/` antes de compilar, de forma que funcione nos três SOs — `rm -rf`
+      não serve, e a preferência do projeto é não acrescentar dependência (produção tem só
+      `commander` e `zod`; `node:fs`+`rmSync` resolve). Confirmar que `npm run verificar` e o CI
+      seguem verdes, e que o e2e continua achando o binário compilado.
 
 ---
 
