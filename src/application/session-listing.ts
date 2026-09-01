@@ -7,34 +7,46 @@
  * ~20-line-per-function budget once documented.
  */
 import type { TranscriptReader } from '../core/ports.js';
-import type { DiscoveredSession, SessionListing } from '../core/types.js';
-
-const NO_TITLE: { readonly aiTitle: null; readonly lastPrompt: null } = {
-  aiTitle: null,
-  lastPrompt: null,
-};
+import type { DiscoveredSession, SessionListing, SessionListingInfo } from '../core/types.js';
 
 /**
- * One session's listing entry. A `readListingInfo` failure (a real I/O error — the port's own
- * contract already treats "no transcript found" as `{ aiTitle: null, lastPrompt: null }`, not a
- * rejection) degrades to the same "no title" shape instead of propagating: the listing is
- * informational (D-031's whole point is identifying a session for a human, nothing more), and a
- * transcript this project can't currently read for one out-of-scope session must never take down
- * `endDay`'s real job — capturing the sessions that ARE in scope. This mirrors the discipline
- * `core/ports.ts#Notifier.notify()` already documents for the same class of reason: a courtesy
- * never gets to abort the thing it's a courtesy about.
+ * One session's `SessionListingInfo` (S4-T0c). A `readListingInfo` failure (a real I/O error — the
+ * port's own contract already treats "no transcript found" as `{ aiTitle: null, lastPrompt: null }`,
+ * not a rejection) becomes `{ kind: 'unreadable', reason }` instead of propagating OR silently
+ * degrading to the same shape an ordinary absent title gets (the bug Q-041's `--session` follow-up
+ * found: before this task, both cases produced `{ aiTitle: null, lastPrompt: null }`, and a reader
+ * had no way to tell "nobody wrote a title" from "seeya couldn't check"). The listing stays
+ * informational either way — D-031's whole point is identifying a session for a human, nothing
+ * more — so a transcript this project can't currently read for one out-of-scope session still must
+ * never take down `endDay`'s real job — capturing the sessions that ARE in scope. This mirrors the
+ * discipline `core/ports.ts#Notifier.notify()` already documents for the same class of reason: a
+ * courtesy never gets to abort the thing it's a courtesy about; it can still say so honestly.
  */
+async function readListingInfo(
+  transcriptReader: TranscriptReader,
+  session: DiscoveredSession,
+): Promise<SessionListingInfo> {
+  try {
+    const { aiTitle, lastPrompt } = await transcriptReader.readListingInfo(session);
+    return { kind: 'read', aiTitle, lastPrompt };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return { kind: 'unreadable', reason };
+  }
+}
+
+/** One session's listing entry — identity from `session`, title/prompt (or the reason reading them
+ * failed) from `readListingInfo` above. */
 async function buildOneListing(
   transcriptReader: TranscriptReader,
   session: DiscoveredSession,
 ): Promise<SessionListing> {
-  const info = await transcriptReader.readListingInfo(session).catch(() => NO_TITLE);
+  const info = await readListingInfo(transcriptReader, session);
   return {
     sessionId: session.sessionId,
     cwd: session.cwd,
     name: session.name,
-    aiTitle: info.aiTitle,
-    lastPrompt: info.lastPrompt,
+    info,
   };
 }
 

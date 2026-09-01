@@ -16,7 +16,13 @@ import type {
   Storage,
   TranscriptReader,
 } from '../core/ports.js';
-import type { Day, DiscoveredSession, Handoff, SessionListing } from '../core/types.js';
+import type {
+  Day,
+  DiscoveredSession,
+  EndDayScope,
+  Handoff,
+  SessionListing,
+} from '../core/types.js';
 import type { IneligibilityReason } from '../core/eligibility.js';
 
 /**
@@ -58,10 +64,24 @@ export interface EndDayDeps {
  * `endDay` still runs `SessionProvider.list()` itself and only narrows what it processes
  * afterward, so `application/` never needs to know `--session` accepts either an id or a `cwd`
  * (`cli/`'s job, `end-day-command.ts`) or grow a special case for two different matching rules.
+ *
+ * `scope` (S4-T0c) is independent of `sessionFilter` on purpose, not derived from whether it's
+ * set: `sessionFilter` is an arbitrary predicate (several existing unit tests pass one without
+ * exercising the `--session` feature at all — `() => false`, matching by an unrelated field), and
+ * inferring "this run was narrowed" from "a predicate was passed" would make an unrelated test's
+ * fixture silently start claiming a `--session`-narrowed scope it never meant to declare. `cli/`
+ * (the only real production caller of a narrowed run) sets both together, consistently, from the
+ * same resolved session. Optional, unlike `core/types.ts#EndDayScope` itself (never optional):
+ * this is `endDay`'s own INPUT, and the ordinary "no `--session` at all" case reads exactly like
+ * `dryRun`/`sessionFilter`'s own optionality above — absence here means "use the full-day default",
+ * resolved inside `endDay` into a concrete, always-present `EndDayScope` before it ever reaches
+ * `core/briefing.ts`, which is where `EndDayScope`'s own "never let absence mean one of the two
+ * meanings" rule actually has to hold.
  */
 export interface EndDayOptions {
   readonly dryRun?: boolean;
   readonly sessionFilter?: (session: DiscoveredSession) => boolean;
+  readonly scope?: EndDayScope;
 }
 
 /** One session `evaluateEligibility` (`core/eligibility.ts`) excluded, and why — the "aceitos e
@@ -119,6 +139,14 @@ export interface CapturedSession {
  */
 export interface EndDayResult {
   readonly day: Day;
+  /**
+   * This run's own `EndDayScope` (S4-T0c) — always resolved to a concrete value by `endDay`
+   * itself (`options.scope ?? { kind: 'fullDay' }`), never left as the `EndDayOptions.scope` input
+   * option's own optionality. `cli/` reads this to decide `format-end-day.ts`'s header note, and
+   * `core/briefing.ts#generateBriefingMarkdown` receives the SAME value so the terminal report and
+   * `summary.md` never disagree about which scope produced them.
+   */
+  readonly scope: EndDayScope;
   readonly discoveredCount: number;
   /** D-022, passed through from `SessionProvider.list()` unchanged. */
   readonly rejectedDiscoveries: readonly RejectedDiscoveryRecord[];

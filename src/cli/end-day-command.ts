@@ -17,7 +17,7 @@
  */
 import { endDay } from '../application/end-day.js';
 import type { EndDayDeps, EndDayResult } from '../application/types.js';
-import type { Config, DiscoveredSession } from '../core/types.js';
+import type { Config, DiscoveredSession, EndDayScope } from '../core/types.js';
 import type { Notifier } from '../core/ports.js';
 import { normalizeCwdForComparison, type PathPlatformHint } from '../core/cwd-normalization.js';
 import { resolveSessionReference, type SessionReference } from './session-reference.js';
@@ -139,7 +139,8 @@ export async function runEndDayCommand(
   notifier: Notifier = SILENT_NOTIFIER,
 ): Promise<string> {
   if (options.session === undefined) {
-    const result = await endDay(deps, { dryRun: options.dryRun });
+    const scope: EndDayScope = { kind: 'fullDay' };
+    const result = await endDay(deps, { dryRun: options.dryRun, scope });
     await notifyEndDayResult(notifier, result);
     return formatEndDayReport(result, config);
   }
@@ -152,9 +153,13 @@ export async function runEndDayCommand(
     return formatAmbiguousMatchMessage(options.session, match.matches);
   }
   const resolvedSessionId = match.item.sessionId;
+  // S4-T0c: `scope.sessionValue` is the RAW value the user typed (`options.session`), never
+  // `resolvedSessionId` — see `core/types.ts#EndDayScope`'s own docstring for why.
+  const scope: EndDayScope = { kind: 'singleSession', sessionValue: options.session };
   const result = await endDay(deps, {
     dryRun: options.dryRun,
     sessionFilter: (candidate) => candidate.sessionId === resolvedSessionId,
+    scope,
   });
   if (result.sessionsInScope === 0) {
     return formatVanishedMatchMessage(options.session, match.item.name);

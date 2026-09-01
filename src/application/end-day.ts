@@ -22,7 +22,7 @@
 import { previewDailyBriefing, writeDailyBriefing } from './briefing.js';
 import { localDayString } from '../core/day.js';
 import { isCaptureCandidate } from '../core/capture-scope.js';
-import type { Config, Day, DiscoveredSession } from '../core/types.js';
+import type { Config, Day, DiscoveredSession, EndDayScope } from '../core/types.js';
 import type { ForkCleanupResult } from '../core/ports.js';
 import { captureSession } from './capture-session.js';
 import { buildSessionListings } from './session-listing.js';
@@ -211,6 +211,12 @@ export async function endDay(deps: EndDayDeps, options: EndDayOptions = {}): Pro
   const now = deps.clock.now();
   const day = localDayString(now);
   const dryRun = options.dryRun ?? false;
+  // S4-T0c: resolved to a concrete, always-present value HERE — the one place
+  // `EndDayOptions.scope`'s own optionality (an ordinary "no --session" input) turns into
+  // `EndDayResult.scope`/`core/briefing.ts`'s never-optional `EndDayScope` (see that type's own
+  // docstring in `core/types.ts` for why the artifact-facing value can't carry the same
+  // optionality this input does).
+  const scope: EndDayScope = options.scope ?? { kind: 'fullDay' };
   const { sessionsInScope, outOfScopeSessions } = applyCaptureScope(
     discovery.sessions,
     options.sessionFilter,
@@ -231,15 +237,17 @@ export async function endDay(deps: EndDayDeps, options: EndDayOptions = {}): Pro
         now,
         captured.map((session) => session.handoff),
         listedSessions,
+        scope,
       )
     : null;
   if (!dryRun) {
-    await writeDailyBriefing(deps.storage, day, now, listedSessions);
+    await writeDailyBriefing(deps.storage, day, now, listedSessions, scope);
   }
   const { forkCleanup, forkCleanupError } = await runForkCleanup(deps, config, dryRun);
 
   return {
     day,
+    scope,
     discoveredCount: discovery.sessions.length,
     rejectedDiscoveries: discovery.rejected,
     ineligible,

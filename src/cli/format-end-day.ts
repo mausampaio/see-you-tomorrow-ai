@@ -6,6 +6,7 @@
 import type { CapturedSession, EndDayResult } from '../application/types.js';
 import type { Config, Handoff } from '../core/types.js';
 import type { RejectedDiscoveryRecord } from '../core/ports.js';
+import { countUnreadableListings, formatSessionListingLine } from '../core/briefing.js';
 import { resolveCanTerminate } from './session-view.js';
 
 function pluralize(count: number, singular: string, plural: string): string {
@@ -15,6 +16,16 @@ function pluralize(count: number, singular: string, plural: string): string {
 function formatHeader(result: EndDayResult): string {
   const suffix = result.dryRun ? ' (dry run — nothing is written or terminated)' : '';
   return `seeya end-day — ${result.day}${suffix}`;
+}
+
+/** S4-T0c: the terminal report states `result.scope` explicitly too, same reasoning and same two
+ * cases as `core/briefing.ts#renderScopeNote` — a `--session` run and a full run must be
+ * distinguishable by reading either surface, not just the file. */
+function formatScopeLine(result: EndDayResult): string {
+  if (result.scope.kind === 'fullDay') {
+    return 'Scope: full day.';
+  }
+  return `Scope: narrowed by --session "${result.scope.sessionValue}".`;
 }
 
 /** D-031: names how many were kept out of scope right in the summary line — without this, "N in
@@ -98,17 +109,22 @@ function formatCapturedSection(result: EndDayResult, config: Config): string[] {
 /** D-031: named separately from `Captured:` on purpose — a listed session was never a capture
  * attempt, so showing it under the same header would misrepresent what happened to it (same
  * "never mixed" rule `application/types.ts#EndDayResult.listedSessions` and
- * `core/briefing.ts#renderListedSessionsSection` already state for the other two surfaces). D-025:
- * an absent `aiTitle` prints as an explicit "(no title)", never a made-up one. */
+ * `core/briefing.ts#renderListedSessionsSection` already state for the other two surfaces).
+ * Per-line rendering and the S4-T0c unreadable-count note reuse `core/briefing.ts`'s own
+ * functions rather than a second copy of the same "(no title)" vs. "title unavailable" branching
+ * (AGENTS.md § "Estilo de código": "nada de duplicação"). */
 function formatListedSessionsSection(result: EndDayResult): string[] {
   if (result.listedSessions.length === 0) {
     return [];
   }
-  const lines = ['', 'Not captured (closed sessions, D-031):'];
+  const unreadableCount = countUnreadableListings(result.listedSessions);
+  const unreadableNote =
+    unreadableCount > 0
+      ? ` (${pluralize(unreadableCount, 'entry', 'entries')} could not be read for title/prompt)`
+      : '';
+  const lines = ['', `Not captured (closed sessions, D-031)${unreadableNote}:`];
   for (const listing of result.listedSessions) {
-    const title = listing.aiTitle ?? '(no title)';
-    const prompt = listing.lastPrompt === null ? '' : ` — last prompt: "${listing.lastPrompt}"`;
-    lines.push(`- ${listing.name} (${listing.cwd}): "${title}"${prompt}`);
+    lines.push(formatSessionListingLine(listing));
   }
   return lines;
 }
@@ -209,6 +225,7 @@ function formatBriefingSection(result: EndDayResult): string[] {
 export function formatEndDayReport(result: EndDayResult, config: Config): string {
   const lines = [
     formatHeader(result),
+    formatScopeLine(result),
     formatDiscoverySummary(result),
     ...formatRejectedDiscoveries(result.rejectedDiscoveries),
     ...formatCapturedSection(result, config),

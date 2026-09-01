@@ -550,6 +550,34 @@ export interface DayState {
 // concurrent editor to collide with here today, but keeping the habit costs nothing.
 
 /**
+ * D-031's listing line's transcript-derived half: whether `ai-title`/`last-prompt` were actually
+ * read, and if so, what they carried (S4-T0c, from the Q-041 follow-up).
+ *
+ * **A discriminated union, not `aiTitle`/`lastPrompt` plus a bolted-on `readError: string | null`
+ * (D-024).** Before S4-T0c, "the transcript never carried an `ai-title`" (ordinary — most sessions
+ * never write one) and "the transcript could not be read at all" (a real I/O failure: permission
+ * denied, the file vanishing mid-read) both landed on the exact same `{ aiTitle: null, lastPrompt:
+ * null }` shape — `application/session-listing.ts#buildOneListing` caught the read failure and
+ * quietly reused `TranscriptReader.readListingInfo`'s own "nothing found" degrade for it. Flattening
+ * the two is exactly what D-025 forbids: only the second one is someone's problem to go fix, the
+ * same distinction D-022 already draws between "aceitos e rejeitados" for a whole collection,
+ * applied here to a single entry's two fields instead.
+ *
+ * `kind: 'read'`'s `aiTitle`/`lastPrompt` still come from the two free transcript entries D-031/
+ * Spike I measured (`ai-title`, `last-prompt`) — internal, undocumented Claude Code entries neither
+ * this project nor the user ever asked to be written. **`null` on either is "listing without a
+ * title", never an invented one** (D-025): the ressalva D-031 itself states for exactly this case,
+ * and it stays the ordinary, non-alarming outcome — most sessions never write an `ai-title` at all.
+ */
+export type SessionListingInfo =
+  | { readonly kind: 'read'; readonly aiTitle: string | null; readonly lastPrompt: string | null }
+  | {
+      readonly kind: 'unreadable';
+      /** AGENTS.md § "Mensagens de erro": the raw failure, not just "could not read". */
+      readonly reason: string;
+    };
+
+/**
  * D-031's "listing" line for a session that fell OUTSIDE the day's capture scope — a session with
  * no live registry entry at all (`SessionWithoutPid`, `sessionState: "unknown"`), which D-031
  * reads as "closed gracefully: the person closed it themselves", never as work to capture. See
@@ -560,22 +588,33 @@ export interface DayState {
  * mixing the two would make "was this session captured or only listed?" a question a reader has
  * to infer from which fields happen to be empty instead of one the type already answers by which
  * shape it is (D-024's own reasoning, applied here to a much smaller union of concerns).
- *
- * `aiTitle`/`lastPrompt` come from the two free transcript entries D-031/Spike I measured
- * (`ai-title`, `last-prompt`) — internal, undocumented Claude Code entries neither this project nor
- * the user ever asked to be written. **`null` on either is "listing without a title", never an
- * invented one** (D-025): the ressalva D-031 itself states for exactly this case.
  */
 export interface SessionListing {
   readonly sessionId: string;
   readonly cwd: string;
   readonly name: string;
-  /** From the transcript's `ai-title` entry (`{ type, aiTitle, sessionId }`) — the newest one
-   * written, since Spike I measured it's rewritten as the session's subject evolves. `null` when
-   * the transcript never carried one (D-025). */
-  readonly aiTitle: string | null;
-  /** From the transcript's `last-prompt` entry (`{ type, lastPrompt, leafUuid, sessionId }`) —
-   * Claude Code's own idea of where the session left off, already computed, at zero model cost
-   * (D-031). `null` when the transcript never carried one (D-025). */
-  readonly lastPrompt: string | null;
+  /** See `SessionListingInfo` above (S4-T0c) for why this is a discriminated union rather than two
+   * flat, possibly-inconsistent fields. */
+  readonly info: SessionListingInfo;
 }
+
+/**
+ * Whether an `endDay` execution covered every discovered session, or was narrowed to one by
+ * `--session` (S4-T0c, born from the Q-041 follow-up — see `core/briefing.ts`'s own top comment for
+ * why the artifact needs this at all).
+ *
+ * **A discriminated union, not an optional `sessionValue: string | undefined` on its own (D-024).**
+ * The daemon (S4-T3) always runs the full day and never sets `--session`, so this type has to say
+ * "full day" with the same explicitness it says "narrowed" — "the field is missing" must never be
+ * how either meaning gets read (D-025's "ausência de dado não vira afirmação", applied here to the
+ * artifact's own framing instead of to a single fact inside it).
+ *
+ * `sessionValue` is the RAW `--session` value as the user typed it
+ * (`cli/end-day-command.ts#EndDayCommandOptions.session`: an id, a `sessionId` prefix, a display
+ * `name`, or a `cwd`) — never the resolved `sessionId` `endDay` actually filtered by. Same reasoning
+ * `formatNoMatchMessage` (`cli/end-day-command.ts`) already applies to its own message: `seeya` has
+ * no way to know what was typed, only what arrived, and showing that value unmodified is what lets
+ * a reader recognize, days later, which invocation produced this file.
+ */
+export type EndDayScope =
+  { readonly kind: 'fullDay' } | { readonly kind: 'singleSession'; readonly sessionValue: string };

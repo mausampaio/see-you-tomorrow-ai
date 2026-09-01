@@ -9,7 +9,7 @@
  */
 import { generateBriefingMarkdown } from '../core/briefing.js';
 import type { Storage } from '../core/ports.js';
-import type { Day, Handoff, SessionListing } from '../core/types.js';
+import type { Day, EndDayScope, Handoff, SessionListing } from '../core/types.js';
 
 /**
  * Reads back every handoff saved for `day`, renders the consolidated markdown, and persists it as
@@ -22,17 +22,22 @@ import type { Day, Handoff, SessionListing } from '../core/types.js';
  * for a previous run to merge back in — the section simply reflects who was out of scope as of the
  * most recent `seeya end-day` run, the same way `seeya sessions` would if run again right now.
  *
+ * `scope` (S4-T0c) is THIS call's own `EndDayScope`, passed straight through to
+ * `generateBriefingMarkdown` — same "not persisted, always the latest run's own view" reasoning as
+ * `listedSessions` just above, not derived from `handoffs` (which can span several earlier runs).
+ *
  * @example
- * await writeDailyBriefing(deps.storage, day, now, listedSessions);
+ * await writeDailyBriefing(deps.storage, day, now, listedSessions, scope);
  */
 export async function writeDailyBriefing(
   storage: Storage,
   day: Day,
   now: Date,
   listedSessions: readonly SessionListing[] = [],
+  scope: EndDayScope = { kind: 'fullDay' },
 ): Promise<void> {
   const { handoffs, rejected } = await storage.listHandoffs(day);
-  const markdown = generateBriefingMarkdown(day, now, handoffs, rejected, listedSessions);
+  const markdown = generateBriefingMarkdown(day, now, handoffs, rejected, listedSessions, scope);
   await storage.saveBriefing(day, markdown);
 }
 
@@ -59,7 +64,7 @@ function mergeHandoffsBySessionId(
  * later: the preview shows both, matching what a real run would consolidate.
  *
  * @example
- * const markdown = await previewDailyBriefing(deps.storage, day, now, capturedHandoffs, listed);
+ * const markdown = await previewDailyBriefing(deps.storage, day, now, capturedHandoffs, listed, scope);
  * // markdown is what ~/.seeya/days/<day>/summary.md WOULD contain — nothing was written.
  */
 export async function previewDailyBriefing(
@@ -68,8 +73,9 @@ export async function previewDailyBriefing(
   now: Date,
   freshHandoffs: readonly Handoff[],
   listedSessions: readonly SessionListing[] = [],
+  scope: EndDayScope = { kind: 'fullDay' },
 ): Promise<string> {
   const { handoffs, rejected } = await storage.listHandoffs(day);
   const merged = mergeHandoffsBySessionId(handoffs, freshHandoffs);
-  return generateBriefingMarkdown(day, now, merged, rejected, listedSessions);
+  return generateBriefingMarkdown(day, now, merged, rejected, listedSessions, scope);
 }
