@@ -218,8 +218,7 @@ describe('endDay — D-031 scope cut (S4-T0b)', () => {
           sessionId: session.sessionId,
           cwd: session.cwd,
           name: session.name,
-          aiTitle: 'Refactor the parser',
-          lastPrompt: 'run the tests',
+          info: { kind: 'read', aiTitle: 'Refactor the parser', lastPrompt: 'run the tests' },
         },
       ]);
     },
@@ -304,6 +303,57 @@ describe('endDay — D-031 scope cut (S4-T0b)', () => {
       // The listed session never gets its own `## <name>` handoff header — that header style is
       // reserved for actual captures (`core/briefing.ts#renderHandoffSection`).
       expect(markdown).not.toContain('## fechada-03');
+    },
+  );
+});
+
+describe('endDay — EndDayScope (S4-T0c)', () => {
+  it('with no options.scope at all, result.scope resolves to fullDay (the ordinary case)', async () => {
+    const deps = buildDeps();
+    const result = await endDay(deps);
+    expect(result.scope).toEqual({ kind: 'fullDay' });
+  });
+
+  it('options.scope is carried straight through to result.scope, unmodified', async () => {
+    const deps = buildDeps();
+    const result = await endDay(deps, {
+      scope: { kind: 'singleSession', sessionValue: 'code-6d' },
+    });
+    expect(result.scope).toEqual({ kind: 'singleSession', sessionValue: 'code-6d' });
+  });
+
+  it(
+    'aceite: a --session-scoped run and a later full-day run on the SAME day produce two ' +
+      'summary.md distinguishable by reading, not by comparing counts',
+    async () => {
+      const onlySession = createSessionWithPid({
+        sessionId: '11111111-1111-4111-8111-111111111111',
+        cwd: 'c:\\code\\so-esta',
+        lastActivity: NOW,
+      });
+      const storage = new FakeStorage(DEFAULT_TEST_CONFIG);
+      const deps = buildDeps({
+        sessionProvider: new FakeSessionProvider({ sessions: [onlySession], rejected: [] }),
+        storage,
+      });
+
+      const narrowedResult = await endDay(deps, {
+        sessionFilter: (session) => session.sessionId === onlySession.sessionId,
+        scope: { kind: 'singleSession', sessionValue: 'so-esta' },
+      });
+      const narrowedMarkdown = storage.savedBriefings.get(narrowedResult.day);
+      expect(narrowedResult.captured).toHaveLength(1);
+
+      // Same underlying data run again as a full day — D-026's anti-duplication may or may not
+      // recapture the same session (unchanged evidence), which is exactly why the aceite says
+      // "not by comparing counts": the scope note has to differ regardless of what got captured.
+      const fullResult = await endDay(deps);
+      const fullMarkdown = storage.savedBriefings.get(fullResult.day);
+
+      expect(narrowedMarkdown).toContain('narrowed by `--session "so-esta"`');
+      expect(fullMarkdown).toContain('full day — every discovered session was considered');
+      expect(fullMarkdown).not.toContain('narrowed by');
+      expect(narrowedMarkdown).not.toEqual(fullMarkdown);
     },
   );
 });

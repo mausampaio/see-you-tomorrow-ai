@@ -53,6 +53,7 @@ function ineligible(overrides: Partial<IneligibleSession> = {}): IneligibleSessi
 function buildResult(overrides: Partial<EndDayResult> = {}): EndDayResult {
   return {
     day: '2026-08-16',
+    scope: { kind: 'fullDay' },
     discoveredCount: 0,
     rejectedDiscoveries: [],
     ineligible: [],
@@ -99,6 +100,20 @@ describe('formatEndDayReport — header and discovery summary', () => {
     );
   });
 
+  it('S4-T0c: a full-day run states its scope explicitly, right after the header', () => {
+    const report = formatEndDayReport(buildResult(), buildConfig());
+    const lines = report.split('\n');
+    expect(lines[1]).toBe('Scope: full day.');
+  });
+
+  it('S4-T0c: a --session-narrowed run names the raw value, not the resolved sessionId', () => {
+    const report = formatEndDayReport(
+      buildResult({ scope: { kind: 'singleSession', sessionValue: 'code-6d' } }),
+      buildConfig(),
+    );
+    expect(report).toContain('Scope: narrowed by --session "code-6d".');
+  });
+
   it('reports discoveredCount and sessionsInScope, singular/plural correctly', () => {
     const report = formatEndDayReport(
       buildResult({ discoveredCount: 1, sessionsInScope: 1 }),
@@ -131,8 +146,7 @@ describe('formatEndDayReport — header and discovery summary', () => {
             sessionId: '11111111-1111-4111-8111-111111111111',
             cwd: 'c:\\code\\fechada',
             name: 'fechada',
-            aiTitle: null,
-            lastPrompt: null,
+            info: { kind: 'read', aiTitle: null, lastPrompt: null },
           },
         ],
       }),
@@ -152,8 +166,7 @@ describe('formatEndDayReport — D-031 listing section', () => {
             sessionId: '22222222-2222-4222-8222-222222222222',
             cwd: 'c:\\code\\fechada',
             name: 'fechada-01',
-            aiTitle: 'Refactor the parser',
-            lastPrompt: 'run the tests',
+            info: { kind: 'read', aiTitle: 'Refactor the parser', lastPrompt: 'run the tests' },
           },
         ],
       }),
@@ -177,8 +190,7 @@ describe('formatEndDayReport — D-031 listing section', () => {
             sessionId: '22222222-2222-4222-8222-222222222222',
             cwd: 'c:\\code\\fechada',
             name: 'fechada-01',
-            aiTitle: null,
-            lastPrompt: null,
+            info: { kind: 'read', aiTitle: null, lastPrompt: null },
           },
         ],
       }),
@@ -186,6 +198,28 @@ describe('formatEndDayReport — D-031 listing section', () => {
     );
     expect(report).toContain('- fechada-01 (c:\\code\\fechada): "(no title)"');
     expect(report).not.toContain('last prompt:');
+  });
+
+  it('S4-T0c: an unreadable listing shows a distinct message and reason, and counts in the header', () => {
+    const report = formatEndDayReport(
+      buildResult({
+        listedSessions: [
+          {
+            sessionId: '22222222-2222-4222-8222-222222222222',
+            cwd: 'c:\\code\\fechada',
+            name: 'fechada-01',
+            info: { kind: 'unreadable', reason: 'EACCES: permission denied' },
+          },
+        ],
+      }),
+      buildConfig(),
+    );
+    expect(report).toContain('Not captured (closed sessions, D-031) (1 entry could not be read');
+    expect(report).toContain(
+      '- fechada-01 (c:\\code\\fechada): title unavailable — could not read the transcript ' +
+        '(EACCES: permission denied)',
+    );
+    expect(report).not.toContain('(no title)');
   });
 
   it('omits the section entirely when nothing was listed', () => {
