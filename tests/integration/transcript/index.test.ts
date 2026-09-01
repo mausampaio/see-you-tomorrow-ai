@@ -64,6 +64,33 @@ describe('TranscriptFileReader.readFacts — locates and reads the right file', 
   });
 });
 
+describe('TranscriptFileReader.readListingInfo — locates and reads the right file (D-031)', () => {
+  it('finds the transcript under any slug and returns its listing entries', async () => {
+    const home = await createClaudeHomeWithTranscript('listing-entries.jsonl');
+    const reader = new TranscriptFileReader({ claudeHome: home });
+
+    const result = await reader.readListingInfo(fakeSession());
+
+    expect(result).toStrictEqual({
+      aiTitle: 'Finish the onboarding flow review',
+      lastPrompt: 'Check the review comments',
+    });
+  });
+});
+
+describe('TranscriptFileReader.readListingInfo — no transcript found (D-031/D-025)', () => {
+  it('answers { aiTitle: null, lastPrompt: null }, never throwing, when no file matches', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'seeya-transcript-reader-'));
+    claudeHome = path.join(root, '.claude');
+    await mkdir(path.join(claudeHome, 'projects'), { recursive: true });
+    const reader = new TranscriptFileReader({ claudeHome });
+
+    const result = await reader.readListingInfo(fakeSession({ hasTranscript: false }));
+
+    expect(result).toStrictEqual({ aiTitle: null, lastPrompt: null });
+  });
+});
+
 describe('TranscriptFileReader.readFacts — no transcript found (D-013)', () => {
   it('answers with least-specific facts, never throwing, when projects/ has no matching file', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'seeya-transcript-reader-'));

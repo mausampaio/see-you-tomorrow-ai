@@ -62,6 +62,7 @@ function buildResult(overrides: Partial<EndDayResult> = {}): EndDayResult {
     dryRun: false,
     briefingPreview: null,
     sessionsInScope: 0,
+    listedSessions: [],
     forkCleanup: null,
     forkCleanupError: null,
     ...overrides,
@@ -118,6 +119,78 @@ describe('formatEndDayReport — header and discovery summary', () => {
     expect(report).toContain('2 sessions discovered, 1 entry ignored; 2 in scope.');
     expect(report).toContain('Ignored discovery entries:');
     expect(report).toContain('sessions/broken.json: not valid JSON');
+  });
+
+  it('D-031: names how many were kept out of scope, right in the summary line', () => {
+    const report = formatEndDayReport(
+      buildResult({
+        discoveredCount: 2,
+        sessionsInScope: 1,
+        listedSessions: [
+          {
+            sessionId: '11111111-1111-4111-8111-111111111111',
+            cwd: 'c:\\code\\fechada',
+            name: 'fechada',
+            aiTitle: null,
+            lastPrompt: null,
+          },
+        ],
+      }),
+      buildConfig(),
+    );
+    expect(report).toContain('2 sessions discovered; 1 in scope, 1 session not captured (closed).');
+  });
+});
+
+describe('formatEndDayReport — D-031 listing section', () => {
+  it('names each listed session with its title and last prompt, separately from Captured', () => {
+    const report = formatEndDayReport(
+      buildResult({
+        captured: [captured()],
+        listedSessions: [
+          {
+            sessionId: '22222222-2222-4222-8222-222222222222',
+            cwd: 'c:\\code\\fechada',
+            name: 'fechada-01',
+            aiTitle: 'Refactor the parser',
+            lastPrompt: 'run the tests',
+          },
+        ],
+      }),
+      buildConfig(),
+    );
+    expect(report).toContain('Not captured (closed sessions, D-031):');
+    expect(report).toContain(
+      '- fechada-01 (c:\\code\\fechada): "Refactor the parser" — last prompt: "run the tests"',
+    );
+    const capturedIndex = report.indexOf('Captured:');
+    const listedIndex = report.indexOf('Not captured');
+    expect(capturedIndex).toBeGreaterThanOrEqual(0);
+    expect(listedIndex).toBeGreaterThan(capturedIndex);
+  });
+
+  it('D-025: a listing with no ai-title shows "(no title)", never an invented one', () => {
+    const report = formatEndDayReport(
+      buildResult({
+        listedSessions: [
+          {
+            sessionId: '22222222-2222-4222-8222-222222222222',
+            cwd: 'c:\\code\\fechada',
+            name: 'fechada-01',
+            aiTitle: null,
+            lastPrompt: null,
+          },
+        ],
+      }),
+      buildConfig(),
+    );
+    expect(report).toContain('- fechada-01 (c:\\code\\fechada): "(no title)"');
+    expect(report).not.toContain('last prompt:');
+  });
+
+  it('omits the section entirely when nothing was listed', () => {
+    const report = formatEndDayReport(buildResult(), buildConfig());
+    expect(report).not.toContain('Not captured');
   });
 });
 

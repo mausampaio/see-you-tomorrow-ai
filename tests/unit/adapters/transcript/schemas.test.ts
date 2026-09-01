@@ -5,6 +5,8 @@ import {
   userEntryTextSchema,
   assistantEntryWithContentSchema,
   entryTypeSchema,
+  aiTitleEntrySchema,
+  lastPromptEntrySchema,
   KNOWN_ENTRY_TYPES,
   KNOWN_ENTRY_TYPE_SET,
 } from '../../../../src/adapters/transcript/schemas.js';
@@ -272,5 +274,48 @@ describe('assistantEntryWithContentSchema (S1-T4, extended S4-T00c/Q-036 for tex
       { type: 'text', text: 'updated the parser' },
       { type: 'tool_use', name: 'Edit', input: { file_path: '/code/example/a.ts' } },
     ]);
+  });
+});
+
+describe('aiTitleEntrySchema (D-031, Spike I)', () => {
+  it('accepts the real shape and drops the unused sessionId', () => {
+    const result = aiTitleEntrySchema.parse({
+      type: 'ai-title',
+      aiTitle: 'Refactor the parser',
+      sessionId: '66666666-6666-4666-8666-666666666666',
+    });
+
+    expect(result).toEqual({ type: 'ai-title', aiTitle: 'Refactor the parser' });
+  });
+
+  it('rejects a type other than "ai-title"', () => {
+    const result = aiTitleEntrySchema.safeParse({ type: 'last-prompt', aiTitle: 'x' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a missing aiTitle', () => {
+    expect(aiTitleEntrySchema.safeParse({ type: 'ai-title' }).success).toBe(false);
+  });
+});
+
+describe('lastPromptEntrySchema (D-031, Spike I)', () => {
+  it('accepts the real shape and drops the unused leafUuid/sessionId', () => {
+    const result = lastPromptEntrySchema.parse({
+      type: 'last-prompt',
+      lastPrompt: 'run the tests',
+      leafUuid: '11111111-1111-4111-8111-111111111111',
+      sessionId: '66666666-6666-4666-8666-666666666666',
+    });
+
+    expect(result).toEqual({ type: 'last-prompt', lastPrompt: 'run the tests' });
+  });
+
+  it('rejects a type other than "last-prompt"', () => {
+    const result = lastPromptEntrySchema.safeParse({ type: 'ai-title', lastPrompt: 'x' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a missing lastPrompt', () => {
+    expect(lastPromptEntrySchema.safeParse({ type: 'last-prompt' }).success).toBe(false);
   });
 });

@@ -163,3 +163,30 @@ export const assistantEntryWithContentSchema = assistantEntrySchema.extend({
 });
 
 export type AssistantEntryWithContent = z.infer<typeof assistantEntryWithContentSchema>;
+
+/**
+ * `type: "ai-title"` entry (D-031, Spike I): `{ type, aiTitle, sessionId }`, measured as 388
+ * occurrences in one real transcript — rewritten repeatedly as the session's subject evolves.
+ * Only `aiTitle` is validated: `sessionId` isn't needed (the caller already knows which session's
+ * file it opened), and zod's default "strip unknown keys" tolerance (D-021) keeps this schema
+ * working even if Claude Code adds a field here later. Internal, undocumented entry (D-031's own
+ * ressalva) — never a `.strict()` schema that would treat a harmless future field as corruption.
+ */
+export const aiTitleEntrySchema = z.object({
+  type: z.literal('ai-title'),
+  aiTitle: z.string(),
+});
+
+export type AiTitleEntry = z.infer<typeof aiTitleEntrySchema>;
+
+/**
+ * `type: "last-prompt"` entry (D-031, Spike I): `{ type, lastPrompt, leafUuid, sessionId }`,
+ * measured as 387 occurrences in the same transcript. Only `lastPrompt` is validated — same
+ * reasoning as `aiTitleEntrySchema` above for `leafUuid`/`sessionId`.
+ */
+export const lastPromptEntrySchema = z.object({
+  type: z.literal('last-prompt'),
+  lastPrompt: z.string(),
+});
+
+export type LastPromptEntry = z.infer<typeof lastPromptEntrySchema>;

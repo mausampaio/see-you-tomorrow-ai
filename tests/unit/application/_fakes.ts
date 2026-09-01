@@ -12,6 +12,7 @@ import type {
   SessionProvider,
   SessionResumer,
   Storage,
+  TranscriptListingInfo,
   TranscriptReader,
   TranscriptReadResult,
 } from '../../../src/core/ports.js';
@@ -53,12 +54,20 @@ const EMPTY_TRANSCRIPT_READ_RESULT: TranscriptReadResult = {
   unknownEntryTypeCount: 0,
 };
 
+const EMPTY_LISTING_INFO: TranscriptListingInfo = { aiTitle: null, lastPrompt: null };
+
 /** Keyed by `sessionId`. A session not in `bySessionId` gets the "no transcript" default — the
- * same graceful behavior the real `TranscriptFileReader` gives a session it can't locate. */
+ * same graceful behavior the real `TranscriptFileReader` gives a session it can't locate.
+ * `listingBySessionId`/`throwListingFor` (D-031) mirror `bySessionId`/`throwFor` for
+ * `readListingInfo` — added as trailing, defaulted parameters so every existing call site (which
+ * only ever passed the first two) keeps compiling and keeps its original `readFacts`-only
+ * behavior unchanged. */
 export class FakeTranscriptReader implements TranscriptReader {
   constructor(
     private readonly bySessionId: ReadonlyMap<string, TranscriptReadResult> = new Map(),
     private readonly throwFor: ReadonlySet<string> = new Set(),
+    private readonly listingBySessionId: ReadonlyMap<string, TranscriptListingInfo> = new Map(),
+    private readonly throwListingFor: ReadonlySet<string> = new Set(),
   ) {}
 
   readFacts(session: DiscoveredSession): Promise<TranscriptReadResult> {
@@ -68,6 +77,15 @@ export class FakeTranscriptReader implements TranscriptReader {
       );
     }
     return Promise.resolve(this.bySessionId.get(session.sessionId) ?? EMPTY_TRANSCRIPT_READ_RESULT);
+  }
+
+  readListingInfo(session: DiscoveredSession): Promise<TranscriptListingInfo> {
+    if (this.throwListingFor.has(session.sessionId)) {
+      return Promise.reject(
+        new Error(`FakeTranscriptReader: forced listing failure for ${session.sessionId}`),
+      );
+    }
+    return Promise.resolve(this.listingBySessionId.get(session.sessionId) ?? EMPTY_LISTING_INFO);
   }
 }
 

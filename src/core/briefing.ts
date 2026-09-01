@@ -22,7 +22,14 @@
  *   settled one.
  * Both surface as first-order lines next to the session, not footnotes.
  */
-import type { Day, EvidenceSource, GitFacts, Handoff, WorktreeFacts } from './types.js';
+import type {
+  Day,
+  EvidenceSource,
+  GitFacts,
+  Handoff,
+  SessionListing,
+  WorktreeFacts,
+} from './types.js';
 import type { RejectedDiscoveryRecord } from './ports.js';
 
 const ALL_SOURCES: readonly EvidenceSource[] = ['git', 'transcript', 'registry'];
@@ -170,6 +177,44 @@ function renderHandoffSection(handoff: Handoff): string {
   return sections.join('\n\n');
 }
 
+/** Same stable-order reasoning as `sortedHandoffs` above, applied to D-031's listing instead of
+ * captured handoffs — `endDay`'s own discovery order isn't a display guarantee either. */
+function sortedListedSessions(listedSessions: readonly SessionListing[]): SessionListing[] {
+  return [...listedSessions].sort(
+    (a, b) => a.name.localeCompare(b.name) || a.sessionId.localeCompare(b.sessionId),
+  );
+}
+
+/** D-025: an absent `ai-title` renders as an explicit "(no title)", never a made-up one — the
+ * ressalva D-031 itself states for this exact entry. */
+function renderListedSessionLine(listing: SessionListing): string {
+  const title = listing.aiTitle ?? '(no title)';
+  const prompt = listing.lastPrompt === null ? '' : ` — last prompt: "${listing.lastPrompt}"`;
+  return `- ${listing.name} (${listing.cwd}): "${title}"${prompt}`;
+}
+
+/**
+ * D-031's listing: every session that fell outside the day's capture scope, named plainly and kept
+ * in its own section — **never merged into the handoff sections above**, since a listed session was
+ * never captured at all (`application/types.ts#EndDayResult.listedSessions`'s own docstring makes
+ * the same point about not mixing the two buckets in memory; this is that same rule applied to the
+ * page a human actually reads). Omitted entirely when empty, same convention every other optional
+ * section in this document already follows.
+ */
+function renderListedSessionsSection(listedSessions: readonly SessionListing[]): string {
+  if (listedSessions.length === 0) {
+    return '';
+  }
+  return [
+    '## Not captured (closed sessions)',
+    '',
+    'No live registry entry was found for these — D-031 reads that as closed gracefully, not ' +
+      'work left in progress, so they are listed here for reference instead of captured:',
+    '',
+    ...sortedListedSessions(listedSessions).map(renderListedSessionLine),
+  ].join('\n');
+}
+
 /** D-022's other half of "aceitos e rejeitados": named files with reasons, not just a count in
  * the summary line — a reader who wants to go fix a hand-edited file needs to know which one. */
 function renderRejectedSection(rejected: readonly RejectedDiscoveryRecord[]): string {
@@ -193,8 +238,13 @@ function renderRejectedSection(rejected: readonly RejectedDiscoveryRecord[]): st
  * `endDay` run just captured, so re-running `seeya end-day --session <id>` (S2-T5) later the same
  * day regenerates a briefing that still reflects everyone captured earlier.
  *
+ * `listedSessions` (D-031, default `[]` so every call site written before this parameter existed
+ * keeps compiling with its original, listing-free output): sessions the day's capture never
+ * attempted at all, rendered in their own section (`renderListedSessionsSection`) — see that
+ * function's own docstring for why they're never folded into the handoff sections below.
+ *
  * @example
- * const markdown = generateBriefingMarkdown('2026-08-16', clock.now(), handoffs, rejected);
+ * const markdown = generateBriefingMarkdown('2026-08-16', clock.now(), handoffs, rejected, listed);
  * await storage.saveBriefing('2026-08-16', markdown);
  */
 export function generateBriefingMarkdown(
@@ -202,6 +252,7 @@ export function generateBriefingMarkdown(
   generatedAt: Date,
   handoffs: readonly Handoff[],
   rejected: readonly RejectedDiscoveryRecord[],
+  listedSessions: readonly SessionListing[] = [],
 ): string {
   const header = [
     `# Daily briefing — ${day}`,
@@ -211,6 +262,7 @@ export function generateBriefingMarkdown(
 
   const body = [
     ...sortedHandoffs(handoffs).map(renderHandoffSection),
+    renderListedSessionsSection(listedSessions),
     renderRejectedSection(rejected),
   ]
     .filter((section) => section !== '')

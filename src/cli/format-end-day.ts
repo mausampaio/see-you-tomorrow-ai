@@ -17,13 +17,21 @@ function formatHeader(result: EndDayResult): string {
   return `seeya end-day — ${result.day}${suffix}`;
 }
 
+/** D-031: names how many were kept out of scope right in the summary line — without this, "N in
+ * scope" alone leaves no way to tell "everything discovered was in scope" apart from "some
+ * sessions were quietly dropped", which is exactly the kind of omission D-022's sibling reasoning
+ * (AGENTS.md § "Dados de fora") already rules out for discovery rejections on the same line. */
 function formatDiscoverySummary(result: EndDayResult): string {
   const discovered = `${pluralize(result.discoveredCount, 'session', 'sessions')} discovered`;
   const rejected =
     result.rejectedDiscoveries.length > 0
       ? `, ${pluralize(result.rejectedDiscoveries.length, 'entry', 'entries')} ignored`
       : '';
-  return `${discovered}${rejected}; ${result.sessionsInScope} in scope.`;
+  const listed =
+    result.listedSessions.length > 0
+      ? `, ${pluralize(result.listedSessions.length, 'session', 'sessions')} not captured (closed)`
+      : '';
+  return `${discovered}${rejected}; ${result.sessionsInScope} in scope${listed}.`;
 }
 
 function formatRejectedDiscoveries(rejected: readonly RejectedDiscoveryRecord[]): string[] {
@@ -83,6 +91,24 @@ function formatCapturedSection(result: EndDayResult, config: Config): string[] {
         formatTerminationLabel(captured, result, config),
     );
     lines.push(formatUnderstanding(handoff));
+  }
+  return lines;
+}
+
+/** D-031: named separately from `Captured:` on purpose — a listed session was never a capture
+ * attempt, so showing it under the same header would misrepresent what happened to it (same
+ * "never mixed" rule `application/types.ts#EndDayResult.listedSessions` and
+ * `core/briefing.ts#renderListedSessionsSection` already state for the other two surfaces). D-025:
+ * an absent `aiTitle` prints as an explicit "(no title)", never a made-up one. */
+function formatListedSessionsSection(result: EndDayResult): string[] {
+  if (result.listedSessions.length === 0) {
+    return [];
+  }
+  const lines = ['', 'Not captured (closed sessions, D-031):'];
+  for (const listing of result.listedSessions) {
+    const title = listing.aiTitle ?? '(no title)';
+    const prompt = listing.lastPrompt === null ? '' : ` — last prompt: "${listing.lastPrompt}"`;
+    lines.push(`- ${listing.name} (${listing.cwd}): "${title}"${prompt}`);
   }
   return lines;
 }
@@ -186,6 +212,7 @@ export function formatEndDayReport(result: EndDayResult, config: Config): string
     formatDiscoverySummary(result),
     ...formatRejectedDiscoveries(result.rejectedDiscoveries),
     ...formatCapturedSection(result, config),
+    ...formatListedSessionsSection(result),
     ...formatIneligibleSection(result),
     ...formatFailedCapturesSection(result),
     ...formatTerminationNoticesSection(result),

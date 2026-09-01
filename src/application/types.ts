@@ -16,7 +16,7 @@ import type {
   Storage,
   TranscriptReader,
 } from '../core/ports.js';
-import type { Day, DiscoveredSession, Handoff } from '../core/types.js';
+import type { Day, DiscoveredSession, Handoff, SessionListing } from '../core/types.js';
 import type { IneligibilityReason } from '../core/eligibility.js';
 
 /**
@@ -138,11 +138,26 @@ export interface EndDayResult {
    * (`application/briefing.ts#previewDailyBriefing`).
    */
   readonly briefingPreview: string | null;
-  /** How many discovered sessions `EndDayOptions.sessionFilter` actually let through to
-   * eligibility/capture — `discoveredCount` stays the TOTAL discovery saw, unaffected by the
-   * filter, so `cli/`'s `--session` handling can tell "0 sessions matched the given id/cwd" (a
-   * likely typo) apart from "0 sessions were discovered at all". */
+  /**
+   * How many discovered sessions made it through BOTH D-031's scope cut
+   * (`core/capture-scope.ts#isCaptureCandidate` — a session with no live registry entry at all
+   * never reaches eligibility, see `listedSessions` below) and `EndDayOptions.sessionFilter`, to
+   * eligibility/capture. `discoveredCount` stays the TOTAL discovery saw, unaffected by either, so
+   * `cli/`'s `--session` handling can tell "0 sessions matched the given id/cwd" (a likely typo)
+   * apart from "0 sessions were discovered at all", and so a day with only out-of-scope sessions
+   * reads as "0 in scope" rather than silently looking identical to a day with none discovered.
+   */
   readonly sessionsInScope: number;
+  /**
+   * D-031's listing: every discovered session D-031's scope cut excluded from capture — no live
+   * registry entry at all (`sessionState: "unknown"`), read as "closed gracefully" rather than
+   * "work in progress". **Never mixed into `captured`/`ineligible`/`failedCaptures`** — a listed
+   * session was never a capture attempt at all, successful or not, so folding it into any of those
+   * buckets would misrepresent what happened to it. Unaffected by `EndDayOptions.sessionFilter`:
+   * `--session` narrows what `endDay` tries to CAPTURE, not what it's willing to identify for the
+   * reader, so the listing always reflects the full discovery pass.
+   */
+  readonly listedSessions: readonly SessionListing[];
   /**
    * D-012's cleanup outcome for today's run, or `null` when it didn't run at all — either because
    * `dryRun: true` (deleting a stale fork's file is itself a write a preview must never perform,

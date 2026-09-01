@@ -64,6 +64,7 @@ function buildResult(overrides: Partial<EndDayResult> = {}): EndDayResult {
     dryRun: false,
     briefingPreview: null,
     sessionsInScope: 0,
+    listedSessions: [],
     forkCleanup: null,
     forkCleanupError: null,
     ...overrides,

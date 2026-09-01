@@ -1,7 +1,10 @@
 /**
  * `endDay`'s top-level orchestration (docs/ESPECIFICACAO.md § `seeya end-day`, steps 1-4; step 5 —
- * notifying the result — is S4-T1). Discovers sessions, filters by the five eligibility conditions
- * (docs/ESPECIFICACAO.md § "Elegibilidade"), captures each eligible one under a concurrency limit
+ * notifying the result — is S4-T1). Discovers sessions, applies D-031's scope cut
+ * (`core/capture-scope.ts#isCaptureCandidate`, BEFORE eligibility — a session with no live registry
+ * entry at all is never a capture candidate, full stop, not a sixth eligibility condition), filters
+ * what remains by the five eligibility conditions (docs/ESPECIFICACAO.md § "Elegibilidade"),
+ * captures each eligible one under a concurrency limit
  * (`config.captureConcurrency`) with per-session failure isolation, writes the day's consolidated
  * briefing (S2-T4, `application/briefing.ts`), runs D-012's fork cleanup (S2-T6, wired in by
  * S2-T5 — see the reasoning on `EndDayDeps.forkCleanup`), and — for sessions that opted in —
@@ -18,9 +21,11 @@
  */
 import { previewDailyBriefing, writeDailyBriefing } from './briefing.js';
 import { localDayString } from '../core/day.js';
+import { isCaptureCandidate } from '../core/capture-scope.js';
 import type { Config, Day, DiscoveredSession } from '../core/types.js';
 import type { ForkCleanupResult } from '../core/ports.js';
 import { captureSession } from './capture-session.js';
+import { buildSessionListings } from './session-listing.js';
 import { mapWithConcurrencyLimit } from './concurrency.js';
 import { evaluateCheapEligibility } from './eligibility-assembly.js';
 import type {
@@ -183,15 +188,23 @@ export async function endDay(deps: EndDayDeps, options: EndDayOptions = {}): Pro
   const now = deps.clock.now();
   const day = localDayString(now);
   const dryRun = options.dryRun ?? false;
-  const sessionsInScope = options.sessionFilter
-    ? discovery.sessions.filter(options.sessionFilter)
-    : discovery.sessions;
 
-  const outcomes = await mapWithConcurrencyLimit(
-    sessionsInScope,
-    config.captureConcurrency,
-    (session) => runSession(deps, session, config, now, day, dryRun),
-  );
+  // D-031's scope cut, applied to the FULL discovery output before eligibility ever sees it — a
+  // session with no live registry entry at all (`unknown`) is never a capture candidate, and
+  // `EndDayOptions.sessionFilter` (`--session`) only narrows within the candidates, never widens
+  // the listing back down: the listing is diagnostic, not something `--session` should hide.
+  const captureCandidates = discovery.sessions.filter(isCaptureCandidate);
+  const outOfScopeSessions = discovery.sessions.filter((session) => !isCaptureCandidate(session));
+  const sessionsInScope = options.sessionFilter
+    ? captureCandidates.filter(options.sessionFilter)
+    : captureCandidates;
+
+  const [outcomes, listedSessions] = await Promise.all([
+    mapWithConcurrencyLimit(sessionsInScope, config.captureConcurrency, (session) =>
+      runSession(deps, session, config, now, day, dryRun),
+    ),
+    buildSessionListings(deps.transcriptReader, outOfScopeSessions),
+  ]);
   const { ineligible, captured, failedCaptures, terminationNotices } = aggregate(outcomes);
 
   const briefingPreview = dryRun
@@ -200,10 +213,11 @@ export async function endDay(deps: EndDayDeps, options: EndDayOptions = {}): Pro
         day,
         now,
         captured.map((session) => session.handoff),
+        listedSessions,
       )
     : null;
   if (!dryRun) {
-    await writeDailyBriefing(deps.storage, day, now);
+    await writeDailyBriefing(deps.storage, day, now, listedSessions);
   }
   const { forkCleanup, forkCleanupError } = await runForkCleanup(deps, config, dryRun);
 
@@ -218,6 +232,7 @@ export async function endDay(deps: EndDayDeps, options: EndDayOptions = {}): Pro
     dryRun,
     briefingPreview,
     sessionsInScope: sessionsInScope.length,
+    listedSessions,
     forkCleanup,
     forkCleanupError,
   };
