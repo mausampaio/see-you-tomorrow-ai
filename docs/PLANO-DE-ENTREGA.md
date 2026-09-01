@@ -1236,6 +1236,46 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* sessão com handoff determinístico do mesmo dia e evidência inalterada volta a ser
       elegível; com handoff `model` e evidência inalterada, continua `duplicateToday`.
 
+- [ ] **S4-T0b — Implementar a D-031: capturar o que está vivo, listar o que foi fechado.**
+      A **D-031** foi decidida em 2026-08-30 e **nunca implementada** — o código continua
+      capturando sessão fechada, que é exatamente o que ela tira de escopo. **Antes do daemon
+      (S4-T3)**, para ele nascer laçando o escopo certo em vez de ser corrigido depois.
+
+      **As três populações, e o sinal que as separa** (medido no Spike E: o registro é apagado na
+      saída graciosa; entrada obsoleta sobrevive só a terminação anormal):
+
+      | situação | significado | escopo |
+      |---|---|---|
+      | registro + PID vivo (`alive`/`idle`) | sessão viva | **captura** |
+      | registro + PID morto (`ended`) | morreu **sem** sair graciosamente | **captura** |
+      | só transcript, sem registro (`unknown`) | saiu graciosamente: a pessoa fechou | **lista** |
+
+      A segunda linha não é concessão: terminal fechado no braço, máquina que suspendeu, `claude`
+      que caiu — a pessoa **perdeu** aquilo sem escolher, que é quando um handoff mais serve.
+
+      **A listagem só se justifica se identificar a sessão para um humano.** "code-6d, fechada
+      17h" não diz nada. Use **`aiTitle` + último prompt**, medidos no Spike I: `ai-title` e
+      `last-prompt` são entradas do transcript que o Claude Code já grava, **já estão em
+      `KNOWN_ENTRY_TYPES`** e hoje não são lidas. **Custo zero de modelo.** E moram no transcript,
+      não no registro — sobrevivem justamente na população que esta listagem descreve.
+
+      *Ressalva:* `ai-title` é entrada interna não documentada. Ausente vira **listagem sem
+      título**, nunca título inventado (D-025). Se valer teste de contrato, abra questão.
+
+      **O que isto custa, e está na D-031:** o varrimento de transcript também encontra sessões
+      **vivas que não se registraram** (D-018), e sem registro elas não têm PID — caem no mesmo
+      `unknown`. Não há como separar das fechadas com carinho. A captura sai para as duas; o
+      **aviso** da D-018 continua.
+
+      *Onde o corte mora, e é preferência com motivo:* a **S4-T00e roda em paralelo e é dona de**
+      **`core/eligibility.ts` e `application/eligibility-assembly.ts`**. Ponha o corte de escopo
+      **antes** da elegibilidade — as cinco condições dela falam de uma sessão que **já está** em
+      escopo. Se não couber assim, **pare e reporte** em vez de invadir.
+
+      *Aceite:* sessão só-transcript não é capturada e **aparece na listagem** com título e último
+      prompt; sessão com registro e PID morto **é** capturada; briefing do dia mostra as duas
+      coisas sem confundi-las.
+
 - [ ] **S4-T0 — A evidência não pode ficar presa ao `cwd` de lançamento.** Aprovada pelo
       mantenedor em 2026-08-30. **O problema, observado no primeiro teste real:** a sessão subiu
       de `C:\Users\<usuario>` e o trabalho aconteceu numa pasta criada durante a conversa. O
