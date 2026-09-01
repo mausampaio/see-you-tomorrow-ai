@@ -3322,6 +3322,31 @@ nada", quando o correto é "ninguém olhou".
 E é isso que torna a listagem estranha: ela é a **única parte do documento que se comporta como
 visão do dia inteiro**, dentro de um documento que é recorte e não se declara recorte.
 
+> **CORREÇÃO (2026-09-01, apontada pelo mantenedor).** Esta resposta afirmou, e o brief da
+> S4-T0c repetiu, que *"o comando não sabe quais sessões deixaram de ser capturadas por causa do
+> filtro, só que houve filtro"*. **Está errado, e verificado no código:**
+> `application/end-day.ts#applyCaptureScope` calcula `captureCandidates` e `sessionsInScope` na
+> **mesma função, lado a lado**. No instante em que o filtro roda, as duas listas estão em mãos —
+> o total de candidatas, quantas sobraram, e por diferença **quantas** e **quais** foram
+> descartadas. Não é inferência; é subtração de dois arrays que o código já segurou.
+>
+> **A consequência foi um texto fraco, implementado obedecendo a premissa errada:** *"Other
+> sessions discovered today **may not** have been looked at"*. "May not" onde existe número
+> disponível é vago sem necessidade, e soa como incerteza técnica quando é só a nota não contar o
+> que já foi contado. É o inverso do erro que este projeto persegue: em vez de afirmar o que a
+> evidência não sustenta, **deixar de afirmar o que ela sustenta**.
+>
+> **A nota passa a trazer o número.** Algo na forma "1 de 4 candidatas foi considerada; 3 foram
+> descartadas pelo filtro" — mais honesto, mais curto e mais útil que o texto atual.
+>
+> **Cuidado de aritmética, para não trocar um erro por outro:** o denominador é **candidatas a
+> captura**, não "sessões descobertas". Descobertas inclui as fechadas, que aparecem na listagem e
+> **não** foram descartadas pelo filtro — eram outra população desde o começo. Misturar as duas
+> faria a nota mentir na direção oposta.
+>
+> **Listar quais** sessões foram descartadas fica em aberto de propósito: pode virar ruído, e
+> `--session` costuma ser deliberado. O **total**, não — esse não tem defesa. Ver **S4-T0d**.
+
 **Decisão: a listagem continua completa, e o artefato passa a registrar que a execução foi
 recortada.** Com isso escrito, listagem completa vira coerente — contexto do dia, rotulado como
 tal, dentro de um documento que se declara parcial. Vira a **S4-T0c**.

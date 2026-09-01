@@ -1361,6 +1361,38 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       houver ao menos uma), sem alarmar sessões ordinariamente sem título. Seis escolhas
       registradas em **Q-042**.
 
+- [ ] **S4-T0d — A nota de recorte precisa trazer o número que já está em mãos.** Emenda pequena
+      à S4-T0c, apontada pelo mantenedor em 2026-09-01. **Erro meu, não do agente que a
+      implementou** — ele obedeceu uma premissa que eu escrevi errada na Q-041.
+
+      **A premissa errada.** Eu afirmei que o comando "não sabe quais sessões deixaram de ser
+      capturadas por causa do filtro, só que houve filtro". Verificado no código:
+      `application/end-day.ts#applyCaptureScope` calcula `captureCandidates` e `sessionsInScope`
+      **na mesma função, lado a lado**. As duas listas estão em mãos no instante do filtro — o
+      total, quantas sobraram, e por diferença **quantas** e **quais** foram descartadas.
+
+      **O que saiu disso.** A nota diz *"Other sessions discovered today **may not** have been
+      looked at"*. "May not" onde existe número disponível é vago sem necessidade, e soa como
+      incerteza técnica quando é só a nota não contar o que já foi contado. **É o inverso do erro
+      que este projeto persegue:** em vez de afirmar o que a evidência não sustenta, deixar de
+      afirmar o que ela sustenta.
+
+      *Escopo:* a nota de recorte no `summary.md` e na saída do `end-day` traz o número. Forma
+      sugerida, não obrigatória: "1 de 4 candidatas foi considerada; 3 descartadas pelo filtro".
+
+      **A aritmética é a parte fácil de errar.** O denominador é **candidatas a captura**
+      (`isCaptureCandidate`, D-031), **não** "sessões descobertas". Descobertas inclui as fechadas,
+      que vão para a listagem e **não** foram descartadas pelo filtro — eram outra população desde
+      o começo. Usar o número errado faria a nota mentir na direção oposta. **Teste um caso com
+      as três populações ao mesmo tempo** (viva capturada, viva descartada pelo filtro, fechada
+      listada), que é onde a conta errada apareceria.
+
+      *Fora de escopo:* **listar quais** sessões o filtro descartou. Pode virar ruído, e
+      `--session` costuma ser deliberado. Se você achar que vale, **abra questão**, não implemente.
+
+      *Aceite:* execução recortada informa quantas candidatas havia e quantas foram descartadas;
+      dia completo continua dizendo que foi completo, sem número inventado onde não há descarte.
+
 - [ ] **S4-T0 — A evidência não pode ficar presa ao `cwd` de lançamento.** Aprovada pelo
       mantenedor em 2026-08-30. **O problema, observado no primeiro teste real:** a sessão subiu
       de `C:\Users\<usuario>` e o trabalho aconteceu numa pasta criada durante a conversa. O
