@@ -161,6 +161,29 @@ async function runForkCleanup(
   }
 }
 
+interface ScopedSessions {
+  /** Passed `EndDayOptions.sessionFilter` (if any) — capture candidates only, D-031. */
+  readonly sessionsInScope: readonly DiscoveredSession[];
+  /** D-031's listing population, UNFILTERED by `sessionFilter` — see `endDay`'s own top comment
+   * for why `--session` never hides the listing. */
+  readonly outOfScopeSessions: readonly DiscoveredSession[];
+}
+
+/** D-031's scope cut (`core/capture-scope.ts#isCaptureCandidate`), applied to the full discovery
+ * output before `EndDayOptions.sessionFilter` (`--session`) or eligibility ever run — pulled out
+ * of `endDay` itself to keep that function to its own ~20-line budget (AGENTS.md). */
+function applyCaptureScope(
+  sessions: readonly DiscoveredSession[],
+  sessionFilter: EndDayOptions['sessionFilter'],
+): ScopedSessions {
+  const captureCandidates = sessions.filter(isCaptureCandidate);
+  const outOfScopeSessions = sessions.filter((session) => !isCaptureCandidate(session));
+  return {
+    sessionsInScope: sessionFilter ? captureCandidates.filter(sessionFilter) : captureCandidates,
+    outOfScopeSessions,
+  };
+}
+
 /**
  * Runs the whole end-of-day encerramento: read config, discover sessions, capture every eligible
  * one (bounded concurrency, per-session isolation), write the day's consolidated briefing, run
@@ -188,16 +211,10 @@ export async function endDay(deps: EndDayDeps, options: EndDayOptions = {}): Pro
   const now = deps.clock.now();
   const day = localDayString(now);
   const dryRun = options.dryRun ?? false;
-
-  // D-031's scope cut, applied to the FULL discovery output before eligibility ever sees it — a
-  // session with no live registry entry at all (`unknown`) is never a capture candidate, and
-  // `EndDayOptions.sessionFilter` (`--session`) only narrows within the candidates, never widens
-  // the listing back down: the listing is diagnostic, not something `--session` should hide.
-  const captureCandidates = discovery.sessions.filter(isCaptureCandidate);
-  const outOfScopeSessions = discovery.sessions.filter((session) => !isCaptureCandidate(session));
-  const sessionsInScope = options.sessionFilter
-    ? captureCandidates.filter(options.sessionFilter)
-    : captureCandidates;
+  const { sessionsInScope, outOfScopeSessions } = applyCaptureScope(
+    discovery.sessions,
+    options.sessionFilter,
+  );
 
   const [outcomes, listedSessions] = await Promise.all([
     mapWithConcurrencyLimit(sessionsInScope, config.captureConcurrency, (session) =>
