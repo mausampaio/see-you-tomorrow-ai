@@ -21,6 +21,7 @@ import type {
   DiscoveredSession,
   EndDayScope,
   Handoff,
+  ResolvedEndDayScope,
   SessionListing,
 } from '../core/types.js';
 import type { IneligibilityReason } from '../core/eligibility.js';
@@ -71,11 +72,12 @@ export interface EndDayDeps {
  * inferring "this run was narrowed" from "a predicate was passed" would make an unrelated test's
  * fixture silently start claiming a `--session`-narrowed scope it never meant to declare. `cli/`
  * (the only real production caller of a narrowed run) sets both together, consistently, from the
- * same resolved session. Optional, unlike `core/types.ts#EndDayScope` itself (never optional):
- * this is `endDay`'s own INPUT, and the ordinary "no `--session` at all" case reads exactly like
- * `dryRun`/`sessionFilter`'s own optionality above — absence here means "use the full-day default",
- * resolved inside `endDay` into a concrete, always-present `EndDayScope` before it ever reaches
- * `core/briefing.ts`, which is where `EndDayScope`'s own "never let absence mean one of the two
+ * same resolved session. Optional here, unlike `core/types.ts#ResolvedEndDayScope` (never
+ * optional): this is `endDay`'s own INPUT, and the ordinary "no `--session` at all" case reads
+ * exactly like `dryRun`/`sessionFilter`'s own optionality above — absence here means "use the
+ * full-day default", resolved inside `endDay` into a concrete, always-present
+ * `ResolvedEndDayScope` (S4-T0d adds its discard counts) before it ever reaches
+ * `core/briefing.ts`, which is where that type's own "never let absence mean one of the two
  * meanings" rule actually has to hold.
  */
 export interface EndDayOptions {
@@ -140,13 +142,14 @@ export interface CapturedSession {
 export interface EndDayResult {
   readonly day: Day;
   /**
-   * This run's own `EndDayScope` (S4-T0c) — always resolved to a concrete value by `endDay`
-   * itself (`options.scope ?? { kind: 'fullDay' }`), never left as the `EndDayOptions.scope` input
-   * option's own optionality. `cli/` reads this to decide `format-end-day.ts`'s header note, and
-   * `core/briefing.ts#generateBriefingMarkdown` receives the SAME value so the terminal report and
-   * `summary.md` never disagree about which scope produced them.
+   * This run's own `ResolvedEndDayScope` (S4-T0c, counts added by S4-T0d) — always resolved to a
+   * concrete value by `endDay` itself (`options.scope ?? { kind: 'fullDay' }`, then enriched with
+   * `applyCaptureScope`'s own counts for a narrowed run), never left as the `EndDayOptions.scope`
+   * input option's own optionality. `cli/` reads this to decide `format-end-day.ts`'s header note,
+   * and `core/briefing.ts#generateBriefingMarkdown` receives the SAME value so the terminal report
+   * and `summary.md` never disagree about which scope — or which counts — produced them.
    */
-  readonly scope: EndDayScope;
+  readonly scope: ResolvedEndDayScope;
   readonly discoveredCount: number;
   /** D-022, passed through from `SessionProvider.list()` unchanged. */
   readonly rejectedDiscoveries: readonly RejectedDiscoveryRecord[];

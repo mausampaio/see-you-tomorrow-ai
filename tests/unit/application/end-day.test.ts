@@ -314,13 +314,24 @@ describe('endDay — EndDayScope (S4-T0c)', () => {
     expect(result.scope).toEqual({ kind: 'fullDay' });
   });
 
-  it('options.scope is carried straight through to result.scope, unmodified', async () => {
-    const deps = buildDeps();
-    const result = await endDay(deps, {
-      scope: { kind: 'singleSession', sessionValue: 'code-6d' },
-    });
-    expect(result.scope).toEqual({ kind: 'singleSession', sessionValue: 'code-6d' });
-  });
+  it(
+    "options.scope's sessionValue is carried straight through unmodified; endDay adds the " +
+      'discard counts itself (S4-T0d)',
+    async () => {
+      const deps = buildDeps();
+      const result = await endDay(deps, {
+        scope: { kind: 'singleSession', sessionValue: 'code-6d' },
+      });
+      // No sessions discovered at all here, so both counts are 0 — see the dedicated
+      // "discard counts" suite below for the case that actually has something to discard.
+      expect(result.scope).toEqual({
+        kind: 'singleSession',
+        sessionValue: 'code-6d',
+        captureCandidateCount: 0,
+        consideredCount: 0,
+      });
+    },
+  );
 
   it(
     'aceite: a --session-scoped run and a later full-day run on the SAME day produce two ' +
@@ -356,6 +367,71 @@ describe('endDay — EndDayScope (S4-T0c)', () => {
       expect(narrowedMarkdown).not.toEqual(fullMarkdown);
     },
   );
+});
+
+describe('endDay — scope note reports the discard count (S4-T0d)', () => {
+  it(
+    'the denominator is capture candidates, never discoveredCount: with all three D-031 ' +
+      'populations present (one captured, one discarded by the filter, one closed) the note ' +
+      'reads 1 of 2 — not 1 of 3',
+    async () => {
+      // The case the task's own brief calls out as the one that would actually catch the bug:
+      // with only two populations, a wrong "discoveredCount" denominator can still look plausible.
+      // It takes all three at once — a capture candidate that WAS considered, one that was NOT
+      // (discarded by --session), and a closed session that was never a capture candidate to begin
+      // with — to tell a correct denominator (captureCandidateCount, D-031) from a wrong one that
+      // silently folds the closed session in as though the filter could have discarded it too.
+      const considered = createSessionWithPid({
+        sessionId: '11111111-1111-4111-8111-111111111111',
+        cwd: 'c:\\code\\considerada',
+        lastActivity: NOW,
+      });
+      const discardedByFilter = createSessionWithPid({
+        sessionId: '22222222-2222-4222-8222-222222222222',
+        cwd: 'c:\\code\\descartada',
+        lastActivity: NOW,
+      });
+      const closed = createSessionWithoutPid({
+        sessionId: '33333333-3333-4333-8333-333333333333',
+        cwd: 'c:\\code\\fechada',
+        name: 'fechada-01',
+        lastActivity: NOW,
+      });
+      const deps = buildDeps({
+        sessionProvider: new FakeSessionProvider({
+          sessions: [considered, discardedByFilter, closed],
+          rejected: [],
+        }),
+      });
+
+      const result = await endDay(deps, {
+        sessionFilter: (session) => session.sessionId === considered.sessionId,
+        scope: { kind: 'singleSession', sessionValue: 'considerada' },
+      });
+
+      // discoveredCount is 3 (all three sessions) — the wrong denominator this test guards
+      // against. The right one, captureCandidateCount, is 2: `closed` has no PID at all, so it was
+      // never a capture candidate `--session` could have discarded (D-031).
+      expect(result.discoveredCount).toBe(3);
+      expect(result.scope).toEqual({
+        kind: 'singleSession',
+        sessionValue: 'considerada',
+        captureCandidateCount: 2,
+        consideredCount: 1,
+      });
+      expect(result.listedSessions).toHaveLength(1);
+      expect(result.listedSessions[0]?.sessionId).toBe(closed.sessionId);
+    },
+  );
+
+  it('a full day never carries discard counts to report — there was no filter to discard against', async () => {
+    const session = createSessionWithPid({ lastActivity: NOW });
+    const deps = buildDeps({
+      sessionProvider: new FakeSessionProvider({ sessions: [session], rejected: [] }),
+    });
+    const result = await endDay(deps);
+    expect(result.scope).toEqual({ kind: 'fullDay' });
+  });
 });
 
 describe('endDay — per-session failure isolation (aceite #3)', () => {

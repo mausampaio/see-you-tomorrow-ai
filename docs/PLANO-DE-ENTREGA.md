@@ -1361,7 +1361,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       houver ao menos uma), sem alarmar sessões ordinariamente sem título. Seis escolhas
       registradas em **Q-042**.
 
-- [ ] **S4-T0d — A nota de recorte precisa trazer o número que já está em mãos.** Emenda pequena
+- [~] **S4-T0d — A nota de recorte precisa trazer o número que já está em mãos.** Emenda pequena
       à S4-T0c, apontada pelo mantenedor em 2026-09-01. **Erro meu, não do agente que a
       implementou** — ele obedeceu uma premissa que eu escrevi errada na Q-041.
 
@@ -1392,6 +1392,33 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
       *Aceite:* execução recortada informa quantas candidatas havia e quantas foram descartadas;
       dia completo continua dizendo que foi completo, sem número inventado onde não há descarte.
+
+      **Implementado em 2026-09-01:** `core/types.ts#ResolvedEndDayScope` — tipo NOVO, irmão de
+      `EndDayScope`, não o mesmo tipo esticado. `EndDayScope` (entrada de `EndDayOptions.scope`,
+      inalterado) continua só `kind` + `sessionValue`, porque `cli/end-day-command.ts` monta esse
+      valor **antes** de `endDay` rodar sua própria descoberta — as contagens não existem ainda
+      nesse instante, e dar ao tipo de entrada um campo `captureCandidateCount` obrigatório
+      forçaria um placeholder (`0`? `undefined`?) que pareceria dado real sem ser (o mesmo erro do
+      D-025, aplicado à forma do próprio escopo). `ResolvedEndDayScope.singleSession` carrega
+      `captureCandidateCount` (D-031, antes de `--session`) e `consideredCount` (depois,
+      `sessionsInScope.length`) — só `EndDayResult.scope` e quem o renderiza
+      (`core/briefing.ts#renderScopeNote`, `cli/format-end-day.ts#formatScopeLine`) veem esse
+      tipo. `application/end-day.ts#applyCaptureScope` passou a devolver também
+      `captureCandidateCount` (o `captureCandidates.length` que já calculava, só nunca tinha
+      saído da função); uma função nova, `resolveScope`, faz a costura `EndDayScope` →
+      `ResolvedEndDayScope` dentro de `endDay()`, chamada depois de `applyCaptureScope` (antes,
+      era antes — a ordem inverteu porque agora o escopo resolvido depende do resultado do corte).
+      O texto virou "N of M capture candidates considered; K discarded by the filter." nas duas
+      superfícies (`summary.md` e terminal), substituindo o "may not have been looked at" da
+      S4-T0c. Dia completo não ganhou nenhum número novo: `renderScopeNote`/`formatScopeLine`
+      continuam com um `if (scope.kind === 'fullDay')` que retorna a mesma frase de sempre, sem
+      tocar `captureCandidateCount`/`consideredCount` — o tipo nem permite ler esses campos nesse
+      ramo (união discriminada). Teste das três populações ao mesmo tempo (viva considerada, viva
+      descartada pelo filtro, fechada listada) em `tests/unit/application/end-day.test.ts`
+      ("endDay — scope note reports the discard count (S4-T0d)") e a mesma prova na função pura em
+      `tests/unit/core/briefing.test.ts`: `discoveredCount` fica 3, `captureCandidateCount` fica
+      2 — a diferença é exatamente a sessão fechada, que nunca foi candidata. Escolhas registradas
+      em **Q-043**.
 
 - [ ] **S4-T0 — A evidência não pode ficar presa ao `cwd` de lançamento.** Aprovada pelo
       mantenedor em 2026-08-30. **O problema, observado no primeiro teste real:** a sessão subiu

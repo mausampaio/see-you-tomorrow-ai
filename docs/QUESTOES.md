@@ -3481,3 +3481,69 @@ mudar aqui. Por isso o teste não afirma `captured.length` na segunda chamada, s
 escopo dos dois `summary.md` difere — exatamente a frase do próprio aceite da tarefa ("sem precisar
 comparar contagens"). Acho que vale a atenção do revisor: não é um teste fraco por acidente, é
 proposital.
+
+## Q-043 — Quatro escolhas fazendo S4-T0d (o número do descarte), registradas para confirmação
+
+**Tarefa:** S4-T0d
+**Bloqueia:** não — solução mínima com o porquê no próprio código; registro para confirmação, no
+mesmo espírito de Q-021/Q-023/Q-037/Q-039/Q-041/Q-042.
+
+**Contexto.** A CORREÇÃO da Q-041 (e a S4-T0d que ela abriu) apontou que a premissa "o comando não
+sabe quais sessões o filtro descartou" estava errada: `application/end-day.ts#applyCaptureScope`
+já segura `captureCandidates` e `sessionsInScope` lado a lado, então "quantas" é uma subtração de
+dois arrays que já estavam em mãos. A tarefa pediu o número (não a lista) na nota de recorte, com
+o denominador certo (candidatas a captura, D-031, nunca "descobertas").
+
+**1) Tipo novo `core/types.ts#ResolvedEndDayScope`, irmão de `EndDayScope`, não o mesmo tipo com
+campos novos.** Testei esticar `EndDayScope` para carregar `captureCandidateCount`/
+`consideredCount` direto no `kind: 'singleSession'` e não fecha: `cli/end-day-command.ts` monta
+esse valor **antes** de `endDay` rodar a própria descoberta (`EndDayOptions.scope`), e as
+contagens não existem nesse instante — exigir os campos ali forçaria um placeholder (`0`?) que
+pareceria dado real sem ser, o mesmo erro que a D-025 já proíbe para um fato dentro de um handoff,
+agora aplicado à forma do próprio escopo. `ResolvedEndDayScope` é só o valor de saída: nunca a
+forma de `EndDayOptions.scope`, sempre a de `EndDayResult.scope` e de tudo que renderiza (D-024:
+dois tipos em vez de um com campo condicionalmente significativo).
+**Termo novo para o glossário:** `ResolvedEndDayScope` (`core/types.ts`), campos
+`captureCandidateCount`/`consideredCount`.
+**Opções:** A) tipo novo, irmão de `EndDayScope` (o que implementei). B) esticar `EndDayScope` com
+os dois campos, opcionais nos dois lugares — reintroduz "ausência de campo = dia completo" (o
+mesmo erro que a Q-042 já tinha corrigido para o `scope` inteiro) e ainda deixa representável um
+`EndDayOptions.scope` com contagens inventadas.
+**Minha escolha:** A.
+
+**2) `EndDayResult.sessionsInScope: number` não foi removido nem unificado com
+`scope.consideredCount`, mesmo os dois sendo o mesmo número numa execução recortada.** Considerei
+apagar `sessionsInScope` e fazer `formatDiscoverySummary`/`formatVanishedMatchMessage` lerem
+`scope.consideredCount` — mas `sessionsInScope` também precisa existir e fazer sentido no caso
+`fullDay`, onde `scope` não carrega contagem nenhuma (união discriminada, de propósito, item 1
+acima). Manter os dois é uma pequena duplicação de valor numa execução recortada, mas os dois vêm
+da MESMA chamada a `applyCaptureScope` dentro de `endDay` — nunca calculados duas vezes,
+nunca podem divergir por construção, só por dois consumidores diferentes (um sempre presente, um
+só no caso recortado).
+**Opções:** A) manter os dois campos, aceitando a duplicação de valor no caso recortado (o que
+implementei). B) remover `sessionsInScope` e fazer todo consumidor derivar de `scope`, com um
+`if` para o caso `fullDay` nos dois lugares que hoje só leem um número. C) remover
+`consideredCount` de `ResolvedEndDayScope` e passar `sessionsInScope` como parâmetro extra para
+`core/briefing.ts`/`cli/format-end-day.ts` — rejeitada porque separa os dois números que
+`renderScopeNote` precisa juntos para a mesma subtração, abrindo espaço para alguém passar um sem
+o outro.
+**Minha escolha:** A — a duplicação é pequena, documentada, e nunca pode ficar inconsistente
+porque vem de um cálculo só.
+
+**3) Texto escolhido: "N of M capture candidates considered; K discarded by the filter."** (e o
+equivalente no terminal). Testei a forma sugerida na tarefa ("1 of 4 candidates was considered")
+e trombei com concordância verbal em inglês (`was`/`were` dependendo de `consideredCount` ser 1
+ou não) — o resto do arquivo (`renderSummaryLine`: "3 sessions captured today.") já evita esse
+problema usando particípio sem auxiliar. Seguí o mesmo estilo: nenhuma das duas cláusulas precisa
+de "was"/"were", então o texto nunca erra concordância nem para `consideredCount: 0` (deveria ser
+raro em produção — `formatVanishedMatchMessage` já intercepta esse caso antes do relatório — mas
+`generateBriefingMarkdown` é testável direto, sem essa proteção).
+**Minha escolha:** sem alternativa forte considerada — a tarefa já dizia "forma sugerida, não
+obrigatória"; abre para o PO trocar a redação se preferir outra.
+
+**4) Não implementei listar QUAIS sessões foram descartadas — registrado aqui como a tarefa
+pediu, não como pergunta que bloqueia.** Ficaria fácil de errar de duas formas: (a) misturar
+identidade de sessão descartada com a listagem de fechadas (populações diferentes, D-031), ou (b)
+nomear sessões que o usuário filtrou de propósito, que é ruído na maioria dos usos reais de
+`--session`. Se o PO achar que vale, é escopo novo, não uma correção desta tarefa.
+**Minha escolha:** não implementei, como o item "Fora de escopo" da tarefa já antecipava.

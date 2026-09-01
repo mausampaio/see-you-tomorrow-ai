@@ -618,3 +618,44 @@ export interface SessionListing {
  */
 export type EndDayScope =
   { readonly kind: 'fullDay' } | { readonly kind: 'singleSession'; readonly sessionValue: string };
+
+/**
+ * `EndDayScope`, resolved with the discard counts `application/end-day.ts#applyCaptureScope`
+ * already holds by the time D-031's scope cut runs — S4-T0d, a follow-up to S4-T0c/Q-041's own
+ * CORREÇÃO (`docs/QUESTOES.md`): the artifact used to say a `--session` run's other sessions "may
+ * not have been looked at", when `captureCandidates` and `sessionsInScope` were sitting side by
+ * side in the same function the whole time — "how many were discarded" was always a subtraction of
+ * two arrays already in hand, never a fact `endDay` lacked.
+ *
+ * **Never the shape of `EndDayOptions.scope`'s own caller-supplied input.** `EndDayScope` above
+ * stays exactly what a `--session` value looks like the moment it arrives, BEFORE `endDay` has run
+ * its own discovery — the counts below don't exist yet at that point, and giving the input type a
+ * placeholder (`0`? `undefined`?) to fill until then would make an unresolved scope carry data that
+ * reads as real (D-025's mistake, applied to the scope's own shape instead of to a fact inside it).
+ * Only `EndDayResult.scope` and what renders it (`core/briefing.ts`, `cli/format-end-day.ts`) ever
+ * see this type.
+ */
+export type ResolvedEndDayScope =
+  | { readonly kind: 'fullDay' }
+  | {
+      readonly kind: 'singleSession';
+      readonly sessionValue: string;
+      /**
+       * D-031's capture-candidate population (`core/capture-scope.ts#isCaptureCandidate`) BEFORE
+       * `--session` narrowed it further — the denominator the scope note's arithmetic needs.
+       * Deliberately **not** `EndDayResult.discoveredCount`: that also counts D-031's closed-session
+       * population, sent to the listing instead of capture — a session `--session` never had a
+       * chance to discard because it was never a capture candidate to begin with. Mixing the two
+       * populations is exactly the mistake S4-T0d's own brief warned against, and the test that
+       * would catch it needs all three populations present at once — two is not enough to tell a
+       * correct denominator from a wrong one that happens to still look plausible.
+       */
+      readonly captureCandidateCount: number;
+      /**
+       * How many of `captureCandidateCount` matched `--session` and were actually attempted.
+       * Mirrors `EndDayResult.sessionsInScope` for a narrowed run — both numbers come out of the
+       * same `applyCaptureScope` call, never computed twice — kept here too so `core/briefing.ts`'s
+       * pure `renderScopeNote` has everything the note's subtraction needs from `scope` alone.
+       */
+      readonly consideredCount: number;
+    };

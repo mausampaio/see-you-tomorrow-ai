@@ -93,6 +93,16 @@ O que precisa estar coberto com rigor, porque é onde os bugs vão doer:
   uma sessão sem título ordinariamente produz. `core/briefing.ts`/`cli/format-end-day.ts` mostram
   texto diferente para os dois casos, e a seção "Not captured" ganha uma nota agregada só quando
   há pelo menos uma entrada não lida — uma sessão comum sem título nunca soa como alarme.
+- **A nota de recorte traz o número do descarte, com o denominador certo (S4-T0d)**: teste
+  dedicado com as **três populações da D-031 ao mesmo tempo** — uma sessão viva considerada, uma
+  viva descartada pelo filtro, uma fechada listada (`tests/unit/application/end-day.test.ts`,
+  "endDay — scope note reports the discard count"; mesma prova na função pura em
+  `tests/unit/core/briefing.test.ts`). Com só duas populações um denominador errado
+  (`discoveredCount`) ainda dá número plausível; com as três, `discoveredCount` fica 3 e o
+  `captureCandidateCount` certo (D-031, antes de `--session`) fica 2 — a diferença é exatamente a
+  sessão fechada, que nunca foi candidata a captura. Dia completo continua sem nenhum número de
+  descarte — testado que a nota nunca contém "discarded"/"candidate" nesse caso, para não inventar
+  "0 descartadas" onde não há descarte para reportar.
 
 Cobertura mínima: **`core/` 95%**, demais diretórios de produção **80%**. Configurado por
 diretório no vitest, e o CI falha abaixo disso.
