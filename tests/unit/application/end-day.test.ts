@@ -113,7 +113,11 @@ describe('endDay — eligibility filtering', () => {
   });
 
   it('a session with no evidence at all is reported ineligible, not a capture failure', async () => {
-    const session = createSessionWithoutPid({ hasTranscript: false, lastActivity: null });
+    // `createSessionWithPid`, not `createSessionWithoutPid`: since D-031 (S4-T0b), a session with
+    // no PID never reaches eligibility at all — it's out of capture scope entirely, not merely
+    // ineligible (see the "endDay — D-031 scope cut" suite below). `noEvidence` is still reachable
+    // through the full `endDay` pipeline via a `SessionWithPid` whose `lastActivity` is `null`.
+    const session = createSessionWithPid({ hasTranscript: false, lastActivity: null });
     const deps = buildDeps({
       sessionProvider: new FakeSessionProvider({ sessions: [session], rejected: [] }),
     });
@@ -181,6 +185,129 @@ describe('endDay — eligibility filtering', () => {
   );
 });
 
+describe('endDay — D-031 scope cut (S4-T0b)', () => {
+  it(
+    'a transcript-only session (unknown, no PID) is never captured and appears in ' +
+      'listedSessions with its title and last prompt instead',
+    async () => {
+      const session = createSessionWithoutPid({
+        sessionId: '11111111-1111-4111-8111-111111111111',
+        cwd: 'c:\\code\\fechada',
+        name: 'fechada-01',
+        lastActivity: NOW,
+      });
+      const transcriptReader = new FakeTranscriptReader(
+        new Map(),
+        new Set(),
+        new Map([
+          [session.sessionId, { aiTitle: 'Refactor the parser', lastPrompt: 'run the tests' }],
+        ]),
+      );
+      const deps = buildDeps({
+        sessionProvider: new FakeSessionProvider({ sessions: [session], rejected: [] }),
+        transcriptReader,
+      });
+      const result = await endDay(deps);
+      expect(result.captured).toHaveLength(0);
+      expect(result.ineligible).toHaveLength(0);
+      expect(result.failedCaptures).toHaveLength(0);
+      expect(result.discoveredCount).toBe(1);
+      expect(result.sessionsInScope).toBe(0);
+      expect(result.listedSessions).toEqual([
+        {
+          sessionId: session.sessionId,
+          cwd: session.cwd,
+          name: session.name,
+          aiTitle: 'Refactor the parser',
+          lastPrompt: 'run the tests',
+        },
+      ]);
+    },
+  );
+
+  it(
+    'a registered session with a dead PID (ended) IS captured — the line D-031 says looks like ' +
+      'a concession and is not',
+    async () => {
+      const session = createSessionWithPid({ processIsAlive: false, lastActivity: NOW });
+      const deps = buildDeps({
+        sessionProvider: new FakeSessionProvider({ sessions: [session], rejected: [] }),
+      });
+      const result = await endDay(deps);
+      expect(result.captured).toHaveLength(1);
+      expect(result.captured[0]?.handoff.sessionId).toBe(session.sessionId);
+      expect(result.captured[0]?.handoff.sessionState).toBe('ended');
+      expect(result.listedSessions).toHaveLength(0);
+    },
+  );
+
+  it('listedSessions is unaffected by --session: it always reflects the full discovery pass', async () => {
+    const captureCandidate = createSessionWithPid({
+      sessionId: '11111111-1111-4111-8111-111111111111',
+      cwd: 'c:\\code\\candidata',
+      lastActivity: NOW,
+    });
+    const listedOnly = createSessionWithoutPid({
+      sessionId: '22222222-2222-4222-8222-222222222222',
+      cwd: 'c:\\code\\fechada',
+      name: 'fechada-02',
+      lastActivity: NOW,
+    });
+    const deps = buildDeps({
+      sessionProvider: new FakeSessionProvider({
+        sessions: [captureCandidate, listedOnly],
+        rejected: [],
+      }),
+    });
+    const result = await endDay(deps, {
+      sessionFilter: (session) => session.sessionId === captureCandidate.sessionId,
+    });
+    expect(result.captured).toHaveLength(1);
+    expect(result.sessionsInScope).toBe(1);
+    expect(result.listedSessions).toHaveLength(1);
+    expect(result.listedSessions[0]?.sessionId).toBe(listedOnly.sessionId);
+  });
+
+  it(
+    "the day's briefing shows captured handoffs and D-031's listing in separate sections, " +
+      'never mixed together',
+    async () => {
+      const captured = createSessionWithPid({
+        sessionId: '11111111-1111-4111-8111-111111111111',
+        cwd: 'c:\\code\\viva',
+        name: 'viva-01',
+        lastActivity: NOW,
+      });
+      const listed = createSessionWithoutPid({
+        sessionId: '22222222-2222-4222-8222-222222222222',
+        cwd: 'c:\\code\\fechada',
+        name: 'fechada-03',
+        lastActivity: NOW,
+      });
+      const transcriptReader = new FakeTranscriptReader(
+        new Map(),
+        new Set(),
+        new Map([[listed.sessionId, { aiTitle: 'Closed session title', lastPrompt: null }]]),
+      );
+      const storage = new FakeStorage(DEFAULT_TEST_CONFIG);
+      const deps = buildDeps({
+        sessionProvider: new FakeSessionProvider({ sessions: [captured, listed], rejected: [] }),
+        storage,
+        transcriptReader,
+      });
+      const result = await endDay(deps);
+      const markdown = storage.savedBriefings.get(result.day);
+      expect(markdown).toContain('## viva-01');
+      expect(markdown).toContain('## Not captured (closed sessions)');
+      expect(markdown).toContain('fechada-03');
+      expect(markdown).toContain('Closed session title');
+      // The listed session never gets its own `## <name>` handoff header — that header style is
+      // reserved for actual captures (`core/briefing.ts#renderHandoffSection`).
+      expect(markdown).not.toContain('## fechada-03');
+    },
+  );
+});
+
 describe('endDay — per-session failure isolation (aceite #3)', () => {
   it('one session throwing during capture does not prevent another from completing', async () => {
     const good = createSessionWithPid({
@@ -208,7 +335,12 @@ describe('endDay — per-session failure isolation (aceite #3)', () => {
 
 describe('endDay — fallback and multi-source (aceite #1, #2)', () => {
   it('a session with only git responding still produces a valid, captured handoff', async () => {
-    const session = createSessionWithoutPid({ hasTranscript: false, lastActivity: NOW });
+    // `createSessionWithPid`, not `createSessionWithoutPid` (D-031, S4-T0b): a `SessionWithoutPid`
+    // is out of capture scope entirely regardless of evidence — see the "endDay — D-031 scope cut"
+    // suite below. `hasTranscript: false` on a REGISTERED session is D-013's real scenario (the
+    // autonomous execution agent, transcript suppressed by an inherited child-session marker),
+    // which is exactly what this test's own aceite is about: only git responds.
+    const session = createSessionWithPid({ hasTranscript: false, lastActivity: NOW });
     const gitReader = new FakeGitReader(
       new Map([
         [
@@ -233,7 +365,11 @@ describe('endDay — fallback and multi-source (aceite #1, #2)', () => {
     });
     const result = await endDay(deps);
     expect(result.captured).toHaveLength(1);
-    expect(result.captured[0]?.handoff.sources).toEqual(['git']);
+    // `registry` also answers here (unlike before this test used `createSessionWithoutPid`):
+    // `session.hasPid` alone means the registry answered (`evidence-gathering.ts#gatherEvidence`),
+    // regardless of whether the transcript did — this test's own aceite is about the ABSENCE of
+    // `transcript`, which `hasTranscript: false` still proves.
+    expect(result.captured[0]?.handoff.sources).toEqual(['git', 'registry']);
   });
 
   it('generation failure produces a "deterministic" handoff, not a dropped session (D-003)', async () => {

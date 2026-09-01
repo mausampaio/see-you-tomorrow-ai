@@ -5,9 +5,14 @@
  */
 import path from 'node:path';
 import type { DiscoveredSession } from '../../core/types.js';
-import type { TranscriptReader, TranscriptReadResult } from '../../core/ports.js';
+import type {
+  TranscriptReader,
+  TranscriptReadResult,
+  TranscriptListingInfo,
+} from '../../core/ports.js';
 import { locateTranscriptFile } from '../discovery/transcript-lookup.js';
 import { parseTranscriptFile } from './reader.js';
+import { parseTranscriptListingInfo } from './listing.js';
 
 /**
  * D-013/D-025: no transcript found is the normal "no evidence" case, not an error — every fact
@@ -18,6 +23,10 @@ const NO_TRANSCRIPT_RESULT: TranscriptReadResult = {
   rejected: [],
   unknownEntryTypeCount: 0,
 };
+
+/** D-031/D-025: no transcript located is "no title", not an error — same reasoning as
+ * `NO_TRANSCRIPT_RESULT` above, for the smaller `readListingInfo` shape. */
+const NO_LISTING_INFO: TranscriptListingInfo = { aiTitle: null, lastPrompt: null };
 
 export interface TranscriptFileReaderOptions {
   /** Injectable root standing in for `~/.claude` (never `os.homedir()` in code of substance) —
@@ -51,5 +60,16 @@ export class TranscriptFileReader implements TranscriptReader {
       rejected: parsed.rejected,
       unknownEntryTypeCount: parsed.unknownEntryTypeCount,
     };
+  }
+
+  /** D-031: independent of `readFacts` above — a listed session (`core/capture-scope.ts`) never
+   * enters the capture pipeline `readFacts` feeds, so this locates the same file but runs the
+   * lighter `parseTranscriptListingInfo` pass instead. */
+  async readListingInfo(session: DiscoveredSession): Promise<TranscriptListingInfo> {
+    const filePath = await locateTranscriptFile(this.projectsDir, session.sessionId);
+    if (filePath === null) {
+      return NO_LISTING_INFO;
+    }
+    return parseTranscriptListingInfo(filePath);
   }
 }

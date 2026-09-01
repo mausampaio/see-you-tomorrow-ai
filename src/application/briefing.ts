@@ -9,7 +9,7 @@
  */
 import { generateBriefingMarkdown } from '../core/briefing.js';
 import type { Storage } from '../core/ports.js';
-import type { Day, Handoff } from '../core/types.js';
+import type { Day, Handoff, SessionListing } from '../core/types.js';
 
 /**
  * Reads back every handoff saved for `day`, renders the consolidated markdown, and persists it as
@@ -17,12 +17,22 @@ import type { Day, Handoff } from '../core/types.js';
  * `Storage#listHandoffs` already isolates that per file) — only a failure of the listing or the
  * write itself propagates, same as any other storage I/O in this use case.
  *
+ * `listedSessions` (D-031) is THIS run's own fresh discovery, not persisted anywhere: unlike
+ * handoffs, a listed session was never captured, so there is nothing for `Storage` to have on disk
+ * for a previous run to merge back in — the section simply reflects who was out of scope as of the
+ * most recent `seeya end-day` run, the same way `seeya sessions` would if run again right now.
+ *
  * @example
- * await writeDailyBriefing(deps.storage, day, now);
+ * await writeDailyBriefing(deps.storage, day, now, listedSessions);
  */
-export async function writeDailyBriefing(storage: Storage, day: Day, now: Date): Promise<void> {
+export async function writeDailyBriefing(
+  storage: Storage,
+  day: Day,
+  now: Date,
+  listedSessions: readonly SessionListing[] = [],
+): Promise<void> {
   const { handoffs, rejected } = await storage.listHandoffs(day);
-  const markdown = generateBriefingMarkdown(day, now, handoffs, rejected);
+  const markdown = generateBriefingMarkdown(day, now, handoffs, rejected, listedSessions);
   await storage.saveBriefing(day, markdown);
 }
 
@@ -49,7 +59,7 @@ function mergeHandoffsBySessionId(
  * later: the preview shows both, matching what a real run would consolidate.
  *
  * @example
- * const markdown = await previewDailyBriefing(deps.storage, day, now, capturedHandoffs);
+ * const markdown = await previewDailyBriefing(deps.storage, day, now, capturedHandoffs, listed);
  * // markdown is what ~/.seeya/days/<day>/summary.md WOULD contain — nothing was written.
  */
 export async function previewDailyBriefing(
@@ -57,8 +67,9 @@ export async function previewDailyBriefing(
   day: Day,
   now: Date,
   freshHandoffs: readonly Handoff[],
+  listedSessions: readonly SessionListing[] = [],
 ): Promise<string> {
   const { handoffs, rejected } = await storage.listHandoffs(day);
   const merged = mergeHandoffsBySessionId(handoffs, freshHandoffs);
-  return generateBriefingMarkdown(day, now, merged, rejected);
+  return generateBriefingMarkdown(day, now, merged, rejected, listedSessions);
 }

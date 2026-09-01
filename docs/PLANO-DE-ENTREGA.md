@@ -1246,7 +1246,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       de assinatura (D-026) não mudou. Onde o limite de retentativas do daemon (S4-T3) deveria
       encaixar, registrado sem implementar, em Q-040.
 
-- [ ] **S4-T0b — Implementar a D-031: capturar o que está vivo, listar o que foi fechado.**
+- [~] **S4-T0b — Implementar a D-031: capturar o que está vivo, listar o que foi fechado.**
       A **D-031** foi decidida em 2026-08-30 e **nunca implementada** — o código continua
       capturando sessão fechada, que é exatamente o que ela tira de escopo. **Antes do daemon
       (S4-T3)**, para ele nascer laçando o escopo certo em vez de ser corrigido depois.
@@ -1285,6 +1285,22 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* sessão só-transcript não é capturada e **aparece na listagem** com título e último
       prompt; sessão com registro e PID morto **é** capturada; briefing do dia mostra as duas
       coisas sem confundi-las.
+
+      **Implementado em 2026-08-31:** `core/capture-scope.ts#isCaptureCandidate` — o corte é
+      exatamente `session.hasPid`, sem campo novo: `SessionWithPid` (viva ou `ended`) sempre foi o
+      único formato com registro; `SessionWithoutPid` sempre foi só-transcript (Q-041 item 1).
+      Aplicado em `application/end-day.ts` antes de `evaluateCheapEligibility`, sem tocar
+      `core/eligibility.ts`/`application/eligibility-assembly.ts` (S4-T00e). Sessão fora de escopo
+      vira `core/types.ts#SessionListing` (`sessionId`, `cwd`, `name`, `aiTitle`, `lastPrompt`),
+      montada por `application/session-listing.ts` a partir de `TranscriptReader.readListingInfo`
+      (porta nova, `core/ports.ts`) — leitura dedicada de `ai-title`/`last-prompt`
+      (`adapters/transcript/listing.ts`, `adapters/transcript/schemas.ts`), mantendo o último valor
+      visto (ambos são regravados conforme a sessão evolui, Spike I). A listagem aparece em seção
+      própria, nunca misturada com handoffs, tanto em `core/briefing.ts#generateBriefingMarkdown`
+      (`summary.md`) quanto em `cli/format-end-day.ts` (relatório do terminal) — **não persistida**:
+      recalculada a cada `end-day`, ao contrário dos handoffs (Q-041 item 4). O aviso da D-018
+      (`core/early-warnings.ts`) não foi tocado e continua funcionando — ele opera sobre a
+      descoberta completa, de fora do corte de escopo. Sete escolhas registradas em **Q-041**.
 
 - [ ] **S4-T0 — A evidência não pode ficar presa ao `cwd` de lançamento.** Aprovada pelo
       mantenedor em 2026-08-30. **O problema, observado no primeiro teste real:** a sessão subiu

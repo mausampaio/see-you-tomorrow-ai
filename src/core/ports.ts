@@ -315,8 +315,37 @@ export interface TranscriptReadResult {
  * the implementation resolves that by never finding a file to open, not by throwing, and answers
  * with every `SessionFacts` field at its least-specific value (D-025) instead.
  */
+/**
+ * D-031's listing entries — `ai-title` and `last-prompt`, entries Claude Code already writes to
+ * the transcript for its own "away summary" UI (Spike I) and that this project reads for the one
+ * case they serve: identifying, for a human, a session that fell outside the day's capture scope
+ * (`core/capture-scope.ts#isCaptureCandidate`, `core/types.ts#SessionListing`). Kept as its own
+ * shape rather than folded into `SessionFacts`/`TranscriptReadResult` above: a listed session never
+ * goes through `readFacts`'s capture pipeline at all (D-031: it was never a capture candidate), so
+ * nothing else that shape carries — `lastActivity`, `touchedFiles`, `assistantMessages` — is ever
+ * needed for it, and giving the handoff-oriented type two fields it can never use would blur why
+ * they're there (D-024's reasoning, applied to a much smaller pair of fields here).
+ *
+ * Both `null` when absent (D-025) — `ai-title` is an internal, undocumented entry type (D-031's own
+ * ressalva): absence is "listing without a title", never an invented one.
+ */
+export interface TranscriptListingInfo {
+  readonly aiTitle: string | null;
+  readonly lastPrompt: string | null;
+}
+
 export interface TranscriptReader {
   readFacts(session: DiscoveredSession): Promise<TranscriptReadResult>;
+
+  /**
+   * Reads just the two D-031 listing entries from `session`'s transcript. Cheap and independent
+   * from `readFacts`'s own streaming pass — no model call either way, but a listed session
+   * (D-031: transcript only, no live registry entry) never enters the capture pipeline, so there is
+   * no reason to also extract `SessionFacts`' other fields for it. Same "not found is not an error"
+   * contract as `readFacts`: a session whose transcript can't be located, or whose transcript never
+   * carried either entry, answers with both fields `null` (D-025) rather than rejecting.
+   */
+  readListingInfo(session: DiscoveredSession): Promise<TranscriptListingInfo>;
 }
 
 // Own import line on purpose, not folded into the block above: a second in-flight task (S2-T2)

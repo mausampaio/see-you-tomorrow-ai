@@ -543,3 +543,39 @@ export interface DayState {
    * (there is nothing left to delay). */
   readonly endOfDayFired: boolean;
 }
+
+// Own block at the end of the file on purpose (S4-T0b), same reasoning as every addition above
+// this one: a second in-flight task (S4-T00e, `core/eligibility.ts`/
+// `application/eligibility-assembly.ts`) doesn't touch `core/types.ts` at all, so there is no
+// concurrent editor to collide with here today, but keeping the habit costs nothing.
+
+/**
+ * D-031's "listing" line for a session that fell OUTSIDE the day's capture scope — a session with
+ * no live registry entry at all (`SessionWithoutPid`, `sessionState: "unknown"`), which D-031
+ * reads as "closed gracefully: the person closed it themselves", never as work to capture. See
+ * `core/capture-scope.ts#isCaptureCandidate` for the scope cut this type is the OTHER side of.
+ *
+ * Deliberately its own type, not a trimmed-down `Handoff` or an addition to `SessionFacts`: a
+ * listed session was never captured, has no `understanding`/`pendingItems`/`tomorrowPlan`, and
+ * mixing the two would make "was this session captured or only listed?" a question a reader has
+ * to infer from which fields happen to be empty instead of one the type already answers by which
+ * shape it is (D-024's own reasoning, applied here to a much smaller union of concerns).
+ *
+ * `aiTitle`/`lastPrompt` come from the two free transcript entries D-031/Spike I measured
+ * (`ai-title`, `last-prompt`) — internal, undocumented Claude Code entries neither this project nor
+ * the user ever asked to be written. **`null` on either is "listing without a title", never an
+ * invented one** (D-025): the ressalva D-031 itself states for exactly this case.
+ */
+export interface SessionListing {
+  readonly sessionId: string;
+  readonly cwd: string;
+  readonly name: string;
+  /** From the transcript's `ai-title` entry (`{ type, aiTitle, sessionId }`) — the newest one
+   * written, since Spike I measured it's rewritten as the session's subject evolves. `null` when
+   * the transcript never carried one (D-025). */
+  readonly aiTitle: string | null;
+  /** From the transcript's `last-prompt` entry (`{ type, lastPrompt, leafUuid, sessionId }`) —
+   * Claude Code's own idea of where the session left off, already computed, at zero model cost
+   * (D-031). `null` when the transcript never carried one (D-025). */
+  readonly lastPrompt: string | null;
+}

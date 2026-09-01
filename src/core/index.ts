@@ -11,6 +11,7 @@ export * from './types.js';
 export * from './day.js';
 export * from './evidence.js';
 export * from './classification.js';
+export * from './capture-scope.js';
 export * from './eligibility.js';
 export * from './termination.js';
 export * from './early-warnings.js';

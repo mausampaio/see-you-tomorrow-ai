@@ -1,9 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { generateBriefingMarkdown } from '../../../src/core/briefing.js';
 import type { RejectedDiscoveryRecord } from '../../../src/core/ports.js';
+import type { SessionListing } from '../../../src/core/types.js';
 import { createHandoff } from './_fixtures.js';
 
 const GENERATED_AT = new Date('2026-08-16T21:05:00.000Z');
+
+function createListing(overrides: Partial<SessionListing> = {}): SessionListing {
+  return {
+    sessionId: '22222222-2222-4222-8222-222222222222',
+    cwd: 'c:\\code\\fechada',
+    name: 'fechada-01',
+    aiTitle: 'Refactor the parser',
+    lastPrompt: 'run the tests',
+    ...overrides,
+  };
+}
 
 describe('generateBriefingMarkdown — the empty day (aceite #5)', () => {
   it('says plainly that nothing was captured, without inventing work', () => {
@@ -242,5 +254,64 @@ describe('generateBriefingMarkdown — pending items and plan', () => {
     const markdown = generateBriefingMarkdown('2026-08-16', GENERATED_AT, [handoff], []);
     expect(markdown).toContain('**Pending**\n\n- finish the thing');
     expect(markdown).toContain('**Plan for tomorrow**\n\n- start the next thing');
+  });
+});
+
+describe('generateBriefingMarkdown — D-031 listing (S4-T0b)', () => {
+  it('omits the section entirely when nothing was listed (default parameter)', () => {
+    const markdown = generateBriefingMarkdown('2026-08-16', GENERATED_AT, [], []);
+    expect(markdown).not.toContain('Not captured');
+  });
+
+  it('names each listed session with its title and last prompt, in its own section', () => {
+    const markdown = generateBriefingMarkdown(
+      '2026-08-16',
+      GENERATED_AT,
+      [],
+      [],
+      [createListing()],
+    );
+    expect(markdown).toContain('## Not captured (closed sessions)');
+    expect(markdown).toContain(
+      '- fechada-01 (c:\\code\\fechada): "Refactor the parser" — last prompt: "run the tests"',
+    );
+  });
+
+  it('D-025: an absent ai-title renders "(no title)", never an invented one', () => {
+    const markdown = generateBriefingMarkdown(
+      '2026-08-16',
+      GENERATED_AT,
+      [],
+      [],
+      [createListing({ aiTitle: null, lastPrompt: null })],
+    );
+    expect(markdown).toContain('- fechada-01 (c:\\code\\fechada): "(no title)"');
+    expect(markdown).not.toContain('last prompt:');
+  });
+
+  it('never mixes a listed session into a handoff "## <name>" section', () => {
+    const handoff = createHandoff({ name: 'viva-01' });
+    const markdown = generateBriefingMarkdown(
+      '2026-08-16',
+      GENERATED_AT,
+      [handoff],
+      [],
+      [createListing({ name: 'fechada-01' })],
+    );
+    expect(markdown).toContain('## viva-01');
+    expect(markdown).not.toContain('## fechada-01');
+  });
+
+  it('sorts multiple listed sessions by name, independent of input order', () => {
+    const zebra = createListing({
+      sessionId: '11111111-1111-4111-8111-111111111111',
+      name: 'zebra',
+    });
+    const apple = createListing({
+      sessionId: '22222222-2222-4222-8222-222222222222',
+      name: 'apple',
+    });
+    const markdown = generateBriefingMarkdown('2026-08-16', GENERATED_AT, [], [], [zebra, apple]);
+    expect(markdown.indexOf('apple')).toBeLessThan(markdown.indexOf('zebra'));
   });
 });
