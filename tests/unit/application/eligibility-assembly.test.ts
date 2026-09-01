@@ -137,6 +137,41 @@ describe('evaluateFullEligibility (D-026 anti-duplication)', () => {
   });
 
   it(
+    'a previous DETERMINISTIC capture today with identical facts is eligible again — a failed ' +
+      'generation attempt is not "already captured" (S4-T00e)',
+    async () => {
+      const session = createSessionWithPid({ lastActivity: NOW });
+      const facts: HandoffFacts = { ...NO_EVIDENCE_FACTS, lastActivity: NOW };
+      const storage = new FakeStorage(DEFAULT_TEST_CONFIG);
+      await storage.saveHandoff('2026-08-16', {
+        sessionId: session.sessionId,
+        cwd: session.cwd,
+        name: session.name,
+        capturedAt: NOW,
+        sessionState: 'alive',
+        capturedDuringActiveTurn: false,
+        source: 'deterministic',
+        captureMode: 'lean',
+        sources: ['transcript'],
+        facts,
+        understanding: '',
+        pendingItems: [],
+        tomorrowPlan: [],
+        generationError: 'budget exceeded',
+      });
+      const result = await evaluateFullEligibility(
+        session,
+        NOW,
+        DEFAULT_TEST_CONFIG,
+        storage,
+        '2026-08-16',
+        facts,
+      );
+      expect(result).toStrictEqual({ eligible: true, reasons: [] });
+    },
+  );
+
+  it(
     'a previous capture with NO transcript, but git changed since, is NOT a duplicate ' +
       '(D-026 — the autonomous execution agent case)',
     async () => {

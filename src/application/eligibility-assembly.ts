@@ -120,6 +120,11 @@ export function evaluateCheapEligibility(
  * corruption error (a malformed handoff on disk) propagate rather than swallowing it: same policy
  * every other `Storage` read in this project follows — corruption is a visible failure, never
  * silently treated as "nothing captured yet" (D-025).
+ *
+ * Passes the stored handoff's `source` through to `PreviousCaptureToday` untouched (S4-T00e) —
+ * this function only resolves the I/O (which handoff, if any, exists today); which sources count
+ * as "already captured" for anti-duplication purposes is part of the eligibility rule itself, so
+ * that decision is made once, in `core/eligibility.ts#evaluateEligibility`, not here.
  */
 export async function evaluateFullEligibility(
   session: DiscoveredSession,
@@ -138,7 +143,10 @@ export async function evaluateFullEligibility(
     previousCaptureToday:
       previousHandoff === null
         ? null
-        : { signature: buildEvidenceSignature(previousHandoff.facts) },
+        : {
+            signature: buildEvidenceSignature(previousHandoff.facts),
+            source: previousHandoff.source,
+          },
     currentSignature: buildEvidenceSignature(currentFacts),
   };
   return evaluateEligibility(withComparableCwd(session), criteria);
