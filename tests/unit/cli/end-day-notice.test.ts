@@ -55,6 +55,7 @@ function terminationNotice(overrides: Partial<TerminationNotice> = {}): Terminat
 function buildResult(overrides: Partial<EndDayResult> = {}): EndDayResult {
   return {
     day: '2026-08-16',
+    scope: { kind: 'fullDay' },
     discoveredCount: 0,
     rejectedDiscoveries: [],
     ineligible: [],

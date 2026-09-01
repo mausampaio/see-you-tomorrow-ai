@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { generateBriefingMarkdown } from '../../../src/core/briefing.js';
 import type { RejectedDiscoveryRecord } from '../../../src/core/ports.js';
-import type { SessionListing } from '../../../src/core/types.js';
+import type { EndDayScope, SessionListing } from '../../../src/core/types.js';
 import { createHandoff } from './_fixtures.js';
 
 const GENERATED_AT = new Date('2026-08-16T21:05:00.000Z');
@@ -11,8 +11,7 @@ function createListing(overrides: Partial<SessionListing> = {}): SessionListing 
     sessionId: '22222222-2222-4222-8222-222222222222',
     cwd: 'c:\\code\\fechada',
     name: 'fechada-01',
-    aiTitle: 'Refactor the parser',
-    lastPrompt: 'run the tests',
+    info: { kind: 'read', aiTitle: 'Refactor the parser', lastPrompt: 'run the tests' },
     ...overrides,
   };
 }
@@ -283,10 +282,37 @@ describe('generateBriefingMarkdown — D-031 listing (S4-T0b)', () => {
       GENERATED_AT,
       [],
       [],
-      [createListing({ aiTitle: null, lastPrompt: null })],
+      [createListing({ info: { kind: 'read', aiTitle: null, lastPrompt: null } })],
     );
     expect(markdown).toContain('- fechada-01 (c:\\code\\fechada): "(no title)"');
     expect(markdown).not.toContain('last prompt:');
+  });
+
+  it('S4-T0c: an unreadable transcript renders distinctly from an absent title, with the reason', () => {
+    const markdown = generateBriefingMarkdown(
+      '2026-08-16',
+      GENERATED_AT,
+      [],
+      [],
+      [createListing({ info: { kind: 'unreadable', reason: 'EACCES: permission denied' } })],
+    );
+    expect(markdown).toContain(
+      '- fechada-01 (c:\\code\\fechada): title unavailable — could not read the transcript ' +
+        '(EACCES: permission denied)',
+    );
+    expect(markdown).not.toContain('(no title)');
+    expect(markdown).toContain('1 entry could not be read for title/prompt — see below.');
+  });
+
+  it('does not mention unreadable entries at all when every listing read successfully', () => {
+    const markdown = generateBriefingMarkdown(
+      '2026-08-16',
+      GENERATED_AT,
+      [],
+      [],
+      [createListing()],
+    );
+    expect(markdown).not.toContain('could not be read for title/prompt');
   });
 
   it('never mixes a listed session into a handoff "## <name>" section', () => {
@@ -314,4 +340,46 @@ describe('generateBriefingMarkdown — D-031 listing (S4-T0b)', () => {
     const markdown = generateBriefingMarkdown('2026-08-16', GENERATED_AT, [], [], [zebra, apple]);
     expect(markdown.indexOf('apple')).toBeLessThan(markdown.indexOf('zebra'));
   });
+});
+
+describe('generateBriefingMarkdown — EndDayScope (S4-T0c)', () => {
+  it('a full-day run states so explicitly, even with the default parameter (never silence)', () => {
+    const markdown = generateBriefingMarkdown('2026-08-16', GENERATED_AT, [], []);
+    expect(markdown).toContain(
+      '**Scope:** full day — every discovered session was considered for capture.',
+    );
+  });
+
+  it('a --session-narrowed run names the raw value, and warns other sessions may be unseen', () => {
+    const scope: EndDayScope = { kind: 'singleSession', sessionValue: 'code-6d' };
+    const markdown = generateBriefingMarkdown('2026-08-16', GENERATED_AT, [], [], [], scope);
+    expect(markdown).toContain('**Scope:** narrowed by `--session "code-6d"`');
+    expect(markdown).toContain('Other sessions discovered today may not have been looked at.');
+  });
+
+  it('the scope note appears before the summary line, so a reader sees it first', () => {
+    const scope: EndDayScope = { kind: 'singleSession', sessionValue: 'code-6d' };
+    const markdown = generateBriefingMarkdown('2026-08-16', GENERATED_AT, [], [], [], scope);
+    expect(markdown.indexOf('**Scope:**')).toBeLessThan(markdown.indexOf('captured today'));
+  });
+
+  it(
+    'aceite: a --session run and a full-day run on the same data produce two summary.md ' +
+      'distinguishable by reading, not by comparing counts',
+    () => {
+      const handoff = createHandoff();
+      const narrowed = generateBriefingMarkdown('2026-08-16', GENERATED_AT, [handoff], [], [], {
+        kind: 'singleSession',
+        sessionValue: handoff.sessionId,
+      });
+      const full = generateBriefingMarkdown('2026-08-16', GENERATED_AT, [handoff], [], [], {
+        kind: 'fullDay',
+      });
+      // Same handoffs, same counts — the only textual difference is the scope note itself.
+      expect(narrowed).not.toEqual(full);
+      expect(narrowed).toContain('narrowed by `--session');
+      expect(full).toContain('full day — every discovered session was considered');
+      expect(full).not.toContain('narrowed by');
+    },
+  );
 });

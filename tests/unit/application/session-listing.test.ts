@@ -25,8 +25,7 @@ describe('buildSessionListings — one entry per out-of-scope session (D-031)', 
         sessionId: session.sessionId,
         cwd: session.cwd,
         name: session.name,
-        aiTitle: 'Refactor the parser',
-        lastPrompt: 'run the tests',
+        info: { kind: 'read', aiTitle: 'Refactor the parser', lastPrompt: 'run the tests' },
       },
     ]);
   });
@@ -44,15 +43,14 @@ describe('buildSessionListings — one entry per out-of-scope session (D-031)', 
         sessionId: session.sessionId,
         cwd: session.cwd,
         name: session.name,
-        aiTitle: null,
-        lastPrompt: null,
+        info: { kind: 'read', aiTitle: null, lastPrompt: null },
       },
     ]);
   });
 
   it(
-    'a readListingInfo failure for one session degrades to "no title" instead of aborting the ' +
-      'whole batch — a listing is informational, never load-bearing',
+    'S4-T0c: a readListingInfo failure for one session becomes a NAMED "unreadable" entry — ' +
+      'never the same shape an ordinary absent title gets — without aborting the whole batch',
     async () => {
       const good = createSessionWithoutPid({
         sessionId: '11111111-1111-4111-8111-111111111111',
@@ -78,10 +76,17 @@ describe('buildSessionListings — one entry per out-of-scope session (D-031)', 
           sessionId: good.sessionId,
           cwd: good.cwd,
           name: good.name,
-          aiTitle: 'Good title',
-          lastPrompt: 'good prompt',
+          info: { kind: 'read', aiTitle: 'Good title', lastPrompt: 'good prompt' },
         },
-        { sessionId: bad.sessionId, cwd: bad.cwd, name: bad.name, aiTitle: null, lastPrompt: null },
+        {
+          sessionId: bad.sessionId,
+          cwd: bad.cwd,
+          name: bad.name,
+          info: {
+            kind: 'unreadable',
+            reason: `FakeTranscriptReader: forced listing failure for ${bad.sessionId}`,
+          },
+        },
       ]);
     },
   );

@@ -21,9 +21,21 @@
  *   by a few seconds. Silence here would let a reader treat a possibly-incomplete snapshot as a
  *   settled one.
  * Both surface as first-order lines next to the session, not footnotes.
+ *
+ * **S4-T0c: the artifact itself now says whether the run that produced it was a full day or a
+ * `--session`-narrowed slice.** Q-041 surfaced the gap: `seeya end-day --session X` used to write a
+ * `summary.md` indistinguishable from a full day that happened to have one session. A reader
+ * finding no other handoffs would read that as "nothing else was going on" — D-025's mistake one
+ * level up from a single field, applied to the whole document. `renderScopeNote` below states the
+ * scope explicitly for BOTH cases (never omitting the full-day note and letting silence mean
+ * "complete" — the exact ambiguity this task exists to close), right after the generation
+ * timestamp and before anything else, because a reader needs this before interpreting the rest of
+ * the page. It never claims which OTHER sessions the filter excluded — `endDay` only knows a filter
+ * ran, not what it skipped (see `core/types.ts#EndDayScope`'s own docstring).
  */
 import type {
   Day,
+  EndDayScope,
   EvidenceSource,
   GitFacts,
   Handoff,
@@ -36,6 +48,24 @@ const ALL_SOURCES: readonly EvidenceSource[] = ['git', 'transcript', 'registry']
 
 function pluralize(count: number, singular: string, plural: string): string {
   return `${count} ${count === 1 ? singular : plural}`;
+}
+
+/**
+ * S4-T0c: states this run's `EndDayScope` explicitly, in both directions — a full day says so, a
+ * narrowed run says so and names the raw `--session` value, and neither reads as the other by
+ * omission (D-025, D-024 — see `EndDayScope`'s own docstring in `core/types.ts`). Deliberately
+ * silent about which OTHER sessions a narrowed run might have skipped: `endDay` never learns that,
+ * only that a filter ran, and this text never promises more than that (per the maintainer's own
+ * framing of the task: "sem prometer o que não sabe").
+ */
+function renderScopeNote(scope: EndDayScope): string {
+  if (scope.kind === 'fullDay') {
+    return '**Scope:** full day — every discovered session was considered for capture.';
+  }
+  return (
+    `**Scope:** narrowed by \`--session "${scope.sessionValue}"\` — only the matching session was ` +
+    'considered for capture. Other sessions discovered today may not have been looked at.'
+  );
 }
 
 /** Alphabetical by display name, `sessionId` as tie-break — a stable order independent of
@@ -185,12 +215,35 @@ function sortedListedSessions(listedSessions: readonly SessionListing[]): Sessio
   );
 }
 
-/** D-025: an absent `ai-title` renders as an explicit "(no title)", never a made-up one — the
- * ressalva D-031 itself states for this exact entry. */
-function renderListedSessionLine(listing: SessionListing): string {
-  const title = listing.aiTitle ?? '(no title)';
-  const prompt = listing.lastPrompt === null ? '' : ` — last prompt: "${listing.lastPrompt}"`;
+/**
+ * S4-T0c: `listing.info.kind === 'unreadable'` renders as an explicit, named problem — never the
+ * same "(no title)" text an ordinary absent `ai-title` gets. Before this task the two collapsed
+ * into the identical shape (D-025's mistake: "no title" and "couldn't check" are different claims,
+ * and only the second is someone's problem to go fix). **Exported for `cli/format-end-day.ts` to
+ * reuse as-is** — its own terminal report renders the exact same per-session text, and a second
+ * copy of this branching would be exactly the duplication AGENTS.md § "Estilo de código" rules out
+ * (same reuse precedent as `renderGitBlock` above, cited on its own docstring).
+ */
+export function formatSessionListingLine(listing: SessionListing): string {
+  if (listing.info.kind === 'unreadable') {
+    return (
+      `- ${listing.name} (${listing.cwd}): title unavailable — could not read the transcript ` +
+      `(${listing.info.reason})`
+    );
+  }
+  const title = listing.info.aiTitle ?? '(no title)';
+  const prompt =
+    listing.info.lastPrompt === null ? '' : ` — last prompt: "${listing.info.lastPrompt}"`;
   return `- ${listing.name} (${listing.cwd}): "${title}"${prompt}`;
+}
+
+/**
+ * D-022's "contável" applied to S4-T0c's read-failure distinction: how many `listedSessions`
+ * entries failed to read their transcript, as opposed to ordinarily having no `ai-title`. Exported
+ * for `cli/format-end-day.ts` to reuse, same reasoning as `formatSessionListingLine` above.
+ */
+export function countUnreadableListings(listedSessions: readonly SessionListing[]): number {
+  return listedSessions.filter((listing) => listing.info.kind === 'unreadable').length;
 }
 
 /**
@@ -205,13 +258,18 @@ function renderListedSessionsSection(listedSessions: readonly SessionListing[]):
   if (listedSessions.length === 0) {
     return '';
   }
+  const unreadableCount = countUnreadableListings(listedSessions);
+  const unreadableNote =
+    unreadableCount > 0
+      ? ` ${pluralize(unreadableCount, 'entry', 'entries')} could not be read for title/prompt — see below.`
+      : '';
   return [
     '## Not captured (closed sessions)',
     '',
     'No live registry entry was found for these — D-031 reads that as closed gracefully, not ' +
-      'work left in progress, so they are listed here for reference instead of captured:',
+      `work left in progress, so they are listed here for reference instead of captured.${unreadableNote}`,
     '',
-    ...sortedListedSessions(listedSessions).map(renderListedSessionLine),
+    ...sortedListedSessions(listedSessions).map(formatSessionListingLine),
   ].join('\n');
 }
 
@@ -243,6 +301,14 @@ function renderRejectedSection(rejected: readonly RejectedDiscoveryRecord[]): st
  * attempted at all, rendered in their own section (`renderListedSessionsSection`) — see that
  * function's own docstring for why they're never folded into the handoff sections below.
  *
+ * `scope` (S4-T0c, default `{ kind: 'fullDay' }` for the same backward-compatibility reason
+ * `listedSessions` defaults to `[]`): THIS call's own `EndDayScope`, rendered by `renderScopeNote`
+ * right after the timestamp — not persisted anywhere else, and not derived from `handoffs`/
+ * `listedSessions` (a `--session`-narrowed run can still see a day with many handoffs already on
+ * disk from earlier runs; the scope note describes how THIS run looked, not how big the day is).
+ * A later full `seeya end-day` the same day overwrites `summary.md` wholesale, including this note
+ * — the artifact always reflects its most recent generation's scope, same as every other section.
+ *
  * @example
  * const markdown = generateBriefingMarkdown('2026-08-16', clock.now(), handoffs, rejected, listed);
  * await storage.saveBriefing('2026-08-16', markdown);
@@ -253,10 +319,12 @@ export function generateBriefingMarkdown(
   handoffs: readonly Handoff[],
   rejected: readonly RejectedDiscoveryRecord[],
   listedSessions: readonly SessionListing[] = [],
+  scope: EndDayScope = { kind: 'fullDay' },
 ): string {
   const header = [
     `# Daily briefing — ${day}`,
     `_Generated ${generatedAt.toISOString()}_`,
+    renderScopeNote(scope),
     renderSummaryLine(handoffs.length, rejected.length),
   ].join('\n\n');
 
