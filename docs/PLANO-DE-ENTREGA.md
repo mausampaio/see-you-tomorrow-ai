@@ -1302,6 +1302,44 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       (`core/early-warnings.ts`) não foi tocado e continua funcionando — ele opera sobre a
       descoberta completa, de fora do corte de escopo. Sete escolhas registradas em **Q-041**.
 
+- [ ] **S4-T0c — O artefato do dia precisa dizer quando foi um recorte.** Saída da Q-041,
+      levantada pelo mantenedor em 2026-09-01 a partir do teste à mão. **Antes do daemon.**
+
+      **O defeito.** `core/briefing.ts` não tem noção de ter sido uma execução filtrada. Um
+      `seeya end-day --session X` produz um `summary.md` **indistinguível** de um dia completo que
+      por acaso tinha uma sessão só.
+
+      **Por que isso é D-025 no nível do dia.** Quem abrir aquele arquivo amanhã vê um handoff e
+      conclui que o dia teve uma sessão relevante — quando cinco sessões vivas podem nunca ter
+      sido olhadas. Ausência de handoff passa a ler como "aquela sessão não tinha nada", e o
+      correto é **"ninguém olhou"**. O mesmo erro que a Q-026 corrigiu dentro de um handoff,
+      agora um nível acima.
+
+      **Como a pergunta apareceu, porque o caminho importa.** O mantenedor perguntou se a
+      listagem de sessões fechadas deveria ser estreitada por `--session`. Estreitar daria quase
+      sempre **vazio** — o valor casa com a sessão selecionada, que por estar em escopo de captura
+      nunca aparece na listagem. Nenhuma das duas opções óbvias servia, e foi investigando isso
+      que o defeito de verdade apareceu: a listagem é a **única parte do documento que se comporta
+      como visão do dia inteiro**, dentro de um documento que é recorte e não se declara recorte.
+
+      *Escopo 1:* o `summary.md` (e a saída do `end-day`) registram quando a execução foi
+      recortada, e por qual valor de `--session`. A **listagem continua completa** — com o recorte
+      declarado ela vira contexto do dia claramente rotulado, em vez de contradição.
+
+      *Escopo 2, mesma tarefa porque é o mesmo raciocínio:* hoje "`(no title)`" na listagem
+      significa **duas coisas diferentes** — não havia `ai-title`, ou a **leitura falhou**. Achatar
+      as duas é o que o D-025 proíbe, e só a segunda pede ação de alguém. Separe (mesmo espírito
+      da D-022: rejeição visível e contável).
+
+      *Fora de escopo:* estreitar a listagem por `--session` (decidido: não), persistir a listagem
+      por dia (decidido: não, D-027 — e sumir da listagem quando a sessão volta a ser capturável é
+      o comportamento certo), e teste de contrato para `ai-title` (decidido: não agora — se sumir,
+      degrada para sem título e nada quebra).
+
+      *Aceite:* rodar `end-day --session X` e um `end-day` completo no mesmo dia produz dois
+      `summary.md` **distinguíveis por leitura**, sem precisar comparar contagens. E falha de
+      leitura da listagem aparece diferente de ausência de título.
+
 - [ ] **S4-T0 — A evidência não pode ficar presa ao `cwd` de lançamento.** Aprovada pelo
       mantenedor em 2026-08-30. **O problema, observado no primeiro teste real:** a sessão subiu
       de `C:\Users\<usuario>` e o trabalho aconteceu numa pasta criada durante a conversa. O

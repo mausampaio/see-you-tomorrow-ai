@@ -3295,3 +3295,61 @@ real do agente-interno, D-013), e documentei a troca com um comentário citando 
 dos dois testes mudou de propósito, só de fixture; acho que vale a atenção do revisor mesmo assim,
 porque um diff que troca `createSessionWithoutPid` por `createSessionWithPid` sem contexto parece
 suspeito de estar escondendo alguma coisa.
+
+
+**Resposta:** **FECHADA — e a pergunta do `--session` revelou um defeito maior que ela mesma.**
+
+**1) `--session` deveria estreitar a listagem? Nem uma coisa nem outra: o problema é outro.**
+
+O mantenedor levantou, em 2026-09-01, que escolher deliberadamente **uma** sessão e receber a
+lista completa das fechadas não parece respeitar a escolha. E ele mesmo apontou o contra: **não
+há como correlacionar** sessão fechada com a que foi escolhida.
+
+**O contra é mais forte do que parece.** Filtrar a listagem por `--session` daria quase sempre
+**vazio** — o valor casa com a sessão selecionada, e essa, por definição, está *em escopo de
+captura*, então nunca aparece na listagem. Filtrar não seria "mostrar menos", seria "não mostrar
+nada". Nenhuma das duas opções óbvias serve.
+
+**O defeito real, verificado no código:** `core/briefing.ts` **não tem noção nenhuma de ter sido
+uma execução filtrada.** Nada no `summary.md` registra que o dia foi recortado.
+
+Consequência: um `seeya end-day --session X` produz um `summary.md` **indistinguível** de um dia
+completo que por acaso tinha uma sessão só. Quem abrir aquele arquivo amanhã vê um handoff e
+conclui que o dia teve uma sessão relevante — quando cinco sessões vivas podem nunca ter sido
+olhadas. **É o D-025 no nível do dia:** ausência de handoff lendo como "aquela sessão não tinha
+nada", quando o correto é "ninguém olhou".
+
+E é isso que torna a listagem estranha: ela é a **única parte do documento que se comporta como
+visão do dia inteiro**, dentro de um documento que é recorte e não se declara recorte.
+
+**Decisão: a listagem continua completa, e o artefato passa a registrar que a execução foi
+recortada.** Com isso escrito, listagem completa vira coerente — contexto do dia, rotulado como
+tal, dentro de um documento que se declara parcial. Vira a **S4-T0c**.
+
+Isso também cobre um caso sem relação com listagem: `--session` usado por engano, ou usado às 14h
+com intenção de rodar o dia completo depois e a pessoa esquecendo. Hoje nada no arquivo denuncia.
+
+**2) Persistir a listagem por dia, como os handoffs? Não.**
+
+Ela é derivável do transcript a **custo zero de modelo**, e persistir criaria chave em disco que a
+D-027 avisa ser barata agora e cara depois. E o sintoma descrito — sessão listada às 14h somindo
+do `summary.md` das 18h — **é o comportamento correto**: se ela deixou de ser `unknown`, voltou a
+ser capturável, e sair da listagem é justamente a informação certa.
+
+**3) Falha ao ler a listagem merece balde visível? Sim.**
+
+Mesmo raciocínio da D-022. Hoje "sem título" significa **duas coisas diferentes**: não havia
+`ai-title`, ou a leitura falhou. Achatar as duas é o que o D-025 proíbe — e a segunda é a única
+que pede ação de alguém. Entra na S4-T0c, junto com o recorte declarado.
+
+**4) Teste de contrato para `ai-title`? Não agora.**
+
+Mesma conclusão da Q-029, e pelo motivo oposto ao que a justificou lá. Se o `ai-title` sumir, a
+listagem degrada para "sem título" e **nada quebra** — o custo de errar é baixo. No
+`--append-system-prompt-file` era caro: a sessão de fallback abriria sem o prompt de sistema
+padrão, sem ninguém perceber.
+
+**Os outros três registros da Q-041** (o corte de escopo ser o `hasPid` que já existia, a troca
+de fixtures nos dois testes do `end-day`, e o teto de identificação que a listagem herda da
+D-031) ficam confirmados como estão. A troca de fixtures em especial foi bem sinalizada: sem
+aquela nota, um diff trocando construtor por construtor pareceria suspeito na revisão.
