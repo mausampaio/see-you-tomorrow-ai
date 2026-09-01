@@ -3353,3 +3353,106 @@ padrão, sem ninguém perceber.
 de fixtures nos dois testes do `end-day`, e o teto de identificação que a listagem herda da
 D-031) ficam confirmados como estão. A troca de fixtures em especial foi bem sinalizada: sem
 aquela nota, um diff trocando construtor por construtor pareceria suspeito na revisão.
+
+## Q-042 — Seis escolhas fazendo S4-T0c (recorte declarado + leitura de título distinguível), registradas para confirmação
+
+**Tarefa:** S4-T0c
+**Bloqueia:** não — todas seguiram a solução mínima com o porquê no próprio código; registro para
+confirmação, no mesmo espírito de Q-021/Q-023/Q-037/Q-039/Q-041.
+
+**Contexto.** A resposta da Q-041 deixou dois escopos comigo: declarar o recorte de `--session` no
+artefato (Escopo 1) e separar "sem título" de "leitura falhou" na listagem (Escopo 2). Registro as
+seis escolhas de forma abaixo.
+
+**1) Tipo novo `core/types.ts#EndDayScope`, união discriminada, nunca um `sessionValue?: string`
+solto.** `{ kind: 'fullDay' } | { kind: 'singleSession'; sessionValue: string }`. Testei a
+alternativa mais simples (um campo opcional) e ela reintroduz exatamente o problema que a Q-041
+apontou: "ausência do campo" viraria o significado de "dia completo", o mesmo erro que o D-025
+proíbe em qualquer outro dado do projeto. `sessionValue` carrega o valor CRU de `--session`, nunca
+o `sessionId` resolvido — mesmo raciocínio que `formatNoMatchMessage`
+(`cli/end-day-command.ts`) já usa: o `seeya` não sabe o que a pessoa digitou, só o que chegou, e
+mostrar isso sem tradução é o que deixa a pessoa reconhecer a própria execução dias depois.
+**Termo novo para o glossário:** `EndDayScope` (`core/types.ts`), campo `sessionValue`.
+**Opções:** A) união discriminada, obrigatória em todo lugar que o valor final é consumido (o que
+implementei). B) `sessionValue?: string`, com `undefined` significando "dia completo" — rejeitada
+pelo motivo acima.
+**Minha escolha:** A.
+
+**2) `EndDayScope` viaja como campo OPCIONAL em `EndDayOptions.scope` (a entrada de `endDay`), mas
+como campo OBRIGATÓRIO, já resolvido, em `EndDayResult.scope` e em todo parâmetro de
+`core/briefing.ts`/`application/briefing.ts`.** A costura acontece uma vez, dentro do próprio
+`endDay()`: `options.scope ?? { kind: 'fullDay' }`. Considerei derivar o escopo diretamente da
+presença de `options.sessionFilter` (economizaria um campo), mas `sessionFilter` é um predicado
+livre — vários testes existentes passam um sem exercitar `--session` de verdade (`() => false`,
+comparando por campo não relacionado) — e inferir "isto foi um recorte" a partir de "um predicado
+foi passado" faria um teste não relacionado começar a declarar um recorte que nunca quis declarar.
+Mantive os dois campos independentes; só `cli/end-day-command.ts` (a única chamada real de
+produção com `--session`) os define juntos, a partir do mesmo `resolvedSessionId`/valor cru.
+**Opções:** A) campo independente em `EndDayOptions`, resolvido dentro de `endDay` (o que
+implementei). B) derivar de `sessionFilter !== undefined` — rejeitada pelo motivo acima. C) exigir
+`scope` sempre, sem default, em `EndDayOptions` — quebraria todo teste existente que não é sobre
+este recurso, custo desproporcional ao ganho.
+**Minha escolha:** A.
+
+**3) O aviso de escopo aparece no topo do `summary.md`, logo após o timestamp e ANTES da linha de
+resumo (`N sessions captured today`), e afirma os dois casos por igual — nunca só o recortado.**
+Um `end-day` completo agora imprime **"Scope: full day — every discovered session was considered
+for capture."** explicitamente, porque o enunciado da tarefa foi direto: "a ausência de marcação
+não pode ser o que significa 'completo'". O texto do recorte nunca promete o que o comando não
+sabe: não lista quais sessões deixaram de ser olhadas, só que um filtro rodou e qual valor.
+Repeti a mesma frase (adaptada para texto simples) no relatório do terminal
+(`cli/format-end-day.ts#formatScopeLine`), logo abaixo do cabeçalho — as duas superfícies citadas
+no aceite da tarefa.
+**Minha escolha:** sem alternativa real considerada — a tarefa já apontava "perto do topo" e "sem
+prometer o que não sabe"; o texto exato é a única coisa que fica aberta para o PO ajustar.
+
+**4) `scope` nunca é persistido separadamente — é recomputado a cada `end-day`, igual à
+`listedSessions` (Q-041 item 4).** Uma execução completa mais tarde no mesmo dia sobrescreve o
+`summary.md` inteiro, inclusive a nota de escopo da execução anterior — o arquivo sempre reflete a
+ÚLTIMA geração, nunca uma mistura. Escrevi isso explicitamente no docstring de
+`generateBriefingMarkdown` porque não é óbvio à primeira leitura: o resto do documento (`handoffs`)
+é cumulativo entre execuções do dia (via `Storage#listHandoffs`), mas o aviso de escopo não é — ele
+descreve como ESTA chamada específica enxergou o mundo, não o dia inteiro.
+**Minha escolha:** sem persistência — nenhuma decisão nova pede isso, e criar uma chave em disco só
+para isto repetiria o custo que a D-027 já avisa.
+
+**5) `core/types.ts#SessionListing.aiTitle`/`lastPrompt` (campos soltos) viram
+`core/types.ts#SessionListingInfo` (união discriminada: `{ kind: 'read'; aiTitle; lastPrompt }` ou
+`{ kind: 'unreadable'; reason }`), embutida em `SessionListing.info`.** Considerei a alternativa
+mais barata — manter os dois campos e acrescentar um terceiro, `readError: string | null` — mas ela
+deixa representável o estado inconsistente "`aiTitle` preenchido E `readError` setado ao mesmo
+tempo", que na prática nunca acontece; a união discriminada torna isso irrepresentável (D-024), no
+mesmo espírito do resto do projeto. O custo foi maior (a mudança toca `core/types.ts`,
+`core/briefing.ts`, `application/session-listing.ts`, `cli/format-end-day.ts` e cinco arquivos de
+teste), mas nenhum formato em disco foi afetado — a listagem nunca é persistida (item 4 acima e
+Q-041 item 4), então isto é só um tipo em memória.
+**Termo novo para o glossário:** `SessionListingInfo` (`core/types.ts`).
+**Opções:** A) união discriminada, embutida em `info` (o que implementei). B) campo
+`readError: string | null` solto ao lado de `aiTitle`/`lastPrompt` — mais barato de tocar, mas
+deixa um estado inválido representável.
+**Minha escolha:** A.
+
+**6) Falha de leitura vira visível E contável, mas sem um balde novo em `EndDayResult` (ao
+contrário de `failedCaptures`/`forkCleanupError`).** "Visível": cada linha da listagem cujo
+`info.kind === 'unreadable'` imprime "title unavailable — could not read the transcript (motivo)"
+em vez de "(no title)" — em `summary.md` e no relatório do terminal, com o texto compartilhado por
+`core/briefing.ts#formatSessionListingLine` (exportado, reaproveitado por
+`cli/format-end-day.ts`, mesmo padrão de `renderGitBlock`). "Contável": a introdução da seção "Not
+captured" ganha uma nota agregada — "N entries could not be read for title/prompt" — quando
+`N > 0`, e nada quando `N === 0` (para não transformar toda sessão sem título num alarme, como a
+tarefa pediu). Não criei um campo `listingErrors` em `EndDayResult`: a informação já está inteira
+dentro de `listedSessions[].info`, e um balde paralelo duplicaria o dado em vez de expor algo novo.
+**Opções:** A) visível inline + nota agregada na seção, sem novo campo em `EndDayResult` (o que
+implementei). B) campo `listingErrors: readonly { sessionId, reason }[]` em `EndDayResult`, no
+espírito literal de `failedCaptures`.
+**Minha escolha:** A — mas B é barata de acrescentar se o PO preferir a simetria com o resto do
+`EndDayResult`.
+
+**Achado à parte, não é pergunta:** o teste de aceite (`tests/unit/application/end-day.test.ts`,
+"aceite: a --session-scoped run and a later full-day run...") roda `endDay` duas vezes contra o
+MESMO `FakeStorage`, com a mesma sessão. A segunda chamada (dia completo) pode ou não recapturar a
+sessão de novo — depende da anti-duplicidade (D-026), que compara evidência, não veio ao caso
+mudar aqui. Por isso o teste não afirma `captured.length` na segunda chamada, só que o texto de
+escopo dos dois `summary.md` difere — exatamente a frase do próprio aceite da tarefa ("sem precisar
+comparar contagens"). Acho que vale a atenção do revisor: não é um teste fraco por acidente, é
+proposital.

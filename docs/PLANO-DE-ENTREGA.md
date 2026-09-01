@@ -1302,7 +1302,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       (`core/early-warnings.ts`) não foi tocado e continua funcionando — ele opera sobre a
       descoberta completa, de fora do corte de escopo. Sete escolhas registradas em **Q-041**.
 
-- [ ] **S4-T0c — O artefato do dia precisa dizer quando foi um recorte.** Saída da Q-041,
+- [~] **S4-T0c — O artefato do dia precisa dizer quando foi um recorte.** Saída da Q-041,
       levantada pelo mantenedor em 2026-09-01 a partir do teste à mão. **Antes do daemon.**
 
       **O defeito.** `core/briefing.ts` não tem noção de ter sido uma execução filtrada. Um
@@ -1339,6 +1339,27 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* rodar `end-day --session X` e um `end-day` completo no mesmo dia produz dois
       `summary.md` **distinguíveis por leitura**, sem precisar comparar contagens. E falha de
       leitura da listagem aparece diferente de ausência de título.
+
+      **Implementado em 2026-09-01:** `core/types.ts#EndDayScope` (união discriminada, `fullDay` |
+      `singleSession` com o valor CRU de `--session`, nunca o `sessionId` resolvido) viaja opcional
+      em `EndDayOptions.scope`, resolvido dentro de `endDay()` (`options.scope ?? { kind:
+      'fullDay' }`) e devolvido, sempre presente, em `EndDayResult.scope`. `core/briefing.ts#
+      generateBriefingMarkdown` recebeu um sexto parâmetro `scope` (default `fullDay`, mesmo
+      padrão de `listedSessions`) e imprime `renderScopeNote` logo após o timestamp, afirmando os
+      dois casos por igual — um dia completo agora diz "full day" explicitamente, nunca por
+      omissão. `cli/format-end-day.ts#formatScopeLine` repete a mesma informação no relatório do
+      terminal. Nada disso é persistido: recalculado a cada execução, igual à listagem (Q-041 item
+      4) — uma execução completa mais tarde no mesmo dia sobrescreve a nota de escopo da anterior.
+      Separadamente, `core/types.ts#SessionListing.aiTitle`/`lastPrompt` viraram
+      `SessionListingInfo` (união discriminada: `{ kind: 'read', aiTitle, lastPrompt }` ou `{ kind:
+      'unreadable', reason }`, embutida em `SessionListing.info`), fechando a lacuna em que uma
+      falha real de leitura (`application/session-listing.ts`) degradava para o mesmo `{ aiTitle:
+      null, lastPrompt: null }` de um `ai-title` simplesmente ausente. `core/briefing.ts#
+      formatSessionListingLine`/`countUnreadableListings` (exportados, reaproveitados por `cli/
+      format-end-day.ts`) tornam a falha visível linha a linha ("title unavailable — could not
+      read the transcript (motivo)") e contável (nota agregada na seção "Not captured" quando
+      houver ao menos uma), sem alarmar sessões ordinariamente sem título. Seis escolhas
+      registradas em **Q-042**.
 
 - [ ] **S4-T0 — A evidência não pode ficar presa ao `cwd` de lançamento.** Aprovada pelo
       mantenedor em 2026-08-30. **O problema, observado no primeiro teste real:** a sessão subiu

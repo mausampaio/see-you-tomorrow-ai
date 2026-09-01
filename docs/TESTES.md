@@ -77,6 +77,22 @@ O que precisa estar coberto com rigor, porque é onde os bugs vão doer:
   sempre a descoberta inteira); o `summary.md` mostra a seção "Not captured" separada de qualquer
   handoff (nunca um `## <nome>` para sessão listada). `core/briefing.ts` e
   `cli/format-end-day.ts` têm suíte própria para a mesma regra de não-mistura.
+- **`EndDayScope` declarado no artefato, nos dois sentidos (S4-T0c)**: `generateBriefingMarkdown`
+  sem `scope` (default) e com `{ kind: 'fullDay' }` produzem o mesmo aviso explícito de "dia
+  completo" — nunca por omissão; com `{ kind: 'singleSession', sessionValue }` o aviso nomeia o
+  valor CRU de `--session`, sem afirmar quais outras sessões deixaram de ser olhadas. Teste de
+  aceite dedicado (`tests/unit/application/end-day.test.ts` e
+  `tests/unit/core/briefing.test.ts`): um `endDay` com `--session` e um `endDay` completo no
+  mesmo dia produzem dois `summary.md` **distinguíveis por leitura**, comparando o texto e não a
+  contagem de sessões capturadas (a segunda chamada pode recapturar ou não, dependendo da
+  anti-duplicidade D-026 — o teste não depende disso). Mesma nota de escopo também no relatório do
+  terminal (`cli/format-end-day.ts`).
+- **`SessionListingInfo` distingue "sem `ai-title`" de "leitura falhou" (S4-T0c)**: uma falha real
+  de `TranscriptReader.readListingInfo` (`application/session-listing.test.ts`) vira `{ kind:
+  'unreadable', reason }`, nunca o mesmo `{ kind: 'read', aiTitle: null, lastPrompt: null }` que
+  uma sessão sem título ordinariamente produz. `core/briefing.ts`/`cli/format-end-day.ts` mostram
+  texto diferente para os dois casos, e a seção "Not captured" ganha uma nota agregada só quando
+  há pelo menos uma entrada não lida — uma sessão comum sem título nunca soa como alarme.
 
 Cobertura mínima: **`core/` 95%**, demais diretórios de produção **80%**. Configurado por
 diretório no vitest, e o CI falha abaixo disso.
