@@ -3095,3 +3095,125 @@ seguidas nesta tarefa (vermelho, vermelho — desta vez também `layer-matrix.te
 paralelo com a S4-T1**, então a contenção de CPU entre os dois contêineres Docker é exatamente a
 causa já registrada lá. Não abri questão nova — Q-030a já cobre o padrão e já diz o que fazer (nada,
 a menos que fique vermelho sem agente em paralelo ou no CI).
+
+---
+
+## Q-041 — Sete escolhas feitas fazendo S4-T0b (implementar a D-031), registradas para confirmação
+
+**Tarefa:** S4-T0b
+**Bloqueia:** não — todas seguiram a solução mínima com o porquê no próprio código; registro para
+confirmação, no mesmo espírito de Q-021/Q-023/Q-037/Q-039.
+
+**Contexto.** A D-031 dizia "capture o que está vivo e o que morreu por acidente, liste o que
+fechou com carinho", mas deixava comigo onde o corte de escopo mora, como a listagem se encaixa no
+briefing persistido, e o que fazer quando a leitura do título falha. Registro as sete abaixo.
+
+**1) O corte de escopo é `session.hasPid`, sem campo novo em `DiscoveredSession` nem em
+`DiscoveryResult`.** Antes de escrever código, conferi se as três populações da D-031 já
+correspondiam a um discriminante existente — e correspondem: `adapters/discovery/registry.ts`
+exige `pid` no schema, então toda sessão que vem do registro é `SessionWithPid`, viva ou morta
+(`processIsAlive` decide `alive`/`idle` vs `ended`, nunca o tipo); a varredura de transcript
+(`transcript-scan.ts`) só produz `SessionWithoutPid`; e a fusão (`merge.ts#fuseSession`) só
+promove para `SessionWithPid` quando o registro de fato viu a sessão. `core/classification.ts`
+já usava exatamente essa mesma checagem para decidir `unknown` vs as outras três. Criei
+`core/capture-scope.ts#isCaptureCandidate(session) = session.hasPid` como nome só para isso não
+ficar implícito e para não obrigar cada consumidor futuro (`seeya sessions`, por exemplo) a
+redescobrir a regra por conta própria.
+**Opções:** A) predicado puro sobre o discriminante existente (o que implementei). B) campo novo
+`captureEligible: boolean` em `DiscoveredSession` — redundante com `hasPid`, e D-024 pede tipo
+sem redundância representável. C) duas listas dentro de `DiscoveryResult` — misturaria "fora de
+escopo" com "rejeitado" (D-022 trata rejeitado como registro inválido, coisa diferente), e o
+enunciado da tarefa pediu explicitamente para não misturar as duas.
+**Minha escolha:** A.
+
+**2) O corte acontece em `application/end-day.ts`, antes de `evaluateCheapEligibility`, nunca
+dentro de `core/eligibility.ts`.** `discovery.sessions` é particionado em `captureCandidates` e
+`outOfScopeSessions` logo após a descoberta; só `captureCandidates` (depois filtrado por
+`--session`, se houver) chega a `mapWithConcurrencyLimit`/`runSession`. Não toquei
+`core/eligibility.ts` nem `application/eligibility-assembly.ts` (S4-T00e).
+**Minha escolha:** única opção compatível com a instrução da tarefa ("ponha o corte antes da
+elegibilidade... se não couber assim, pare e reporte") — coube, sem invadir os dois arquivos.
+
+**3) `SessionListing` é tipo próprio em `core/types.ts`, não um `Handoff` enxuto nem um campo a
+mais em `SessionFacts`.** Uma sessão listada nunca foi capturada — não tem `understanding`,
+`pendingItems` nem `tomorrowPlan` — e misturar os dois tipos faria "isto foi capturado ou só
+listado?" virar uma pergunta que o leitor infere pelos campos vazios em vez de o próprio tipo já
+responder (mesma lógica da D-024 aplicada a um par de conceitos bem menor). `aiTitle`/`lastPrompt`
+saem por um método novo do `TranscriptReader` (`readListingInfo`), não por `readFacts` +
+campos novos em `SessionFacts`: uma sessão listada nunca entra no pipeline de captura que
+`readFacts` alimenta, então dar ao tipo orientado a handoff dois campos que ele nunca usa
+confundiria por que eles estão lá.
+**Termos novos, para o glossário de `AGENTS.md`:** `SessionListing` (core/types.ts),
+`TranscriptListingInfo` e `readListingInfo` (core/ports.ts), `isCaptureCandidate`
+(core/capture-scope.ts). Nenhum vai para disco — ver item 4.
+
+**4) A listagem nunca é persistida — nem em `Handoff`, nem em `resumed.json`, nem em artefato
+novo.** `application/end-day.ts` recalcula `outOfScopeSessions`/`listedSessions` a cada execução, a
+partir da descoberta fresca daquela chamada, e passa isso direto para
+`writeDailyBriefing`/`previewDailyBriefing` → `generateBriefingMarkdown`. **Consequência que quero
+que fique visível:** ao contrário dos handoffs (que `Storage#listHandoffs` acumula do dia inteiro,
+mesmo entre execuções de `seeya end-day --session <id>` separadas), a seção "Not captured" do
+`summary.md` reflete só a ÚLTIMA execução — se a sessão A apareceu como fechada numa execução das
+14h e a sessão B só ficou "unknown" numa execução das 18h, o `summary.md` das 18h não mostra A a
+menos que ela ainda esteja "unknown" na descoberta das 18h. Não implementei acumulação (um
+`listed.json` por dia, no estilo de `early-warnings.json`/`resumed.json`) porque a D-031 não pede
+histórico, só identificação no momento — mas é uma divergência real de comportamento entre as duas
+seções da mesma página, e vale a pena o PO confirmar que é aceitável.
+**Opções:** A) sem persistência, sempre a foto da última descoberta (o que implementei). B) arquivo
+`~/.seeya/days/<day>/listed.json` acumulando por `sessionId`, igual aos outros dois casos citados.
+**Minha escolha:** A — menor superfície nova, e nada na D-031 ou no item de plano pedia histórico.
+
+**5) Falha ao ler `ai-title`/`last-prompt` de UMA sessão listada nunca aborta o restante, e
+também não vira um balde "rejeitado" visível (diferente de D-022).**
+`application/session-listing.ts#buildOneListing` captura qualquer rejeição de
+`readListingInfo` e degrada para `{ aiTitle: null, lastPrompt: null }` — mesmo "sem título",
+nunca "erro". Decidi não dar a isso um bucket próprio em `EndDayResult` (como
+`failedCaptures`/`forkCleanupError` têm) porque a listagem é só identificação para humano, nunca
+o trabalho de verdade do comando — a mesma razão que `core/ports.ts#Notifier.notify()` já usa para
+nunca rejeitar. Se um dia isso incomodar (por exemplo, alguém querendo saber SE havia erro de
+permissão nalgum `.jsonl`), dá para adicionar sem quebrar nada, porque hoje a informação
+simplesmente não é gravada em lugar nenhum.
+**Opções:** A) degrada silenciosamente para nulo (o que implementei). B) novo campo
+`listingErrors: readonly { sessionId, reason }[]` em `EndDayResult`, no espírito de D-022.
+**Minha escolha:** A, por proporcionalidade ao que a D-031 pede — mas B é barato de acrescentar se o
+PO preferir a simetria com o resto do arquivo.
+
+**6) `listedSessions` nunca é filtrado por `--session`/`sessionFilter` — reflete sempre a
+descoberta inteira, mesmo quando `--session` restringe a captura a uma sessão só.** O raciocínio:
+`--session` é uma flag de ESCOPO DE CAPTURA (D-002 é quem a justifica — ela também decide qual
+sessão pode ser terminada), não uma flag de "o que você quer saber". Testei isso explicitamente
+(`tests/unit/application/end-day.test.ts`, "listedSessions is unaffected by --session"). Não é
+óbvio que seja o comportamento certo — dá para argumentar que `--session <id-de-uma-sessão-viva>`
+não deveria imprimir a listagem de TODAS as fechadas do dia, só para reduzir ruído.
+**Opções:** A) listagem sempre completa, independente de `--session` (o que implementei). B)
+`--session` também filtra a listagem, mostrando zero linhas quando o valor casa uma sessão viva.
+**Minha escolha:** A — `seeya sessions` (o comando de diagnóstico) já mostra tudo sem filtro, e
+tratar a listagem como diagnóstico, não como parte do que `--session` recorta, pareceu mais
+consistente com esse precedente.
+
+**7) Ressalva da D-031 sobre teste de contrato para `ai-title`/`last-prompt`: não abri um.**
+A ressalva compara explicitamente com o `--append-system-prompt-file` (Q-029) e diz "se valer,
+abra questão em vez de construir" — mas diferente daquele caso, aqui a superfície já é tolerante
+por construção: `aiTitleEntrySchema`/`lastPromptEntrySchema` só validam o campo que leem, um
+`z.object()` sem `.strict()` ignora campos desconhecidos (D-021), e se o Claude Code um dia mudar
+a FORMA da entrada (não só acrescentar campo), a pior consequência é `aiTitle`/`lastPrompt`
+voltarem `null` — a mesma "listagem sem título" que a D-031 já pede para o caso de ausência. Não
+há travamento nem exceção possível, ao contrário do `--append-system-prompt-file` (onde a semântica
+errada silenciosamente trocaria o prompt de sistema do fallback de retomada, um bug ativo, não uma
+degradação honesta). Julguei que isso não atinge a barra "merece teste de contrato" — mas registro
+aqui, como a ressalva pede, para o PO decidir se quer um mesmo assim (rodaria contra o
+`~/.claude` real, fora do CI padrão, confirmando que as duas entradas ainda existem com esses
+nomes de campo na versão instalada).
+**Minha escolha:** não construí. Se o PO achar que vale, é um teste pequeno e me diz o formato de
+"Bloqueia" que prefere para tarefa futura.
+
+**Achado à parte, não é pergunta:** dois testes existentes de `end-day.test.ts` usavam
+`createSessionWithoutPid` para exercitar aceites que não têm nada a ver com D-031 ("sessão sem
+nenhuma evidência" e "sessão só com git respondendo") — e que, depois do corte de escopo, deixaram
+de alcançar `core/eligibility.ts` de verdade, porque toda `SessionWithoutPid` agora nem chega lá.
+Troquei os dois fixtures para `createSessionWithPid` (preservando o que cada teste realmente prova:
+`noEvidence` com `lastActivity: null`, e "só git responde" com `hasTranscript: false` — o cenário
+real do agente-interno, D-013), e documentei a troca com um comentário citando esta tarefa. Nenhum
+dos dois testes mudou de propósito, só de fixture; acho que vale a atenção do revisor mesmo assim,
+porque um diff que troca `createSessionWithoutPid` por `createSessionWithPid` sem contexto parece
+suspeito de estar escondendo alguma coisa.

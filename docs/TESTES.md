@@ -69,6 +69,14 @@ O que precisa estar coberto com rigor, porque é onde os bugs vão doer:
   `normalizeCwdForComparison` com a dica de plataforma como argumento explícito — a mesma função
   roda com `'win32'` e `'posix'` no mesmo processo de teste, então o ramo Windows nunca fica
   descoberto só porque a suíte rodou em Linux/macOS (a lição da S2-T1, aplicada de novo).
+- **Corte de escopo da D-031 (S4-T0b)**: `isCaptureCandidate` isolado para as três populações —
+  viva, `ended` (registro + PID morto, **é** candidata, é a linha que parece concessão e não é) e
+  só-transcript (**nunca** candidata). No `endDay` completo: sessão só-transcript nunca chega à
+  elegibilidade e aparece em `listedSessions`, com título/último prompt vindos do
+  `TranscriptReader.readListingInfo` fake; `--session` nunca filtra `listedSessions` (reflete
+  sempre a descoberta inteira); o `summary.md` mostra a seção "Not captured" separada de qualquer
+  handoff (nunca um `## <nome>` para sessão listada). `core/briefing.ts` e
+  `cli/format-end-day.ts` têm suíte própria para a mesma regra de não-mistura.
 
 Cobertura mínima: **`core/` 95%**, demais diretórios de produção **80%**. Configurado por
 diretório no vitest, e o CI falha abaixo disso.
@@ -84,6 +92,12 @@ Cada adapter contra o mundo real, mas num mundo de mentira controlado.
   `tests/fixtures/transcripts/`. Incluir obrigatoriamente: transcript grande (>1 MB), com
   tipos de entrada desconhecidos, com linha truncada no fim (o Claude Code pode estar
   escrevendo enquanto lemos).
+  **D-031 (S4-T0b)**: `parseTranscriptListingInfo` mantém a ocorrência mais recente de
+  `ai-title`/`last-prompt` (as duas são regravadas conforme a sessão evolui, Spike I), tolera
+  linha em branco e linha sem campo `type`, nunca aborta a leitura, e responde `{ aiTitle: null,
+  lastPrompt: null }` — nunca lançando — quando nenhuma das duas entradas existe no arquivo.
+  `TranscriptFileReader.readListingInfo` tem o mesmo teste de localização de arquivo que
+  `readFacts` já tinha.
 - **`storage/`**: `tmpdir` real. Testar atomicidade — matar no meio da escrita não pode
   deixar arquivo pela metade; ler documento de `schemaVersion` antiga aciona migração.
   `resumed.json` (S3-T3, por `day`): arquivo ausente é conjunto vazio (D-025), JSON inválido e
