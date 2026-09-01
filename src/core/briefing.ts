@@ -30,15 +30,23 @@
  * scope explicitly for BOTH cases (never omitting the full-day note and letting silence mean
  * "complete" — the exact ambiguity this task exists to close), right after the generation
  * timestamp and before anything else, because a reader needs this before interpreting the rest of
- * the page. It never claims which OTHER sessions the filter excluded — `endDay` only knows a filter
- * ran, not what it skipped (see `core/types.ts#EndDayScope`'s own docstring).
+ * the page.
+ *
+ * **S4-T0d amends the last claim S4-T0c made here.** This used to say `endDay` only knows a filter
+ * ran, not what it skipped — wrong, and verified in the code: `application/end-day.ts#
+ * applyCaptureScope` holds `captureCandidates` and `sessionsInScope` side by side in the same
+ * function, so "how many were discarded" is a subtraction of two arrays already in hand, not a fact
+ * `endDay` lacks (the premise was wrong in `docs/QUESTOES.md` Q-041 too — see its own CORREÇÃO).
+ * `renderScopeNote` below now states that count. What it still never claims is WHICH sessions the
+ * filter discarded — that's a different, riskier claim (identities, not a count) that
+ * `docs/PLANO-DE-ENTREGA.md` S4-T0d keeps out of scope on purpose, not an oversight repeated twice.
  */
 import type {
   Day,
-  EndDayScope,
   EvidenceSource,
   GitFacts,
   Handoff,
+  ResolvedEndDayScope,
   SessionListing,
   WorktreeFacts,
 } from './types.js';
@@ -51,20 +59,29 @@ function pluralize(count: number, singular: string, plural: string): string {
 }
 
 /**
- * S4-T0c: states this run's `EndDayScope` explicitly, in both directions — a full day says so, a
- * narrowed run says so and names the raw `--session` value, and neither reads as the other by
- * omission (D-025, D-024 — see `EndDayScope`'s own docstring in `core/types.ts`). Deliberately
- * silent about which OTHER sessions a narrowed run might have skipped: `endDay` never learns that,
- * only that a filter ran, and this text never promises more than that (per the maintainer's own
- * framing of the task: "sem prometer o que não sabe").
+ * S4-T0c: states this run's scope explicitly, in both directions — a full day says so, a narrowed
+ * run says so and names the raw `--session` value, and neither reads as the other by omission
+ * (D-025, D-024 — see `ResolvedEndDayScope`'s own docstring in `core/types.ts`).
+ *
+ * S4-T0d: a narrowed run also states HOW MANY capture candidates the filter discarded —
+ * `scope.captureCandidateCount - scope.consideredCount`, both numbers `endDay` already held side by
+ * side (`application/end-day.ts#applyCaptureScope`). The denominator is deliberately
+ * `captureCandidateCount`, never `EndDayResult.discoveredCount`: the latter also counts D-031's
+ * closed-session population, which a `--session` filter never had a chance to discard in the first
+ * place (see `ResolvedEndDayScope`'s own docstring for why mixing the two would flip the note's
+ * meaning). Still deliberately silent about WHICH sessions were discarded — a different, riskier
+ * claim (identities, not a count) that `docs/PLANO-DE-ENTREGA.md` S4-T0d keeps out of scope on
+ * purpose (per the maintainer's own framing: "sem prometer o que não sabe").
  */
-function renderScopeNote(scope: EndDayScope): string {
+function renderScopeNote(scope: ResolvedEndDayScope): string {
   if (scope.kind === 'fullDay') {
     return '**Scope:** full day — every discovered session was considered for capture.';
   }
+  const discardedCount = scope.captureCandidateCount - scope.consideredCount;
   return (
-    `**Scope:** narrowed by \`--session "${scope.sessionValue}"\` — only the matching session was ` +
-    'considered for capture. Other sessions discovered today may not have been looked at.'
+    `**Scope:** narrowed by \`--session "${scope.sessionValue}"\` — ${scope.consideredCount} of ` +
+    `${scope.captureCandidateCount} capture candidates considered; ${discardedCount} discarded ` +
+    'by the filter.'
   );
 }
 
@@ -302,8 +319,9 @@ function renderRejectedSection(rejected: readonly RejectedDiscoveryRecord[]): st
  * function's own docstring for why they're never folded into the handoff sections below.
  *
  * `scope` (S4-T0c, default `{ kind: 'fullDay' }` for the same backward-compatibility reason
- * `listedSessions` defaults to `[]`): THIS call's own `EndDayScope`, rendered by `renderScopeNote`
- * right after the timestamp — not persisted anywhere else, and not derived from `handoffs`/
+ * `listedSessions` defaults to `[]`; S4-T0d adds the discard counts to the narrowed case): THIS
+ * call's own `ResolvedEndDayScope`, rendered by `renderScopeNote` right after the timestamp — not
+ * persisted anywhere else, and not derived from `handoffs`/
  * `listedSessions` (a `--session`-narrowed run can still see a day with many handoffs already on
  * disk from earlier runs; the scope note describes how THIS run looked, not how big the day is).
  * A later full `seeya end-day` the same day overwrites `summary.md` wholesale, including this note
@@ -319,7 +337,7 @@ export function generateBriefingMarkdown(
   handoffs: readonly Handoff[],
   rejected: readonly RejectedDiscoveryRecord[],
   listedSessions: readonly SessionListing[] = [],
-  scope: EndDayScope = { kind: 'fullDay' },
+  scope: ResolvedEndDayScope = { kind: 'fullDay' },
 ): string {
   const header = [
     `# Daily briefing — ${day}`,

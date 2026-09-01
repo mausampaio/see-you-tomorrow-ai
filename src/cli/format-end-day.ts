@@ -20,12 +20,21 @@ function formatHeader(result: EndDayResult): string {
 
 /** S4-T0c: the terminal report states `result.scope` explicitly too, same reasoning and same two
  * cases as `core/briefing.ts#renderScopeNote` — a `--session` run and a full run must be
- * distinguishable by reading either surface, not just the file. */
+ * distinguishable by reading either surface, not just the file. S4-T0d: the narrowed case also
+ * names how many capture candidates the filter discarded, same arithmetic and same denominator as
+ * `core/briefing.ts#renderScopeNote` (`ResolvedEndDayScope.captureCandidateCount`, never
+ * `discoveredCount` — see that type's own docstring in `core/types.ts`). */
 function formatScopeLine(result: EndDayResult): string {
   if (result.scope.kind === 'fullDay') {
     return 'Scope: full day.';
   }
-  return `Scope: narrowed by --session "${result.scope.sessionValue}".`;
+  const { sessionValue, captureCandidateCount, consideredCount } = result.scope;
+  const discardedCount = captureCandidateCount - consideredCount;
+  return (
+    `Scope: narrowed by --session "${sessionValue}" — ${consideredCount} of ` +
+    `${captureCandidateCount} capture candidates considered; ${discardedCount} discarded by the ` +
+    'filter.'
+  );
 }
 
 /** D-031: names how many were kept out of scope right in the summary line — without this, "N in

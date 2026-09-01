@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { generateBriefingMarkdown } from '../../../src/core/briefing.js';
 import type { RejectedDiscoveryRecord } from '../../../src/core/ports.js';
-import type { EndDayScope, SessionListing } from '../../../src/core/types.js';
+import type { ResolvedEndDayScope, SessionListing } from '../../../src/core/types.js';
 import { createHandoff } from './_fixtures.js';
 
 const GENERATED_AT = new Date('2026-08-16T21:05:00.000Z');
@@ -350,15 +350,24 @@ describe('generateBriefingMarkdown — EndDayScope (S4-T0c)', () => {
     );
   });
 
-  it('a --session-narrowed run names the raw value, and warns other sessions may be unseen', () => {
-    const scope: EndDayScope = { kind: 'singleSession', sessionValue: 'code-6d' };
+  it('a --session-narrowed run names the raw value', () => {
+    const scope: ResolvedEndDayScope = {
+      kind: 'singleSession',
+      sessionValue: 'code-6d',
+      captureCandidateCount: 4,
+      consideredCount: 1,
+    };
     const markdown = generateBriefingMarkdown('2026-08-16', GENERATED_AT, [], [], [], scope);
     expect(markdown).toContain('**Scope:** narrowed by `--session "code-6d"`');
-    expect(markdown).toContain('Other sessions discovered today may not have been looked at.');
   });
 
   it('the scope note appears before the summary line, so a reader sees it first', () => {
-    const scope: EndDayScope = { kind: 'singleSession', sessionValue: 'code-6d' };
+    const scope: ResolvedEndDayScope = {
+      kind: 'singleSession',
+      sessionValue: 'code-6d',
+      captureCandidateCount: 4,
+      consideredCount: 1,
+    };
     const markdown = generateBriefingMarkdown('2026-08-16', GENERATED_AT, [], [], [], scope);
     expect(markdown.indexOf('**Scope:**')).toBeLessThan(markdown.indexOf('captured today'));
   });
@@ -371,6 +380,8 @@ describe('generateBriefingMarkdown — EndDayScope (S4-T0c)', () => {
       const narrowed = generateBriefingMarkdown('2026-08-16', GENERATED_AT, [handoff], [], [], {
         kind: 'singleSession',
         sessionValue: handoff.sessionId,
+        captureCandidateCount: 1,
+        consideredCount: 1,
       });
       const full = generateBriefingMarkdown('2026-08-16', GENERATED_AT, [handoff], [], [], {
         kind: 'fullDay',
@@ -380,6 +391,64 @@ describe('generateBriefingMarkdown — EndDayScope (S4-T0c)', () => {
       expect(narrowed).toContain('narrowed by `--session');
       expect(full).toContain('full day — every discovered session was considered');
       expect(full).not.toContain('narrowed by');
+    },
+  );
+});
+
+describe('generateBriefingMarkdown — scope note reports the discard count (S4-T0d)', () => {
+  it('names how many capture candidates were considered and how many were discarded', () => {
+    const scope: ResolvedEndDayScope = {
+      kind: 'singleSession',
+      sessionValue: 'code-6d',
+      captureCandidateCount: 4,
+      consideredCount: 1,
+    };
+    const markdown = generateBriefingMarkdown('2026-08-16', GENERATED_AT, [], [], [], scope);
+    expect(markdown).toContain('1 of 4 capture candidates considered; 3 discarded by the filter.');
+  });
+
+  it('a full day never prints a discard count — there is nothing to report, not zero', () => {
+    const markdown = generateBriefingMarkdown('2026-08-16', GENERATED_AT, [], []);
+    expect(markdown).not.toContain('discarded');
+    expect(markdown).not.toContain('candidate');
+  });
+
+  it(
+    'the denominator is capture candidates, never discoveredCount — a closed session in the ' +
+      'listing was never a capture candidate the filter could have discarded ' +
+      '(the three-population case: one captured, one discarded by the filter, one closed)',
+    () => {
+      const scope: ResolvedEndDayScope = {
+        kind: 'singleSession',
+        sessionValue: 'viva-01',
+        // Two capture candidates total (the captured one + the one the filter discarded) — NOT
+        // three, which is what a wrong "discoveredCount" denominator would produce if it also
+        // counted the closed session below as though `--session` could have discarded it too.
+        captureCandidateCount: 2,
+        consideredCount: 1,
+      };
+      const listing: SessionListing = {
+        sessionId: '33333333-3333-4333-8333-333333333333',
+        cwd: 'c:\\code\\fechada',
+        name: 'fechada-01',
+        info: { kind: 'read', aiTitle: 'Closed session', lastPrompt: null },
+      };
+      const markdown = generateBriefingMarkdown(
+        '2026-08-16',
+        GENERATED_AT,
+        [createHandoff({ name: 'viva-01' })],
+        [],
+        [listing],
+        scope,
+      );
+      // Correct math (denominator 2, D-031's capture-candidate population): 1 of 2, 1 discarded.
+      expect(markdown).toContain(
+        '1 of 2 capture candidates considered; 1 discarded by the filter.',
+      );
+      // The wrong math a `discoveredCount`-style denominator (3: captured + discarded + closed)
+      // would have produced — must never appear.
+      expect(markdown).not.toContain('1 of 3 capture candidates');
+      expect(markdown).not.toContain('2 discarded by the filter');
     },
   );
 });

@@ -22,7 +22,13 @@
 import { previewDailyBriefing, writeDailyBriefing } from './briefing.js';
 import { localDayString } from '../core/day.js';
 import { isCaptureCandidate } from '../core/capture-scope.js';
-import type { Config, Day, DiscoveredSession, EndDayScope } from '../core/types.js';
+import type {
+  Config,
+  Day,
+  DiscoveredSession,
+  EndDayScope,
+  ResolvedEndDayScope,
+} from '../core/types.js';
 import type { ForkCleanupResult } from '../core/ports.js';
 import { captureSession } from './capture-session.js';
 import { buildSessionListings } from './session-listing.js';
@@ -167,6 +173,11 @@ interface ScopedSessions {
   /** D-031's listing population, UNFILTERED by `sessionFilter` — see `endDay`'s own top comment
    * for why `--session` never hides the listing. */
   readonly outOfScopeSessions: readonly DiscoveredSession[];
+  /** S4-T0d: `sessionsInScope`'s size BEFORE `sessionFilter` narrowed it — the denominator
+   * `ResolvedEndDayScope.singleSession.captureCandidateCount` needs. Exposed here, next to
+   * `sessionsInScope`, instead of making a caller re-run `sessions.filter(isCaptureCandidate)` a
+   * second time just to recover a number this function already computed. */
+  readonly captureCandidateCount: number;
 }
 
 /** D-031's scope cut (`core/capture-scope.ts#isCaptureCandidate`), applied to the full discovery
@@ -181,6 +192,31 @@ function applyCaptureScope(
   return {
     sessionsInScope: sessionFilter ? captureCandidates.filter(sessionFilter) : captureCandidates,
     outOfScopeSessions,
+    captureCandidateCount: captureCandidates.length,
+  };
+}
+
+/**
+ * S4-T0d: turns the caller's raw `EndDayScope` input into the `ResolvedEndDayScope` everything
+ * downstream (`EndDayResult.scope`, `core/briefing.ts`, `cli/format-end-day.ts`) renders — adding
+ * the discard counts `applyCaptureScope` just computed, for the one case (`singleSession`) where
+ * they mean anything. A full day carries no counts to add: there was no filter to discard against,
+ * and inventing a "0 discarded" note where nothing was discarded is exactly the noise D-025 warns
+ * against (there's a real difference between "nothing to report" and "zero, measured").
+ */
+function resolveScope(
+  inputScope: EndDayScope,
+  captureCandidateCount: number,
+  consideredCount: number,
+): ResolvedEndDayScope {
+  if (inputScope.kind === 'fullDay') {
+    return inputScope;
+  }
+  return {
+    kind: 'singleSession',
+    sessionValue: inputScope.sessionValue,
+    captureCandidateCount,
+    consideredCount,
   };
 }
 
@@ -213,13 +249,19 @@ export async function endDay(deps: EndDayDeps, options: EndDayOptions = {}): Pro
   const dryRun = options.dryRun ?? false;
   // S4-T0c: resolved to a concrete, always-present value HERE — the one place
   // `EndDayOptions.scope`'s own optionality (an ordinary "no --session" input) turns into
-  // `EndDayResult.scope`/`core/briefing.ts`'s never-optional `EndDayScope` (see that type's own
-  // docstring in `core/types.ts` for why the artifact-facing value can't carry the same
-  // optionality this input does).
-  const scope: EndDayScope = options.scope ?? { kind: 'fullDay' };
-  const { sessionsInScope, outOfScopeSessions } = applyCaptureScope(
+  // `EndDayResult.scope`/`core/briefing.ts`'s never-optional scope (see `ResolvedEndDayScope`'s own
+  // docstring in `core/types.ts` for why the artifact-facing value can't carry the same optionality
+  // this input does). `applyCaptureScope` has to run first now (S4-T0d): the resolved value needs
+  // its discard counts, and those only exist once the scope cut has actually run.
+  const inputScope: EndDayScope = options.scope ?? { kind: 'fullDay' };
+  const { sessionsInScope, outOfScopeSessions, captureCandidateCount } = applyCaptureScope(
     discovery.sessions,
     options.sessionFilter,
+  );
+  const scope: ResolvedEndDayScope = resolveScope(
+    inputScope,
+    captureCandidateCount,
+    sessionsInScope.length,
   );
 
   const [outcomes, listedSessions] = await Promise.all([

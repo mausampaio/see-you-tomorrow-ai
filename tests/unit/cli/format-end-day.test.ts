@@ -108,10 +108,41 @@ describe('formatEndDayReport — header and discovery summary', () => {
 
   it('S4-T0c: a --session-narrowed run names the raw value, not the resolved sessionId', () => {
     const report = formatEndDayReport(
-      buildResult({ scope: { kind: 'singleSession', sessionValue: 'code-6d' } }),
+      buildResult({
+        scope: {
+          kind: 'singleSession',
+          sessionValue: 'code-6d',
+          captureCandidateCount: 4,
+          consideredCount: 1,
+        },
+      }),
       buildConfig(),
     );
-    expect(report).toContain('Scope: narrowed by --session "code-6d".');
+    expect(report).toContain('Scope: narrowed by --session "code-6d"');
+  });
+
+  it('S4-T0d: names how many capture candidates were considered and how many were discarded', () => {
+    const report = formatEndDayReport(
+      buildResult({
+        scope: {
+          kind: 'singleSession',
+          sessionValue: 'code-6d',
+          captureCandidateCount: 4,
+          consideredCount: 1,
+        },
+      }),
+      buildConfig(),
+    );
+    expect(report).toContain(
+      'Scope: narrowed by --session "code-6d" — 1 of 4 capture candidates considered; 3 discarded ' +
+        'by the filter.',
+    );
+  });
+
+  it('S4-T0d: a full-day run never prints a discard count — there is nothing to report', () => {
+    const report = formatEndDayReport(buildResult(), buildConfig());
+    expect(report).toContain('Scope: full day.');
+    expect(report).not.toContain('discarded');
   });
 
   it('reports discoveredCount and sessionsInScope, singular/plural correctly', () => {
