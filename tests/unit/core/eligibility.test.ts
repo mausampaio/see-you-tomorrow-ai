@@ -141,7 +141,10 @@ describe('evaluateEligibility', () => {
       const result = evaluateEligibility(
         session,
         criteria({
-          previousCaptureToday: { signature: { transcript: '2026-08-16T18:00:00.000Z' } },
+          previousCaptureToday: {
+            signature: { transcript: '2026-08-16T18:00:00.000Z' },
+            source: 'model',
+          },
           currentSignature: { transcript: '2026-08-16T18:00:00.000Z' },
         }),
       );
@@ -156,7 +159,10 @@ describe('evaluateEligibility', () => {
       const result = evaluateEligibility(
         session,
         criteria({
-          previousCaptureToday: { signature: { transcript: '2026-08-16T18:00:00.000Z' } },
+          previousCaptureToday: {
+            signature: { transcript: '2026-08-16T18:00:00.000Z' },
+            source: 'model',
+          },
           currentSignature: { transcript: '2026-08-16T19:50:00.000Z' },
         }),
       );
@@ -173,7 +179,10 @@ describe('evaluateEligibility', () => {
         const result = evaluateEligibility(
           session,
           criteria({
-            previousCaptureToday: { signature: { transcript: null, git: 'sha-1' } },
+            previousCaptureToday: {
+              signature: { transcript: null, git: 'sha-1' },
+              source: 'model',
+            },
             currentSignature: { transcript: null, git: 'sha-2' },
           }),
         );
@@ -191,7 +200,7 @@ describe('evaluateEligibility', () => {
         const result = evaluateEligibility(
           session,
           criteria({
-            previousCaptureToday: { signature: { transcript: null, git: null } },
+            previousCaptureToday: { signature: { transcript: null, git: null }, source: 'model' },
             currentSignature: { transcript: null, git: null },
           }),
         );
@@ -199,6 +208,67 @@ describe('evaluateEligibility', () => {
         expect(result.eligible).toBe(true);
       },
     );
+
+    describe('S4-T00e: only a model handoff can make today "already captured"', () => {
+      it(
+        'a deterministic previous capture (generation was attempted and FAILED) does not block ' +
+          're-capture, even with an unchanged signature — a failed call is not a verdict (D-025)',
+        () => {
+          const session = createSessionWithPid();
+
+          const result = evaluateEligibility(
+            session,
+            criteria({
+              previousCaptureToday: {
+                signature: { transcript: '2026-08-16T18:00:00.000Z' },
+                source: 'deterministic',
+              },
+              currentSignature: { transcript: '2026-08-16T18:00:00.000Z' },
+            }),
+          );
+
+          expect(result).toStrictEqual({ eligible: true, reasons: [] });
+        },
+      );
+
+      it(
+        'a noTranscript previous capture (the model was never called) does not block ' +
+          're-capture either, even with an unchanged signature',
+        () => {
+          const session = createSessionWithPid();
+
+          const result = evaluateEligibility(
+            session,
+            criteria({
+              previousCaptureToday: {
+                signature: { transcript: '2026-08-16T18:00:00.000Z' },
+                source: 'noTranscript',
+              },
+              currentSignature: { transcript: '2026-08-16T18:00:00.000Z' },
+            }),
+          );
+
+          expect(result).toStrictEqual({ eligible: true, reasons: [] });
+        },
+      );
+
+      it('a model previous capture still blocks with an unchanged signature (regression guard)', () => {
+        const session = createSessionWithPid();
+
+        const result = evaluateEligibility(
+          session,
+          criteria({
+            previousCaptureToday: {
+              signature: { transcript: '2026-08-16T18:00:00.000Z' },
+              source: 'model',
+            },
+            currentSignature: { transcript: '2026-08-16T18:00:00.000Z' },
+          }),
+        );
+
+        expect(result).toStrictEqual({ eligible: false, reasons: ['duplicateToday'] });
+      });
+    });
   });
 
   it('accumulates every applicable reason, not just the first', () => {

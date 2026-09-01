@@ -4,7 +4,7 @@
  * I/O here — every external datum (config, `forks.json`, today's capture signature) arrives
  * already resolved in `EligibilityCriteria`, assembled by the caller (outside the core).
  */
-import type { DiscoveredSession } from './types.js';
+import type { DiscoveredSession, HandoffSource } from './types.js';
 import { sameEvidence, type EvidenceSignature } from './evidence.js';
 
 /**
@@ -31,6 +31,13 @@ export interface PreviousCaptureToday {
    * by whoever assembles the signature (outside the core); this rule only compares.
    */
   readonly signature: EvidenceSignature;
+  /**
+   * The stored handoff's own `source` (docs/ESPECIFICACAO.md § "Formato do handoff"). Decides
+   * whether this previous capture is even a candidate for anti-duplication at all — see
+   * `evaluateEligibility`'s condition 5 for the rule and why (S4-T00e, D-025 applied to
+   * eligibility).
+   */
+  readonly source: HandoffSource;
 }
 
 export interface EligibilityCriteria {
@@ -79,6 +86,15 @@ export interface EligibilityResult {
  * signature of today's last capture via `sameEvidence` — never `session.lastTranscriptWrite`
  * directly, because that kept any transcript-less session "duplicate" for the whole day even if
  * its git tree had changed (the exact case of the autonomous execution agent, D-013).
+ *
+ * That same condition only fires when `previousCaptureToday.source === 'model'` (S4-T00e). A
+ * `deterministic` handoff is the record that generation was attempted and FAILED; a
+ * `noTranscript` one is the record that it was never attempted at all. Neither is a verdict from
+ * the model about this session's state — treating either as "already captured" would apply D-025
+ * (absence of data never becomes a positive claim) backwards: it would let the *absence* of an
+ * understanding stand in for the *presence* of one, permanently consuming the day's only capture
+ * window on a session a transient failure (budget, network, model down) never actually looked at.
+ * Q-026 is the same reasoning one layer up, for `pendingItems` instead of anti-duplication.
  */
 export function evaluateEligibility(
   session: DiscoveredSession,
@@ -110,6 +126,7 @@ export function evaluateEligibility(
 
   if (
     criteria.previousCaptureToday !== null &&
+    criteria.previousCaptureToday.source === 'model' &&
     sameEvidence(criteria.previousCaptureToday.signature, criteria.currentSignature)
   ) {
     reasons.push('duplicateToday');
