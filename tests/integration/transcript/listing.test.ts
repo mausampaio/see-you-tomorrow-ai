@@ -27,6 +27,15 @@ describe('parseTranscriptListingInfo — absent entries (D-025)', () => {
   });
 });
 
+describe('parseTranscriptListingInfo — blank lines and lines with no "type" field', () => {
+  it('skips both without stopping the read, and still finds the entries around them', async () => {
+    const result = await parseTranscriptListingInfo(fixturePath('listing-edge-cases.jsonl'));
+
+    expect(result.aiTitle).toBe('Draft the onboarding flow');
+    expect(result.lastPrompt).toBe('Write the initial draft');
+  });
+});
+
 describe('parseTranscriptListingInfo — tolerance for unrelated and malformed lines', () => {
   it('never stops or rejects on a truncated final line, still answering the entries seen so far', async () => {
     // truncated-last-line.jsonl carries no ai-title/last-prompt at all — this proves the
