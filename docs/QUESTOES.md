@@ -3095,3 +3095,78 @@ seguidas nesta tarefa (vermelho, vermelho — desta vez também `layer-matrix.te
 paralelo com a S4-T1**, então a contenção de CPU entre os dois contêineres Docker é exatamente a
 causa já registrada lá. Não abri questão nova — Q-030a já cobre o padrão e já diz o que fazer (nada,
 a menos que fique vermelho sem agente em paralelo ou no CI).
+
+---
+
+## Q-040 — S4-T00e: onde a distinção de `source` mora, por que `noTranscript` leva o mesmo tratamento de `deterministic`, e onde o limite de retentativas do daemon vai encaixar
+
+**Tarefa:** S4-T00e
+**Bloqueia:** não — a tarefa deixou as duas escolhas comigo, com o critério; registro do
+raciocínio, não pedido de decisão.
+
+**1) Onde a distinção mora: dentro do `core/eligibility.ts`, não em `eligibility-assembly.ts`.**
+`PreviousCaptureToday` ganhou um campo `source: HandoffSource`, e a condição 5
+(`duplicateToday`) só dispara quando `previousCaptureToday.source === 'model'`. A alternativa óbvia
+era filtrar na montagem — se `previousHandoff.source !== 'model'`, passar `previousCaptureToday:
+null` para o núcleo, que continuaria sem saber que `source` existe.
+
+Escolhi o núcleo pelo mesmo motivo que o próprio arquivo já documenta para as outras quatro
+condições: `evaluateEligibility` é o lugar único onde as cinco condições da elegibilidade (D-026
+inclusa) vivem juntas, testáveis como regra pura, sem precisar de um `Storage` fake para exercitar
+cada combinação. "Quais handoffs contam como captura para efeito de duplicidade" não é resolução
+de I/O — é parte da própria regra de anti-duplicidade, do mesmo jeito que "qual assinatura comparar"
+já é. Filtrar na montagem esconderia essa metade da regra num `? :` sem teste direto de núcleo, e
+o dia em que alguém precisasse explicar a regra completa (por exemplo, para o `seeya sessions`)
+teria que ler dois arquivos em vez de um.
+
+Contra-argumento que considerei e descartei: manter o núcleo "sem saber de `source`" o deixaria
+mais simples de ler. Não me convenceu — `HandoffSource` já é um tipo do próprio `core/types.ts`
+(não é um conceito de infraestrutura vindo de fora), então importá-lo não fere a regra de pureza
+do núcleo (sem I/O, sem `node:*`, sem adapter). É dado de domínio, não de mundo.
+`application/eligibility-assembly.ts` ficou só repassando o campo do handoff lido — nenhuma decisão
+nova mora lá, e o comentário da função diz isso explicitamente.
+
+**2) `noTranscript` leva exatamente o mesmo tratamento que `deterministic` — não distingui.**
+Os dois valores significam "o modelo não analisou esta sessão", só que por motivos diferentes:
+`deterministic` é tentativa que falhou (orçamento, rede, timeout — `GenerationError`);
+`noTranscript` é tentativa que **nunca aconteceu** (hoje um valor morto — `types.ts` documenta que
+`application/generation-policy.ts` não o produz ainda, reservado para uma política futura de "pular
+o modelo quando não há transcript"). Considerei tratá-los diferente — por exemplo, um poderia
+"contar menos" que o outro para uma retentativa futura mais cautelosa — mas não achei razão para
+isso na regra de elegibilidade: para efeito de "isto é um veredito sobre a sessão?", a resposta é
+não nos dois casos, pela mesma razão (D-025 — ausência de análise não é veredito, não importa se a
+ausência veio de falha ou de nunca ter sido tentada). Qualquer distinção de tratamento entre os
+dois seria uma decisão de produto sobre a política de retentativa (por exemplo, "não vale a pena
+tentar de novo uma sessão sem transcript"), não uma decisão de elegibilidade — e essa política nem
+existe ainda no código (`noTranscript` é inalcançável hoje). Inventá-la agora seria decidir por
+antecipação um comportamento que ninguém pediu.
+
+**3) Onde o limite de retentativas do daemon (S4-T3) vai ter que encaixar — registrado como a
+tarefa pediu, não implementado.** Lendo `application/eligibility-assembly.ts#evaluateFullEligibility`
+e `application/end-day.ts`, o ponto de encaixe mais natural é **antes** da chamada a
+`evaluateFullEligibility` (ou dentro dela, como um sexto critério que o núcleo NÃO deveria ganhar
+sozinho — ver abaixo): o daemon vai precisar contar, por `sessionId` e por dia, quantas vezes já
+tentou gerar um handoff `model` e falhou, e comparar com um teto antes de sequer chamar a
+elegibilidade de novo. Dois formatos de dependência que vejo, para quem for fazer a S4-T3 escolher:
+
+- **Um contador em `DayState`** (S4-T2, já existe o tipo) seria o lugar natural para persistir
+  "tentativas de captura de `sessionId` X hoje" — evita inventar uma chave nova solta em disco
+  (D-027), já que `DayState` é exatamente o registro de progresso do dia.
+- **Alternativa sem estado novo:** contar handoffs `deterministic` já gravados hoje para o mesmo
+  `sessionId` lendo o histórico existente (se `Storage` algum dia guardar mais de um handoff por
+  sessão por dia — hoje só guarda o último, `saveHandoff` sobrescreve). Essa opção não funciona com
+  o formato atual de armazenamento sem mudança adicional, então tende a empurrar para a primeira.
+
+**Não implementei nenhuma das duas** — nem contador, nem chave nova em disco — porque a própria
+tarefa proibiu isso explicitamente e o limite é do daemon, não desta tarefa. Deixo aqui só o
+apontamento de onde o gancho fica, para a S4-T3 não descobrir isso do zero.
+
+**O que não se sustentou ao encostar no código:** nada. A causa descrita na tarefa bateu exatamente
+com o código lido (`evaluateFullEligibility` monta `previousCaptureToday` só a partir de
+`previousHandoff.facts`, ignorando `previousHandoff.source`) — não houve necessidade de corrigir
+nenhuma premissa da tarefa.
+
+**Opções que enxergo, para quem revisar:** A) manter a distinção dentro do núcleo, como implementei.
+B) mover para a montagem, deixando o núcleo cego a `source` — mais simples de explicar em uma
+frase, mais fraco como documentação executável da regra completa.
+**Minha escolha:** A, pelos motivos acima.

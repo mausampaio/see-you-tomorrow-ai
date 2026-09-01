@@ -1197,7 +1197,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       consertado (o `timeout` de `spawn-claude.ts` descarta o mesmo tipo de evidência, só que no
       caminho de timeout) registrados na Q-039.
 
-- [ ] **S4-T00e — Captura que falhou não pode bloquear a retentativa do dia.** Achada pelo
+- [~] **S4-T00e — Captura que falhou não pode bloquear a retentativa do dia.** Achada pelo
       mantenedor em 2026-08-31, testando à mão. **Antes do daemon**, que vai chamar a captura em
       laço e multiplicar o efeito.
 
@@ -1235,6 +1235,16 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
       *Aceite:* sessão com handoff determinístico do mesmo dia e evidência inalterada volta a ser
       elegível; com handoff `model` e evidência inalterada, continua `duplicateToday`.
+
+      **Implementado em 2026-08-31.** `core/eligibility.ts#PreviousCaptureToday` ganhou um campo
+      `source: HandoffSource`; a condição 5 (`duplicateToday`) só dispara quando
+      `previousCaptureToday.source === 'model'`. `application/eligibility-assembly.ts` só repassa
+      o `source` do handoff lido, sem decidir nada — a regra de quais handoffs contam como
+      "já capturado" mora inteira no núcleo, junto das outras quatro condições. `noTranscript`
+      recebeu o mesmo tratamento de `deterministic` (não uma regra distinta): os dois significam
+      "o modelo não analisou", por motivos diferentes, mas nenhum é veredito (D-025). A comparação
+      de assinatura (D-026) não mudou. Onde o limite de retentativas do daemon (S4-T3) deveria
+      encaixar, registrado sem implementar, em Q-040.
 
 - [ ] **S4-T0b — Implementar a D-031: capturar o que está vivo, listar o que foi fechado.**
       A **D-031** foi decidida em 2026-08-30 e **nunca implementada** — o código continua
