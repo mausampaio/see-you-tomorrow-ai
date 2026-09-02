@@ -1420,6 +1420,45 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       2 — a diferença é exatamente a sessão fechada, que nunca foi candidata. Escolhas registradas
       em **Q-043**.
 
+- [ ] **S4-T0e — O prompt de captura precisa proibir identificador inventado.** Achado pelo
+      mantenedor em 2026-09-02, num `end-day` real sobre a própria sessão de trabalho. **Trataria
+      como mais urgente que o daemon:** este defeito corrompe o artefato **em silêncio**.
+
+      **O que aconteceu.** A captura saiu boa — `source: model`, entendimento de 2043 caracteres
+      que acerta o trabalho do dia. Mas o terceiro `pendingItem` nomeia **cinco worktrees por ID**:
+      `agent-a3a7d78489e5801f0`, `agent-a55122566d4a0061c`, `agent-ab7a6b01cb4e42ea3`,
+      `agent-a1b18309afddc9a9e`, `agent-acf95a5b3de591220`. **Nenhuma das cinco existe.** Há 25
+      worktrees em disco e nenhuma bate com nenhum desses identificadores.
+
+      **A forma do erro é a pior possível.** A afirmação é **verdadeira** — há worktrees mescladas
+      precisando de limpeza — e **cada identificador é inventado**. Frase certa decorada com
+      especificidade falsa, que é justamente o que a faz parecer verificada. Quem ler amanhã vai
+      procurar diretório que nunca existiu.
+
+      **É o D-025 acontecendo pelo modelo, não pelo código** — primeira vez que pegamos isso neste
+      projeto. Todo o resto que a gente consertou (mensagem cega, ramo errado, ausência virando
+      afirmação) deixava rastro. Este **não deixa**: produz texto plausível.
+
+      **A lacuna, no `adapters/generation/system-prompt.ts`.** O prompt diz *"if the context has
+      nothing substantive, say so plainly instead of inventing activity"* — proíbe **inventar
+      atividade** e não diz nada sobre **inventar identificadores dentro de uma atividade real**.
+      O modelo viu caminhos sob `.claude/worktrees/` nos 47 `touchedFiles`, deduziu a categoria,
+      e preencheu os nomes.
+
+      *Escopo:* instrução específica para a forma observada, não um "não alucine" genérico —
+      **quando só dá para ver que uma categoria de coisas existe, mas não quais, diga isso em vez
+      de enumerar**. "Várias worktrees mescladas" é honesto; nomear as que não recebeu, não.
+
+      *Honestidade sobre o aceite:* é mudança de prompt, e o efeito **não é verificável por teste
+      de unidade** — depende do modelo. Não finja que é. O que dá para fazer: cobrir o texto do
+      prompt por teste (a instrução está lá) e registrar na questão que a validação real é
+      observar capturas reais. **Não invente um teste que aparenta provar o que não prova.**
+
+      *Candidato registrado, NÃO para agora:* verificação mecânica — conferir se identificadores
+      na saída aparecem na entrada. É tentador e arriscado (paráfrase legítima viraria falso
+      positivo, e reprovar handoff bom é pior que o defeito). Se o problema reaparecer depois
+      desta emenda, aí sim vale medir. Registre a ideia; não construa.
+
 - [ ] **S4-T0 — A evidência não pode ficar presa ao `cwd` de lançamento.** Aprovada pelo
       mantenedor em 2026-08-30. **O problema, observado no primeiro teste real:** a sessão subiu
       de `C:\Users\<usuario>` e o trabalho aconteceu numa pasta criada durante a conversa. O
@@ -1437,6 +1476,21 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       profunda o modelo lê a conversa, que **nomeia** o diretório de trabalho — isso não entrega
       fatos de git, mas muda o que esta tarefa precisa consertar. Especificar antes disso seria
       desenhar contra um alvo que está se movendo.
+
+      **EVIDÊNCIA REAL (2026-09-02), que substitui o caso sintético.** Um `end-day` sobre a própria
+      sessão de trabalho do mantenedor devolveu:
+
+      ```
+      sources: ["transcript","registry"]     facts.git: null
+      ```
+
+      A sessão foi lançada de `C:code`, que **não é repositório**. O trabalho todo aconteceu em
+      `C:codesee-you-tomorrow-ai` — 8 commits só no dia anterior, e dezenas na semana. O handoff
+      tem **zero** fatos de git.
+
+      Isto é melhor evidência que o caso do `seeya-todo-test`, que nem repositório era: aqui o
+      repositório **existe**, tem histórico denso, e a evidência não chega porque o `cwd` de
+      lançamento é o **pai** dele. Vale reavaliar o escopo desta tarefa com este caso na mão.
 
 - [~] **S4-T1 — `adapters/notification`** conforme o Spike B, com a cadeia de fallback e o
       contrato mínimo **sem ações**. Validação manual do `activationType="protocol"` com esquema
