@@ -1459,6 +1459,36 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       positivo, e reprovar handoff bom é pior que o defeito). Se o problema reaparecer depois
       desta emenda, aí sim vale medir. Registre a ideia; não construa.
 
+      **EMENDA (2026-09-02): duas falhas, dois modelos, mesma raiz — a instrução precisa cobrir
+      as duas.** O mantenedor repetiu a mesma captura trocando sonnet por haiku. O haiku **não
+      inventou identificador nenhum** — e produziu outra coisa, pior de detectar:
+
+      > *"Background search confirmed the IDs the user suspected as hallucination were **actually
+      > introduced by the user's own documentation, not found in the codebase before**."*
+
+      **Conclusão invertida.** A busca achou os IDs no `PLANO-DE-ENTREGA.md` porque **eu os
+      escrevi lá**, citando-os como invenções. O modelo leu o resultado e concluiu o oposto: que
+      não eram alucinação. Quem ler esse handoff amanhã recebe o achado de cabeça para baixo.
+
+      **E é pior que a invenção do sonnet, por assimetria de verificação:** um identificador
+      inventado é **conferível** — um `ls` resolveu em cinco linhas. Uma conclusão invertida se
+      apresenta como resultado de investigação e destrói o achado real em silêncio, sem nada para
+      conferir contra.
+
+      *Escopo ampliado:* a instrução cobre **as duas formas** — não enumerar itens de uma
+      categoria que só se sabe existir, **e** não afirmar conclusão sobre algo visto pela metade.
+      Quando a evidência estiver incompleta, **dizer que está** é a resposta certa (D-025), e vale
+      tanto para identificador quanto para veredito.
+
+      *Observação que muda a leitura:* a previsão de que o modelo mais barato falharia no caso
+      difícil **estava errada**. No caso fácil (checklist) o haiku perdeu o item de julgamento; no
+      caso difícil (sessão discursiva) ele **pegou** o item de julgamento e não inventou nada.
+      Não há aqui uma ordenação simples de "modelo melhor" — há formas de erro diferentes, e a
+      instrução tem que fechar as duas portas.
+
+      *Ver também:* **Q-044**, sobre o truncamento em 500 caracteres ter cortado justamente a
+      conclusão da mensagem que originou a inversão.
+
 - [ ] **S4-T0 — A evidência não pode ficar presa ao `cwd` de lançamento.** Aprovada pelo
       mantenedor em 2026-08-30. **O problema, observado no primeiro teste real:** a sessão subiu
       de `C:\Users\<usuario>` e o trabalho aconteceu numa pasta criada durante a conversa. O

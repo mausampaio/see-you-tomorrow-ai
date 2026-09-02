@@ -3547,3 +3547,60 @@ identidade de sessão descartada com a listagem de fechadas (populações difere
 nomear sessões que o usuário filtrou de propósito, que é ruído na maioria dos usos reais de
 `--session`. Se o PO achar que vale, é escopo novo, não uma correção desta tarefa.
 **Minha escolha:** não implementei, como o item "Fora de escopo" da tarefa já antecipava.
+---
+
+## Q-044 — O corte em 500 caracteres trunca pelo fim, e conclusão costuma morar no fim
+
+**Tarefa:** nenhuma — achado do mantenedor em 2026-09-02, comparando capturas reais.
+**Bloqueia:** não. Mas mexe num número que foi escolhido **sem** medição, e agora tem um caso
+concreto contra ele.
+
+**O caso.** Uma captura com haiku produziu, no `understanding`, a afirmação de que os
+identificadores inventados numa captura anterior **não eram alucinação** — que teriam vindo da
+documentação. É o **inverso** do que se estabeleceu: eles só existem no `PLANO-DE-ENTREGA.md`
+porque foram escritos lá **citando-os como invenções**.
+
+**A causa provável, e é hipótese, não medição.** A explicação da busca — incluindo a conclusão
+"os IDs não existiam antes de eu documentar" — estava numa **mensagem de assistente longa**. O
+`MAX_ASSISTANT_MESSAGE_CHARS` (`adapters/transcript/facts.ts`) corta em **500 caracteres**, **pelo
+fim**, marcando com `[…]`. A conclusão vinha depois do corte.
+
+Se for isso, o modelo recebeu a premissa ("os IDs aparecem no documento") **sem o desfecho**, e
+completou sozinho — na direção errada, mas plausível a partir do que sobrou.
+
+**Por que isto é mais que "aumentar o número".** Truncar **pelo fim** é o pior corte possível para
+o gênero de texto em questão. Mensagem de assistente costuma abrir com contexto e **fechar com a
+conclusão** — é a forma que o próprio prompt do away summary do Claude Code prescreve (Spike I:
+*"Lead with the overall goal and current task, then the one next action"*, com a ação no fim).
+Cortar os últimos caracteres remove sistematicamente a parte mais informativa.
+
+**E o número não tem medição por trás.** A **Q-036** registra: o custo **não discriminou** volume
+(a chamada com mais conteúdo saiu 3,5x mais barata que a com menos), então 500 foi escolhido por
+**qualidade de prompt** — simetria com `MAX_LAST_PROMPTS`, limitar um turno verboso. Escolha
+honesta na época, e agora há um caso onde ela custou uma inversão de conclusão.
+
+**Opções que enxergo:**
+
+**A) Aumentar o limite.** Simples e não ataca a causa: continua cortando pelo fim, só que mais
+tarde. E a Q-036 mostrou que não dá para justificar um número novo por custo.
+
+**B) Cortar pelo meio, preservando começo e fim.** Ataca a causa: mantém a abertura (contexto) e o
+fecho (conclusão), marcando o buraco. Mais código, e a marca do corte precisa ser visível para o
+modelo não ler os dois pedaços como texto contínuo — o que criaria um terceiro tipo de invenção,
+pior que os dois já observados.
+
+**C) Não truncar mensagem, truncar quantidade.** Menos mensagens inteiras em vez de mais mensagens
+mutiladas. Preserva a estrutura de cada uma; perde as mais antigas.
+
+**D) Deixar como está e tratar na instrução.** A **S4-T0e** já vai proibir afirmar conclusão sobre
+coisa vista pela metade. Se a instrução funcionar, o modelo diria "a busca foi inconclusiva" em vez
+de inverter. **Mais barato, e não resolve a perda de informação — só a mentira sobre ela.**
+
+**Minha inclinação, para registro:** (D) primeiro, porque a S4-T0e já está sendo feita e cobre a
+consequência mais perigosa; depois medir se (B) ou (C) vale, **com o caso na mão** em vez de por
+analogia — que é exatamente o erro que a D-011 já cometeu duas vezes.
+
+**Um cuidado, para não trocar um problema por outro:** qualquer uma das opções aumenta o texto que
+vai para o modelo, e a Q-036 registra que **o custo não é previsível pelo volume** neste caminho.
+Medir antes de assumir que "um pouco mais" é barato.
+**Resposta:** _(em aberto)_
