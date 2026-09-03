@@ -3604,3 +3604,77 @@ analogia — que é exatamente o erro que a D-011 já cometeu duas vezes.
 vai para o modelo, e a Q-036 registra que **o custo não é previsível pelo volume** neste caminho.
 Medir antes de assumir que "um pouco mais" é barato.
 **Resposta:** _(em aberto)_
+
+---
+
+## Q-045 — S4-T0e entregue: prompt fecha as duas portas, mas a validação real ainda não aconteceu
+
+**Tarefa:** S4-T0e (`docs/PLANO-DE-ENTREGA.md`, incluindo a EMENDA de 2026-09-02).
+**Bloqueia:** não a entrega desta tarefa — o texto está no prompt e coberto por teste. Bloqueia
+**fechar o assunto**: a única prova que importaria (o modelo parar de cometer as duas formas do
+defeito) não foi observada.
+
+**O que foi feito.** `GENERATION_SYSTEM_PROMPT`
+(`src/adapters/generation/system-prompt.ts`) ganhou duas frases novas, uma para cada forma medida:
+
+1. *"If you can tell a category of things exists but not which specific ones, name the category —
+   not invented items."* — fecha a forma do sonnet (nomear cinco worktrees inexistentes a partir
+   de caminhos vistos em `touchedFiles`).
+2. *"If your evidence is partial — an unfinished search, a cut-off message — say it is partial
+   instead of stating what it proves."* — fecha a forma do haiku (conclusão invertida a partir de
+   uma busca/mensagem incompleta).
+
+Tamanho do prompt: **463 → 701 caracteres** (string em `GENERATION_SYSTEM_PROMPT`, sem contar
+aspas/concatenação do código-fonte) — cresceu **51%**. Ainda curto o suficiente para caber como
+argumento de `--system-prompt` (D-015 só restringe texto de tamanho variável); D-011 pede atenção
+a cada caractere aqui porque é piso pago em toda chamada de geração — registrado no comentário
+acima da constante e num teste-tripwire (`length < 1000`) para que uma futura adição não cresça
+sem alguém perceber e medir.
+
+**Por que não é maior nem menor.** Testei formulações mais curtas ("não invente nada", genérico) e
+mais longas (citando termos como "search" e "cut-off message" com mais contexto). A tarefa pediu
+explicitamente instrução calibrada às **duas formas observadas**, não um "não alucine" genérico —
+então o texto ficou específico o bastante para descrever "categoria vs. item nomeado" e "evidência
+parcial vs. conclusão", sem citar os IDs reais nem o incidente (o prompt é texto de produção, não
+registro — AGENTS.md § Comentários: "nunca cite a mensagem que despachou a tarefa").
+
+**O que a cobertura de teste prova, e o que ela NÃO prova.**
+`tests/unit/adapters/generation/system-prompt.test.ts` prova que: (a) as duas frases existem
+literalmente na constante exportada; (b) a constante preserva a instrução original ("say so
+plainly instead of inventing activity"); (c) é exatamente essa string, e não outra, que
+`buildLeanArgs`/`buildDeepArgs` (`args.ts`) passam como valor de `--system-prompt` — ou seja, o
+texto não fica esquecido num arquivo que ninguém importa. **Isso é tudo que um teste de unidade
+pode provar sobre uma string.** Nenhum teste aqui chama o modelo real, então nenhum teste prova
+que o modelo passa a obedecer — depende do modelo, é o ponto central que a tarefa pediu para não
+maquiar.
+
+**Não construí o candidato "chamar o modelo de verdade e checar que ele não inventa".** Seria
+exatamente o padrão que a **Q-029** já reprovou para o `--append-system-prompt-file`: flaky por
+natureza (depende de amostra de um modelo não determinístico), e um teste que "parece" provar
+ausência de alucinação dá **falsa confiança** — pior que não ter teste nenhum, porque quem ler o
+verde para de desconfiar.
+
+**A validação real, registrada e pendente: observar capturas reais.** O jeito honesto de saber se
+isto funcionou é o mesmo que achou o defeito: rodar `end-day` de verdade (sonnet e haiku, os dois
+modelos que já erraram, cada um de um jeito) sobre sessões com a mesma forma de evidência ambígua
+— caminhos de categoria conhecida sem nomes confirmáveis, buscas/mensagens que terminam antes da
+conclusão — e checar o `pendingItems`/`understanding` resultante à mão. **Isso ainda não
+aconteceu.** Não virou tarefa nem spike porque exigiria chamadas reais de `claude` (custo real) e
+não há ainda um roteiro de "qual evidência ambígua reproduzir" que não seja recriar os dois casos
+reais do mantenedor — decisão de quando/como fazer isso fica para o mantenedor, não para este
+agente decidir sozinho.
+
+**Candidato mecânico, registrado e explicitamente NÃO construído agora:** verificar por código se
+todo identificador que aparece na saída (`pendingItems`, `understanding`, `tomorrowPlan`) também
+aparece em algum lugar da entrada (`touchedFiles`, prompts, fatos de git). Pegaria a forma 1
+(identificador inventado) com certeza mecânica — um `grep` da saída contra a entrada, sem
+depender do modelo se comportar. **Por que não construir agora:** o risco simétrico é pior que o
+defeito — uma paráfrase legítima (o modelo reescrevendo `agent-a85a4e2e822435fcc` como "a
+worktree do S4-T0e", ou resumindo um caminho longo) reprovaria um handoff **bom**, e um handoff
+bom marcado como suspeito é o tipo de falso positivo que o D-025 já identificou como pior que a
+ausência de dado. Fica registrado aqui para o caso de a forma 1 **reaparecer** depois desta
+emenda — aí a medição teria um caso concreto para calibrar o que conta como "identificador" (UUID,
+caminho, nome de arquivo?) e o que conta como paráfrase aceitável, em vez de adivinhar a regra
+antes de ver um exemplo real de falso positivo.
+
+**Resposta:** _(em aberto — pendente de observação de capturas reais pelo mantenedor)_
