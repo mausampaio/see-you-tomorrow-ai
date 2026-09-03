@@ -1420,7 +1420,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       2 — a diferença é exatamente a sessão fechada, que nunca foi candidata. Escolhas registradas
       em **Q-043**.
 
-- [ ] **S4-T0e — O prompt de captura precisa proibir identificador inventado.** Achado pelo
+- [~] **S4-T0e — O prompt de captura precisa proibir identificador inventado.** Achado pelo
       mantenedor em 2026-09-02, num `end-day` real sobre a própria sessão de trabalho. **Trataria
       como mais urgente que o daemon:** este defeito corrompe o artefato **em silêncio**.
 
@@ -1488,6 +1488,21 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
       *Ver também:* **Q-044**, sobre o truncamento em 500 caracteres ter cortado justamente a
       conclusão da mensagem que originou a inversão.
+
+      **Implementado em 2026-09-03:** `GENERATION_SYSTEM_PROMPT`
+      (`src/adapters/generation/system-prompt.ts`) ganhou duas frases, uma por forma medida —
+      "name the category, not invented items" para a forma do sonnet (item nomeado a partir de
+      categoria só deduzida), "say it is partial instead of stating what it proves" para a forma
+      do haiku (conclusão sobre busca/mensagem cortada). Nenhuma cita os IDs reais nem o incidente
+      — texto de produção, não registro (AGENTS.md § Comentários). Prompt cresceu de 463 para 701
+      caracteres (+51%); D-011 pede atenção a cada caractere aqui, então o comentário acima da
+      constante e um teste-tripwire (`length < 1000`) ficam como aviso para quem adicionar mais.
+      Teste novo, `tests/unit/adapters/generation/system-prompt.test.ts`, cobre que as duas frases
+      existem na constante e que é exatamente essa string que `args.ts` manda em `--system-prompt`
+      — **não** que o modelo obedece, o que nenhum teste de unidade prova. Candidato mecânico
+      (conferir identificador da saída contra a entrada) registrado e **não** construído — risco
+      de falso positivo em paráfrase legítima. Validação real (observar capturas de verdade) ainda
+      **não aconteceu** — registrado em **Q-045**, em aberto para o mantenedor decidir quando.
 
 - [ ] **S4-T0 — A evidência não pode ficar presa ao `cwd` de lançamento.** Aprovada pelo
       mantenedor em 2026-08-30. **O problema, observado no primeiro teste real:** a sessão subiu
