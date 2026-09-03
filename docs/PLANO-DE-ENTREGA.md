@@ -1522,6 +1522,34 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       repositório **existe**, tem histórico denso, e a evidência não chega porque o `cwd` de
       lançamento é o **pai** dele. Vale reavaliar o escopo desta tarefa com este caso na mão.
 
+      **ESCOPO FECHADO (2026-09-02) pela D-032.** A tarefa deixa de ser "derivar diretórios
+      candidatos e ver no que dá" e passa a ter forma decidida:
+
+      1. **A evidência de git segue os `touchedFiles`, não o `cwd` de lançamento.** Sobe de cada
+         arquivo até achar um `.git`, desduplica pela raiz.
+      2. **`HandoffFacts.git` vira lista**, com os fatos completos de cada repositório.
+      3. **Migração obrigatória, e é a parte que não pode ser esquecida.** Handoff versão 1, com
+         `git` singular, é lido como lista de um elemento. Sem isso, subir o `HANDOFF_SCHEMA_VERSION`
+         torna **ilegível todo handoff já gravado** — o `resolveSchemaVersion` **lança**, não
+         degrada — e o `seeya start-day` lê exatamente isso.
+      4. **Normalizar a raiz antes de desduplicar**, reusando `core/cwd-normalization.ts` (S3-T5).
+         Sem isso os mesmos caminhos com maiúscula diferente viram dois repositórios — aconteceu
+         na medição que originou a D-032.
+      5. **Arquivos fora de qualquer repositório são contados e declarados** (12 de 47 na sessão
+         medida). Sumir com eles esconde atividade.
+      6. **O `cwd` de lançamento continua valendo quando for repositório.**
+      7. **Limite de quantos repositórios visitar, rotulado no código como E/S e não julgamento de
+         produto**, com o excedente declarado — mesma distinção da Q-025.
+
+      *Aceite:* uma sessão lançada de fora de qualquer repositório, que tocou arquivos em **dois**
+      repositórios diferentes, produz handoff com os dois — e um handoff **versão 1 já em disco**
+      continua sendo lido sem erro. **Os dois casos com teste**; o segundo é o que protege o
+      histórico de quem já usa.
+
+      *Fora de escopo:* mudar o que o `--session`/`ignore` fazem com caminho (já resolvido na
+      S3-T5 — **reuse**, não reescreva), e qualquer tentativa de adivinhar um repositório
+      "principal" para voltar ao singular.
+
 - [~] **S4-T1 — `adapters/notification`** conforme o Spike B, com a cadeia de fallback e o
       contrato mínimo **sem ações**. Validação manual do `activationType="protocol"` com esquema
       `seeya://` no Windows; se não se provar, o produto segue sem ações clicáveis e nada quebra.
