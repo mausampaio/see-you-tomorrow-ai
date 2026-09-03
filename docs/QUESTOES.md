@@ -3607,6 +3607,9 @@ Medir antes de assumir que "um pouco mais" é barato.
 
 ---
 
+
+---
+
 ## Q-045 — S4-T0e entregue: prompt fecha as duas portas, mas a validação real ainda não aconteceu
 
 **Tarefa:** S4-T0e (`docs/PLANO-DE-ENTREGA.md`, incluindo a EMENDA de 2026-09-02).
@@ -3678,3 +3681,91 @@ caminho, nome de arquivo?) e o que conta como paráfrase aceitável, em vez de a
 antes de ver um exemplo real de falso positivo.
 
 **Resposta:** _(em aberto — pendente de observação de capturas reais pelo mantenedor)_
+
+---
+
+## Q-046 — Nove escolhas fazendo S4-T0 (D-032: evidência de git por repositório, e a migração), registradas para confirmação
+
+**Tarefa:** S4-T0
+**Bloqueia:** não — a tarefa foi entregue com a solução mínima em cada ponto, mesmo padrão de
+Q-017/Q-019/Q-021/Q-022/Q-023/Q-027.
+
+**1) Nomes novos, ainda fora do glossário do `AGENTS.md` § "Idioma".** `RepositoryGitFacts`
+(`core/types.ts`), `readEvidenceAcrossRepos`/`GitEvidenceAcrossRepos` (`core/ports.ts`), e as duas
+chaves novas que vão para disco em `facts`: `filesOutsideRepository`, `reposNotVisited`. Segui o
+padrão já estabelecido (`GitFacts`/`readFacts`, `save<Nome>`/`read<Nome>`) em vez de inventar
+convenção nova. **Minha escolha:** os nomes ficam como estão até confirmação; se algum divergir do
+que o mantenedor teria escolhido, é troca de string, não de desenho.
+
+**2) `root` como o nome do campo que identifica o repositório em `RepositoryGitFacts`**, em vez de
+reaproveitar `cwd` ou `path` (`WorktreeFacts` já usa `path` para outra coisa — o diretório de um
+*worktree*, não de um repositório — então usar o mesmo nome para os dois níveis pareceu mais
+confuso que um nome novo). **Minha escolha:** `root`, por ser o termo que a própria D-032 usa na
+prosa ("raiz de repositório").
+
+**3) `filesOutsideRepository`/`reposNotVisited` viraram `number | null` em `HandoffFacts`, não
+`number` com `0` como default para o handoff migrado.** Um v1 nunca mediu nenhum dos dois — `0`
+alegaria uma medição que não existiu (D-025). O custo é que todo consumidor de `HandoffFacts` que
+algum dia quiser somar/exibir esses campos precisa tratar `null` explicitamente; achei que o custo
+vale a honestidade, e é o mesmo tipo de escolha que `SessionListingInfo`/`EndDayScope` já fizeram
+com união discriminada em vez de sentinela. **Minha escolha:** `number | null`, `null` só na saída
+da migração, nunca produzido por uma captura de verdade.
+
+**4) `MAX_GIT_ROOTS_TO_VISIT = 8`, sem medição — mesma classe de risco que a Q-025 já nomeou para
+`MAX_BRIEFING_SCAN_DAYS`.** O raciocínio: cada raiz visitada custa de 4 a 6 processos `git`
+(`readFacts` sozinho spawna 4, mais um par por worktree que encontrar), e o caso comum que a D-032
+descreve — frontend + backend na mesma sessão — é 2. Escolhi uma folga generosa (4x o caso comum)
+sem crunching de números reais, porque não há hoje uma sessão real que tenha tocado mais de dois
+repositórios para medir contra. **Minha escolha:** 8, exportado e com parâmetro de override no
+método (`readEvidenceAcrossRepos(cwd, touchedFiles, maxRootsToVisit?)`) — se o número estiver
+errado, é uma constante para trocar, não um redesenho.
+
+**5) A ordem de prioridade quando o limite corta: a raiz do `cwd` sempre entra primeiro na lista a
+visitar**, e as raízes vindas de `touchedFiles` entram na ordem em que os arquivos aparecem (sem
+reordenar por frequência de arquivo por repositório). A D-032 (item 6) só exige que o `cwd` nunca
+seja descartado; não diz nada sobre qual dos demais repositórios "ganha" quando há mais do que o
+limite permite. **Minha escolha:** ordem de chegada em `touchedFiles`, por ser a mais simples e não
+introduzir um critério de "importância" que a decisão não pediu.
+
+**6) A raiz é resolvida por `fs.stat` de um `.git` subindo diretório por diretório
+(`adapters/git/repo-roots.ts#findRepoRoot`), nunca por `git rev-parse --show-toplevel`.** Mais
+barato por arquivo (sem spawnar processo), e correto pela mesma razão que `isInsideWorkTree`
+confia na presença do marcador em vez de interpretar saída do `git`. **Risco aceito e registrado no
+comentário:** um `.git` que seja um arquivo apontando para outro lugar (worktree/submódulo) é
+tratado como raiz **onde o arquivo `.git` está**, não onde ele aponta — suficiente para dizer "isto
+é uma raiz de repositório", insuficiente para saber se duas raízes assim resolvidas são,
+internamente, o mesmo repositório físico (um worktree e seu principal apareceriam como duas
+entradas). Não é o caso que a D-032 mediu (a sessão real tocou um repositório comum e o resto fora
+de qualquer repo), então não bloqueei nisso — mas fica registrado para quem for medir sessões reais
+com worktree.
+
+**7) `gatherEvidence` deixou de rodar transcript e git em paralelo (`Promise.all`) e passou a
+rodar sequencial.** Não é uma escolha entre alternativas equivalentes: git agora depende de
+`touchedFiles`, que só existe depois que o transcript resolve (ou seu padrão vazio, quando não há
+transcript). **Custo aceito:** uma sessão com transcript grande paga a leitura antes de começar a
+falar com o `git`, em vez de sobrepor as duas I/Os. Não medi o impacto em tempo de captura — a
+config atual não tem orçamento de tempo por fonte, só por sessão inteira (`budgetPerSessionUsd` é
+custo de modelo, não tempo de evidência), então não havia contra o que medir.
+
+**8) O `root` de um handoff migrado de v1 é preenchido com o `cwd` de topo do próprio documento**,
+não com um valor sintético nem deixado ausente. Antes de `root` existir, "o repositório" de um
+handoff v1 sempre foi implicitamente "o que está em `cwd`" — backfillar com o próprio `cwd` é
+reafirmar exatamente essa leitura antiga, não inventar uma nova. **Minha escolha:** `document.cwd`,
+com o caso de um `cwd` que não seja string deixado para a validação normal do schema pegar depois
+(a migração não tenta consertar um documento que já estava malformado antes dela).
+
+**9) A migração vive no schema (`adapters/storage/handoff-schema.ts#HANDOFF_SCHEMA_MIGRATIONS`),
+registrada no mecanismo já genérico de `resolveSchemaVersion`, e nunca reescreve o arquivo em
+disco.** A tarefa deixava as três decisões (onde mora, se reescreve) para quem implementasse.
+Escolhi o schema porque é onde a forma v1/v2 já está descrita lado a lado (os dois zod schemas), e
+"nunca reescreve" porque `resolveSchemaVersion` já era uma função pura recebendo o documento
+parseado — fazer diferente exigiria `StorageAdapter` gravar de volta a cada leitura, o que quebraria
+`--dry-run` (que promete não escrever nada) e complicaria _quem lê o mesmo handoff duas vezes_
+(cada `seeya end-day --session` do dia relê e regrava `summary.md` a partir de `listHandoffs`) sem
+ganho nenhum — a tradução em memória custa a mesma migração de novo a cada leitura, e é barata o
+suficiente (nenhum I/O extra) para não valer a complexidade de cache. **Testado de propósito:**
+`tests/integration/storage/handoff.test.ts`, "reading the same v1 file twice produces the identical
+result both times" — o arquivo em disco é conferido *entre* as duas leituras e continua
+`schemaVersion: 1`.
+
+**Resposta:** _(em aberto)_

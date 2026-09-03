@@ -15,7 +15,9 @@ const NO_EVIDENCE_FACTS: HandoffFacts = {
   lastPrompts: [],
   assistantMessages: [],
   touchedFiles: [],
-  git: null,
+  git: [],
+  filesOutsideRepository: 0,
+  reposNotVisited: 0,
 };
 
 describe('projectPolicyFor', () => {
@@ -181,20 +183,36 @@ describe('evaluateFullEligibility (D-026 anti-duplication)', () => {
         lastPrompts: [],
         assistantMessages: [],
         touchedFiles: [],
-        git: { branch: 'main', dirty: false, modifiedFiles: [], commitsToday: [], worktrees: [] },
+        git: [
+          {
+            root: session.cwd,
+            branch: 'main',
+            dirty: false,
+            modifiedFiles: [],
+            commitsToday: [],
+            worktrees: [],
+          },
+        ],
+        filesOutsideRepository: 0,
+        reposNotVisited: 0,
       };
       const currentFacts: HandoffFacts = {
         lastActivity: null,
         lastPrompts: [],
         assistantMessages: [],
         touchedFiles: [],
-        git: {
-          branch: 'main',
-          dirty: true,
-          modifiedFiles: ['src/a.ts'],
-          commitsToday: [{ sha: '1b7fd99', title: 'work' }],
-          worktrees: [],
-        },
+        git: [
+          {
+            root: session.cwd,
+            branch: 'main',
+            dirty: true,
+            modifiedFiles: ['src/a.ts'],
+            commitsToday: [{ sha: '1b7fd99', title: 'work' }],
+            worktrees: [],
+          },
+        ],
+        filesOutsideRepository: 0,
+        reposNotVisited: 0,
       };
       const storage = new FakeStorage(DEFAULT_TEST_CONFIG);
       await storage.saveHandoff('2026-08-16', {

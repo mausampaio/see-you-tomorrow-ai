@@ -7,7 +7,9 @@ const NO_EVIDENCE_FACTS: HandoffFacts = {
   lastPrompts: [],
   assistantMessages: [],
   touchedFiles: [],
-  git: null,
+  git: [],
+  filesOutsideRepository: 0,
+  reposNotVisited: 0,
 };
 
 describe('sameEvidence', () => {
@@ -88,30 +90,36 @@ describe('buildEvidenceSignature (D-026)', () => {
     expect(buildEvidenceSignature(facts).transcript).toBe('2026-08-16T20:00:00.000Z');
   });
 
-  it('git token is null when there is no repository at all (hasGit: false)', () => {
+  it('git token is null when there is no repository at all (D-032: git: [])', () => {
     expect(buildEvidenceSignature(NO_EVIDENCE_FACTS).git).toBeNull();
   });
 
   it('git token changes when the git facts change — the autonomous-agent case (D-026)', () => {
     const before: HandoffFacts = {
       ...NO_EVIDENCE_FACTS,
-      git: {
-        branch: 'main',
-        dirty: false,
-        modifiedFiles: [],
-        commitsToday: [],
-        worktrees: [],
-      },
+      git: [
+        {
+          root: 'c:\\code\\projeto',
+          branch: 'main',
+          dirty: false,
+          modifiedFiles: [],
+          commitsToday: [],
+          worktrees: [],
+        },
+      ],
     };
     const after: HandoffFacts = {
       ...NO_EVIDENCE_FACTS,
-      git: {
-        branch: 'main',
-        dirty: true,
-        modifiedFiles: ['src/a.ts'],
-        commitsToday: [{ sha: '1b7fd99', title: 'docs: especificação inicial' }],
-        worktrees: [],
-      },
+      git: [
+        {
+          root: 'c:\\code\\projeto',
+          branch: 'main',
+          dirty: true,
+          modifiedFiles: ['src/a.ts'],
+          commitsToday: [{ sha: '1b7fd99', title: 'docs: especificação inicial' }],
+          worktrees: [],
+        },
+      ],
     };
     const beforeSignature = buildEvidenceSignature(before);
     const afterSignature = buildEvidenceSignature(after);
@@ -124,10 +132,46 @@ describe('buildEvidenceSignature (D-026)', () => {
   it('identical git facts produce the identical token — same evidence confirms', () => {
     const facts: HandoffFacts = {
       ...NO_EVIDENCE_FACTS,
-      git: { branch: 'main', dirty: false, modifiedFiles: [], commitsToday: [], worktrees: [] },
+      git: [
+        {
+          root: 'c:\\code\\projeto',
+          branch: 'main',
+          dirty: false,
+          modifiedFiles: [],
+          commitsToday: [],
+          worktrees: [],
+        },
+      ],
     };
     const first = buildEvidenceSignature(facts);
     const second = buildEvidenceSignature({ ...facts });
     expect(sameEvidence(first, second)).toBe(true);
   });
+
+  it(
+    'D-032: two repositories in a different array order still produce the identical token — an ' +
+      'order-only difference is never read as "the evidence changed"',
+    () => {
+      const repoA = {
+        root: 'c:\\code\\frontend',
+        branch: 'main',
+        dirty: false,
+        modifiedFiles: [],
+        commitsToday: [],
+        worktrees: [],
+      };
+      const repoB = {
+        root: 'c:\\code\\backend',
+        branch: 'main',
+        dirty: true,
+        modifiedFiles: ['api.ts'],
+        commitsToday: [],
+        worktrees: [],
+      };
+      const first = buildEvidenceSignature({ ...NO_EVIDENCE_FACTS, git: [repoA, repoB] });
+      const second = buildEvidenceSignature({ ...NO_EVIDENCE_FACTS, git: [repoB, repoA] });
+      expect(first.git).toEqual(second.git);
+      expect(sameEvidence(first, second)).toBe(true);
+    },
+  );
 });

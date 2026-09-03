@@ -227,6 +227,136 @@ describe('GitAdapter.readFacts — never writes to the repository (AGENTS.md § 
   });
 });
 
+/**
+ * D-032 (S4-T0): git evidence now follows `touchedFiles` instead of the session's launch `cwd`.
+ * This is the suite's aceite test — "sessão lançada de fora de qualquer repositório, que tocou
+ * arquivos em dois repositórios diferentes, produz handoff com os dois" — built against two real
+ * repositories and a `cwd` that is neither of them, the same shape as the real capture that
+ * motivated D-032 (`C:\code`, parent of `C:\code\see-you-tomorrow-ai`, `sources:
+ * ["transcript","registry"]`, zero git facts).
+ */
+describe('GitAdapter.readEvidenceAcrossRepos — D-032', () => {
+  let repoA: GitFixture;
+  let repoB: GitFixture;
+  let outsideDir: string;
+
+  afterEach(async () => {
+    await Promise.all([removeGitFixture(repoA), removeGitFixture(repoB)]);
+    await rm(outsideDir, { recursive: true, force: true });
+  });
+
+  async function buildTwoRepos(): Promise<void> {
+    repoA = await createGitFixture();
+    await writeAndStage(repoA.mainDir, 'a.txt', 'frontend\n');
+    await commitAt(repoA.mainDir, YESTERDAY_10PM, 'feat: frontend work');
+
+    repoB = await createGitFixture();
+    await writeAndStage(repoB.mainDir, 'b.txt', 'backend\n');
+    await commitAt(repoB.mainDir, TODAY_9AM, 'feat: backend work');
+
+    outsideDir = await mkdtemp(path.join(tmpdir(), 'seeya-git-outside-'));
+  }
+
+  it('a cwd outside any repository, with touched files in two repositories, reports both', async () => {
+    await buildTwoRepos();
+    const adapter = new GitAdapter({ clock: new FakeClock(NOW) });
+
+    const result = await adapter.readEvidenceAcrossRepos(outsideDir, [
+      path.join(repoA.mainDir, 'a.txt'),
+      path.join(repoB.mainDir, 'b.txt'),
+    ]);
+
+    const roots = result.repositories.map((repo) => toPosix(repo.root)).sort();
+    expect(roots).toEqual([toPosix(repoA.mainDir), toPosix(repoB.mainDir)].sort());
+    expect(result.filesOutsideRepository).toBe(0);
+    expect(result.reposNotVisited).toBe(0);
+    const frontend = result.repositories.find(
+      (repo) => toPosix(repo.root) === toPosix(repoA.mainDir),
+    );
+    expect(frontend?.commitsToday).toHaveLength(0); // dated yesterday
+    const backend = result.repositories.find(
+      (repo) => toPosix(repo.root) === toPosix(repoB.mainDir),
+    );
+    expect(backend?.commitsToday).toHaveLength(1);
+  });
+
+  it("the launch cwd's own repository is included even with no touched files inside it (D-032 rule 6)", async () => {
+    await buildTwoRepos();
+    const adapter = new GitAdapter({ clock: new FakeClock(NOW) });
+
+    const result = await adapter.readEvidenceAcrossRepos(repoA.mainDir, [
+      path.join(repoB.mainDir, 'b.txt'),
+    ]);
+
+    const roots = result.repositories.map((repo) => toPosix(repo.root));
+    expect(roots).toContain(toPosix(repoA.mainDir));
+    expect(roots).toContain(toPosix(repoB.mainDir));
+  });
+
+  it('a touched file outside every repository is counted, not silently dropped (D-025)', async () => {
+    await buildTwoRepos();
+    const adapter = new GitAdapter({ clock: new FakeClock(NOW) });
+    const outsideFile = path.join(outsideDir, 'notes.txt');
+
+    const result = await adapter.readEvidenceAcrossRepos(outsideDir, [
+      path.join(repoA.mainDir, 'a.txt'),
+      outsideFile,
+    ]);
+
+    expect(result.filesOutsideRepository).toBe(1);
+    expect(result.repositories).toHaveLength(1);
+  });
+
+  it('a cwd and touchedFiles all outside any repository report zero repositories, never a thrown error', async () => {
+    await buildTwoRepos();
+    const adapter = new GitAdapter({ clock: new FakeClock(NOW) });
+
+    const result = await adapter.readEvidenceAcrossRepos(outsideDir, [
+      path.join(outsideDir, 'a.txt'),
+      path.join(outsideDir, 'b.txt'),
+    ]);
+
+    expect(result).toStrictEqual({
+      repositories: [],
+      filesOutsideRepository: 2,
+      reposNotVisited: 0,
+    });
+  });
+
+  it('the same root reached via cwd and via a touched file is not visited twice (normalize before dedup)', async () => {
+    await buildTwoRepos();
+    const adapter = new GitAdapter({ clock: new FakeClock(NOW) });
+
+    const result = await adapter.readEvidenceAcrossRepos(repoA.mainDir, [
+      path.join(repoA.mainDir, 'a.txt'),
+    ]);
+
+    expect(result.repositories).toHaveLength(1);
+  });
+
+  it(
+    'more repositories than the visit ceiling: the excess is declared as reposNotVisited, never ' +
+      'silently dropped (D-025) — cwd stays inside the ceiling either way (aceite rule 6)',
+    async () => {
+      await buildTwoRepos();
+      const adapter = new GitAdapter({ clock: new FakeClock(NOW) });
+      // maxRootsToVisit: 1 turns these two ordinary repositories into "more than the ceiling"
+      // without building nine real repositories on disk just to reach the production default
+      // (MAX_GIT_ROOTS_TO_VISIT) — see readEvidenceAcrossRepos's own docstring for why the limit
+      // is an injectable parameter.
+      const result = await adapter.readEvidenceAcrossRepos(
+        repoA.mainDir,
+        [path.join(repoB.mainDir, 'b.txt')],
+        1,
+      );
+
+      expect(result.repositories).toHaveLength(1);
+      expect(toPosix(result.repositories[0]!.root)).toBe(toPosix(repoA.mainDir));
+      expect(result.reposNotVisited).toBe(1);
+    },
+  );
+});
+
 describe('GitAdapter.readFacts — a worktree git still remembers but whose directory is gone (D-022)', () => {
   it('is reported as a rejection, visible and countable, without taking down the others', async () => {
     fixture = await createGitFixture();

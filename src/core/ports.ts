@@ -351,7 +351,7 @@ export interface TranscriptReader {
 // Own import line on purpose, not folded into the block above: a second in-flight task (S2-T2)
 // touches this same file's top import block, and D-022/D-025 already established the pattern of
 // keeping an addition self-contained to reduce merge collisions (see this file's own history).
-import type { GitFacts } from './types.js';
+import type { GitFacts, RepositoryGitFacts } from './types.js';
 
 /**
  * `GitReader.readFacts()`'s return shape (S2-T1). A discriminated union, not `GitFacts | null` —
@@ -391,8 +391,48 @@ export type GitReadResult =
  * Flagged in docs/QUESTOES.md for confirmation, per AGENTS.md § "Glossário de domínio": "termo
  * novo entra aqui antes de entrar no código" — registering instead of deciding silently.
  */
+/**
+ * `GitReader.readEvidenceAcrossRepos()`'s return shape (D-032, S4-T0). One `RepositoryGitFacts`
+ * per repository root discovered among a session's `touchedFiles` and its own launch `cwd` — see
+ * that type's own docstring in `core/types.ts` for why `root` lives on each entry instead of a
+ * caller supplying a single `cwd` up front the way `readFacts` above still does.
+ *
+ * `filesOutsideRepository`/`reposNotVisited` are D-025's "declare it, don't drop it" applied to two
+ * different reasons a piece of evidence might be missing: a touched file with no repository
+ * ancestor at all, and a repository root that WAS found but skipped for staying inside the E/S
+ * ceiling (`adapters/git/git-adapter.ts`'s `MAX_GIT_ROOTS_TO_VISIT` — a cost limit, not a judgment
+ * about which repository matters more, same distinction docs/QUESTOES.md Q-025 already drew for
+ * `MAX_BRIEFING_SCAN_DAYS`). Both are always real numbers here — never `null` — because a live call
+ * to this method always knows both counts; `null` only ever appears on the persisted
+ * `HandoffFacts` shape, for a handoff migrated up from schemaVersion 1, which never tracked either.
+ */
+export interface GitEvidenceAcrossRepos {
+  readonly repositories: readonly RepositoryGitFacts[];
+  readonly filesOutsideRepository: number;
+  readonly reposNotVisited: number;
+}
+
 export interface GitReader {
   readFacts(cwd: string): Promise<GitReadResult>;
+
+  /**
+   * D-032: given a session's own launch `cwd` and its already-extracted `touchedFiles`, finds
+   * every distinct repository root among them (walking up from each path to a `.git` entry,
+   * `adapters/git/repo-roots.ts#findRepoRoot`; deduplicated after normalizing via
+   * `core/cwd-normalization.ts`, S3-T5 — reused, not reimplemented) and calls `readFacts` for each
+   * one, up to an I/O ceiling. `cwd`'s own root is always resolved first and always kept inside
+   * that ceiling, so a session launched from inside a repository never loses evidence it already
+   * had before this method existed (docs/PLANO-DE-ENTREGA.md S4-T0: "o `cwd` de lançamento
+   * continua valendo quando for repositório").
+   *
+   * Never throws for the ordinary "nothing found" cases, same discipline as `readFacts`: a `cwd`
+   * and every `touchedFiles` entry outside any repository resolves to `{ repositories: [],
+   * filesOutsideRepository: N, reposNotVisited: 0 }`, never a thrown error.
+   */
+  readEvidenceAcrossRepos(
+    cwd: string,
+    touchedFiles: readonly string[],
+  ): Promise<GitEvidenceAcrossRepos>;
 }
 
 /**

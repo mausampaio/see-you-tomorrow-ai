@@ -4,6 +4,7 @@ import type {
   DiscoveryResult,
   ForkCleanup,
   ForkCleanupResult,
+  GitEvidenceAcrossRepos,
   GitReader,
   GitReadResult,
   HandoffGenerator,
@@ -91,8 +92,19 @@ export class FakeTranscriptReader implements TranscriptReader {
 
 const NOT_A_REPO: GitReadResult = { hasGit: false };
 
-/** Keyed by `cwd`. A `cwd` not in `byCwd` gets `{ hasGit: false }` — the same "not a repository"
- * default the real `GitAdapter` gives a `cwd` outside a working tree. */
+/**
+ * Keyed by `cwd`. A `cwd` not in `byCwd` gets `{ hasGit: false }` — the same "not a repository"
+ * default the real `GitAdapter` gives a `cwd` outside a working tree.
+ *
+ * **D-032's `readEvidenceAcrossRepos` deliberately ignores `touchedFiles` and only ever asks about
+ * `cwd`** — every existing test configuration here is keyed by `cwd` (`byCwd`/`throwFor` above,
+ * predating D-032), and this keeps those configurations meaning the same thing ("git responds for
+ * this session") without a real filesystem walk. `root` on the synthesized `RepositoryGitFacts` is
+ * just `cwd` itself — good enough for tests that only care about `sources`/one repository's facts,
+ * never a stand-in for `adapters/git/git-adapter.ts`'s real multi-root discovery, which is covered
+ * by its own integration suite (`tests/integration/git/git-adapter.test.ts`) against a real
+ * filesystem instead of a fake.
+ */
 export class FakeGitReader implements GitReader {
   constructor(
     private readonly byCwd: ReadonlyMap<string, GitReadResult> = new Map(),
@@ -104,6 +116,38 @@ export class FakeGitReader implements GitReader {
       return Promise.reject(new Error(`FakeGitReader: forced failure for ${cwd}`));
     }
     return Promise.resolve(this.byCwd.get(cwd) ?? NOT_A_REPO);
+  }
+
+  async readEvidenceAcrossRepos(cwd: string): Promise<GitEvidenceAcrossRepos> {
+    const result = await this.readFacts(cwd);
+    if (!result.hasGit) {
+      return { repositories: [], filesOutsideRepository: 0, reposNotVisited: 0 };
+    }
+    return {
+      repositories: [{ root: cwd, ...result.facts }],
+      filesOutsideRepository: 0,
+      reposNotVisited: 0,
+    };
+  }
+}
+
+/**
+ * A `GitReader` whose `readEvidenceAcrossRepos` returns a fixed `GitEvidenceAcrossRepos` no matter
+ * what `cwd`/`touchedFiles` it's called with — for testing `evidence-gathering.ts`'s OWN plumbing
+ * (does `gatherEvidence` copy `repositories`/`filesOutsideRepository`/`reposNotVisited` onto
+ * `HandoffFacts` correctly, including the multi-repository case) independently of the real
+ * root-discovery algorithm, which `adapters/git/git-adapter.ts` owns and
+ * `tests/integration/git/git-adapter.test.ts` covers against a real filesystem (D-032).
+ */
+export class StaticGitReader implements GitReader {
+  constructor(private readonly result: GitEvidenceAcrossRepos) {}
+
+  readFacts(): Promise<GitReadResult> {
+    return Promise.reject(new Error('StaticGitReader.readFacts is not exercised by this double'));
+  }
+
+  readEvidenceAcrossRepos(): Promise<GitEvidenceAcrossRepos> {
+    return Promise.resolve(this.result);
   }
 }
 

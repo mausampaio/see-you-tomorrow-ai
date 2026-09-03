@@ -131,11 +131,13 @@ describe('generateBriefingMarkdown — partial evidence (D-013/D-025)', () => {
   });
 });
 
-describe('generateBriefingMarkdown — git facts', () => {
-  it('states plainly there is no repository, instead of an empty-looking GitFacts block', () => {
-    const handoff = createHandoff({ facts: { ...createHandoff().facts, git: null } });
+describe('generateBriefingMarkdown — git facts (D-032: a list of repositories)', () => {
+  it('states plainly there is no repository, instead of an empty-looking repository block', () => {
+    const handoff = createHandoff({ facts: { ...createHandoff().facts, git: [] } });
     const markdown = generateBriefingMarkdown('2026-08-16', GENERATED_AT, [handoff], []);
-    expect(markdown).toContain('_No git repository at this path._');
+    expect(markdown).toContain(
+      'No git repository found among the touched files or launch directory of this session.',
+    );
   });
 
   it('lists branch, dirtiness, modified files, commits, and other worktrees', () => {
@@ -145,23 +147,29 @@ describe('generateBriefingMarkdown — git facts', () => {
         lastPrompts: [],
         assistantMessages: [],
         touchedFiles: [],
-        git: {
-          branch: 'main',
-          dirty: true,
-          modifiedFiles: ['src/a.ts'],
-          commitsToday: [{ sha: '1b7fd99', title: 'docs: initial spec' }],
-          worktrees: [
-            {
-              path: 'c:\\code\\projeto\\.wt\\issue-42',
-              branch: 'issue-42',
-              dirty: false,
-              commitsTodayCount: 3,
-            },
-          ],
-        },
+        git: [
+          {
+            root: 'c:\\code\\projeto',
+            branch: 'main',
+            dirty: true,
+            modifiedFiles: ['src/a.ts'],
+            commitsToday: [{ sha: '1b7fd99', title: 'docs: initial spec' }],
+            worktrees: [
+              {
+                path: 'c:\\code\\projeto\\.wt\\issue-42',
+                branch: 'issue-42',
+                dirty: false,
+                commitsTodayCount: 3,
+              },
+            ],
+          },
+        ],
+        filesOutsideRepository: 0,
+        reposNotVisited: 0,
       },
     });
     const markdown = generateBriefingMarkdown('2026-08-16', GENERATED_AT, [handoff], []);
+    expect(markdown).toContain('**Git — `c:\\code\\projeto`**');
     expect(markdown).toContain('- Branch: main');
     expect(markdown).toContain('- Working tree: dirty');
     expect(markdown).toContain('- Modified files: src/a.ts');
@@ -176,13 +184,18 @@ describe('generateBriefingMarkdown — git facts', () => {
         lastPrompts: [],
         assistantMessages: [],
         touchedFiles: [],
-        git: {
-          branch: 'main',
-          dirty: false,
-          modifiedFiles: [],
-          commitsToday: [],
-          worktrees: [{ path: 'c:\\code\\wt', branch: null, dirty: true, commitsTodayCount: 0 }],
-        },
+        git: [
+          {
+            root: 'c:\\code\\projeto',
+            branch: 'main',
+            dirty: false,
+            modifiedFiles: [],
+            commitsToday: [],
+            worktrees: [{ path: 'c:\\code\\wt', branch: null, dirty: true, commitsTodayCount: 0 }],
+          },
+        ],
+        filesOutsideRepository: 0,
+        reposNotVisited: 0,
       },
     });
     const markdown = generateBriefingMarkdown('2026-08-16', GENERATED_AT, [handoff], []);
@@ -196,11 +209,107 @@ describe('generateBriefingMarkdown — git facts', () => {
         lastPrompts: [],
         assistantMessages: [],
         touchedFiles: [],
-        git: { branch: null, dirty: false, modifiedFiles: [], commitsToday: [], worktrees: [] },
+        git: [
+          {
+            root: 'c:\\code\\projeto',
+            branch: null,
+            dirty: false,
+            modifiedFiles: [],
+            commitsToday: [],
+            worktrees: [],
+          },
+        ],
+        filesOutsideRepository: 0,
+        reposNotVisited: 0,
       },
     });
     const markdown = generateBriefingMarkdown('2026-08-16', GENERATED_AT, [handoff], []);
     expect(markdown).toContain('- Branch: (detached HEAD)');
+  });
+
+  it('renders one block per repository when a session touched several (D-032)', () => {
+    const handoff = createHandoff({
+      facts: {
+        lastActivity: null,
+        lastPrompts: [],
+        assistantMessages: [],
+        touchedFiles: [],
+        git: [
+          {
+            root: 'c:\\code\\frontend',
+            branch: 'main',
+            dirty: true,
+            modifiedFiles: ['app.tsx'],
+            commitsToday: [],
+            worktrees: [],
+          },
+          {
+            root: 'c:\\code\\backend',
+            branch: 'main',
+            dirty: false,
+            modifiedFiles: [],
+            commitsToday: [],
+            worktrees: [],
+          },
+        ],
+        filesOutsideRepository: 0,
+        reposNotVisited: 0,
+      },
+    });
+    const markdown = generateBriefingMarkdown('2026-08-16', GENERATED_AT, [handoff], []);
+    expect(markdown).toContain('**Git — `c:\\code\\frontend`**');
+    expect(markdown).toContain('**Git — `c:\\code\\backend`**');
+  });
+
+  it('declares files that could not be traced to any repository (D-025/D-032)', () => {
+    const handoff = createHandoff({
+      facts: {
+        lastActivity: null,
+        lastPrompts: [],
+        assistantMessages: [],
+        touchedFiles: [],
+        git: [
+          {
+            root: 'c:\\code\\projeto',
+            branch: 'main',
+            dirty: false,
+            modifiedFiles: [],
+            commitsToday: [],
+            worktrees: [],
+          },
+        ],
+        filesOutsideRepository: 12,
+        reposNotVisited: 0,
+      },
+    });
+    const markdown = generateBriefingMarkdown('2026-08-16', GENERATED_AT, [handoff], []);
+    expect(markdown).toContain('12 touched files could not be traced to any git repository.');
+  });
+
+  it('says nothing about the outside-repository count for a migrated (null) record', () => {
+    const handoff = createHandoff({
+      facts: {
+        lastActivity: null,
+        lastPrompts: [],
+        assistantMessages: [],
+        touchedFiles: [],
+        git: [
+          {
+            root: 'c:\\code\\projeto',
+            branch: 'main',
+            dirty: false,
+            modifiedFiles: [],
+            commitsToday: [],
+            worktrees: [],
+          },
+        ],
+        filesOutsideRepository: null,
+        reposNotVisited: null,
+      },
+    });
+    const markdown = generateBriefingMarkdown('2026-08-16', GENERATED_AT, [handoff], []);
+    expect(markdown).not.toContain('could not be traced');
+    expect(markdown).not.toContain('not visited');
   });
 });
 

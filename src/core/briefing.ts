@@ -44,8 +44,8 @@
 import type {
   Day,
   EvidenceSource,
-  GitFacts,
   Handoff,
+  RepositoryGitFacts,
   ResolvedEndDayScope,
   SessionListing,
   WorktreeFacts,
@@ -161,29 +161,59 @@ function renderWorktreeLine(worktree: WorktreeFacts): string {
   return `  - ${worktree.path} (${branch}) — ${dirty}, ${commits} today`;
 }
 
-/** `git: null` is a real, ordinary state (`cwd` isn't a repository at all, D-025) — rendered as
- * its own sentence, never as a `GitFacts` block with every field looking emptily "clean".
- *
- * **Exported for `core/resume-prompt.ts` (S3-T1) to reuse as-is** for a `source !== "model"`
- * handoff's facts-only resume prompt: same git facts, same "no repository here" honesty, and
- * writing a second renderer for the same `GitFacts` shape would be exactly the duplication
- * AGENTS.md § "Estilo de código" rules out. */
-export function renderGitBlock(git: GitFacts | null): string {
-  if (git === null) {
-    return '**Git**\n\n_No git repository at this path._';
-  }
+function renderRepositoryBlock(repo: RepositoryGitFacts): string {
   const commits =
-    git.commitsToday.map((commit) => `\`${commit.sha}\` ${commit.title}`).join('; ') || 'none';
+    repo.commitsToday.map((commit) => `\`${commit.sha}\` ${commit.title}`).join('; ') || 'none';
   const worktrees =
-    git.worktrees.length === 0 ? 'none' : `\n${git.worktrees.map(renderWorktreeLine).join('\n')}`;
+    repo.worktrees.length === 0 ? 'none' : `\n${repo.worktrees.map(renderWorktreeLine).join('\n')}`;
   return [
-    '**Git**\n',
-    `- Branch: ${git.branch ?? '(detached HEAD)'}`,
-    `- Working tree: ${git.dirty ? 'dirty' : 'clean'}`,
-    `- Modified files: ${git.modifiedFiles.join(', ') || 'none'}`,
+    `**Git — \`${repo.root}\`**\n`,
+    `- Branch: ${repo.branch ?? '(detached HEAD)'}`,
+    `- Working tree: ${repo.dirty ? 'dirty' : 'clean'}`,
+    `- Modified files: ${repo.modifiedFiles.join(', ') || 'none'}`,
     `- Commits today: ${commits}`,
     `- Other worktrees: ${worktrees}`,
   ].join('\n');
+}
+
+/**
+ * D-032: `repositories: []` is a real, ordinary state — no repository was found among this
+ * session's touched files or its own launch `cwd` (D-025) — rendered as its own sentence, never as
+ * an empty list of repository blocks with nothing else said. One block per repository when there
+ * are several (replaces the single implicit "the session's cwd" repository this used to render).
+ *
+ * `filesOutsideRepository`/`reposNotVisited` render as trailing notes only when there is something
+ * to say: `null` (a handoff migrated up from schemaVersion 1, which never tracked either — see
+ * `HandoffFacts`'s own docstring in `core/types.ts`) or `0` both print nothing, matching every
+ * other "nothing recorded" convention in this module.
+ *
+ * **Exported for `core/resume-prompt.ts` (S3-T1) to reuse as-is** for a `source !== "model"`
+ * handoff's facts-only resume prompt: same git facts, same "no repository here" honesty, and
+ * writing a second renderer for the same shape would be exactly the duplication AGENTS.md §
+ * "Estilo de código" rules out. */
+export function renderGitBlock(
+  repositories: readonly RepositoryGitFacts[],
+  filesOutsideRepository: number | null,
+  reposNotVisited: number | null,
+): string {
+  if (repositories.length === 0) {
+    return (
+      '**Git**\n\n_No git repository found among the touched files or launch directory of this ' +
+      'session._'
+    );
+  }
+  const blocks = repositories.map(renderRepositoryBlock).join('\n\n');
+  const notes = [
+    filesOutsideRepository !== null && filesOutsideRepository > 0
+      ? `_${pluralize(filesOutsideRepository, 'touched file', 'touched files')} could not be ` +
+        'traced to any git repository._'
+      : '',
+    reposNotVisited !== null && reposNotVisited > 0
+      ? `_${pluralize(reposNotVisited, 'additional repository', 'additional repositories')} ` +
+        'discovered but not visited (I/O limit)._'
+      : '',
+  ].filter((note) => note !== '');
+  return notes.length === 0 ? blocks : `${blocks}\n\n${notes.join('\n\n')}`;
 }
 
 function renderHandoffHeader(handoff: Handoff): string {
@@ -218,7 +248,11 @@ function renderHandoffSection(handoff: Handoff): string {
     renderTextBlock('What was happening', handoff.understanding),
     renderListBlock('Pending', handoff.pendingItems),
     renderListBlock('Plan for tomorrow', handoff.tomorrowPlan),
-    renderGitBlock(handoff.facts.git),
+    renderGitBlock(
+      handoff.facts.git,
+      handoff.facts.filesOutsideRepository,
+      handoff.facts.reposNotVisited,
+    ),
     renderRecallBlocks(handoff),
   ].filter((section) => section !== '');
   return sections.join('\n\n');

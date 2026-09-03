@@ -3,7 +3,7 @@
  * `core/eligibility.ts`) — plus the pure function that builds one from `HandoffFacts`
  * (`application/endDay`, S2-T3).
  */
-import type { GitFacts, HandoffFacts } from './types.js';
+import type { HandoffFacts, RepositoryGitFacts } from './types.js';
 
 /**
  * A comparable token per evidence source (D-013: git, transcript, registry). `null` when that
@@ -52,10 +52,28 @@ export function sameEvidence(previous: EvidenceSignature, current: EvidenceSigna
   return hasConfirmingSource;
 }
 
+function repositoryToken(repo: RepositoryGitFacts): unknown {
+  return {
+    root: repo.root,
+    branch: repo.branch,
+    dirty: repo.dirty,
+    modifiedFiles: repo.modifiedFiles,
+    commitsToday: repo.commitsToday,
+    worktrees: repo.worktrees,
+  };
+}
+
 /**
- * A stable text token for `git`, or `null` when there's no repository at all (`HandoffFacts.git
- * === null`) — kept as its own `null`, never coerced into a string that would read as "a repo with
- * nothing going on" (D-025, same distinction `GitReadResult` draws in `core/ports.ts`).
+ * A stable text token for `git`, or `null` when there's no repository evidence at all
+ * (`HandoffFacts.git.length === 0`, D-032 — `git: []` replaced the old `GitFacts | null`) — kept
+ * as its own `null`, never coerced into a string that would read as "a repo with nothing going on"
+ * (D-025, same distinction `GitReadResult` draws in `core/ports.ts`).
+ *
+ * Sorted by `root` before tokenizing so two evidence-gathering passes over the SAME facts always
+ * produce the SAME token regardless of iteration order —
+ * `adapters/git/git-adapter.ts#readEvidenceAcrossRepos` builds its roots list from `touchedFiles`,
+ * whose order isn't guaranteed to repeat identically between two capture attempts, and an order-only
+ * difference must never register as "the evidence changed" (D-026).
  *
  * `JSON.stringify` over a fixed field order is enough for a *comparison* token — it doesn't need
  * to be a canonical/minimal encoding, only to change whenever the underlying facts do. The one
@@ -64,17 +82,12 @@ export function sameEvidence(previous: EvidenceSignature, current: EvidenceSigna
  * re-capture (safe: same direction D-025 already prefers, "say less than you might get away with"
  * — never a false "unchanged" that would hide the autonomous-agent case D-026 exists for).
  */
-function gitToken(git: GitFacts | null): string | null {
-  if (git === null) {
+function gitToken(repositories: readonly RepositoryGitFacts[]): string | null {
+  if (repositories.length === 0) {
     return null;
   }
-  return JSON.stringify({
-    branch: git.branch,
-    dirty: git.dirty,
-    modifiedFiles: git.modifiedFiles,
-    commitsToday: git.commitsToday,
-    worktrees: git.worktrees,
-  });
+  const sorted = [...repositories].sort((a, b) => a.root.localeCompare(b.root));
+  return JSON.stringify(sorted.map(repositoryToken));
 }
 
 /**

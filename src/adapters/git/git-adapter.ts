@@ -6,8 +6,15 @@
  * beside `cwd`, with no transcript at all, still gets a useful handoff only if this adapter looks
  * there too.
  */
-import type { Clock, GitReader, GitReadResult, RejectedDiscoveryRecord } from '../../core/ports.js';
-import type { WorktreeFacts } from '../../core/types.js';
+import type {
+  Clock,
+  GitEvidenceAcrossRepos,
+  GitReader,
+  GitReadResult,
+  RejectedDiscoveryRecord,
+} from '../../core/ports.js';
+import type { RepositoryGitFacts, WorktreeFacts } from '../../core/types.js';
+import { normalizeCwdForComparison, type PathPlatformHint } from '../../core/cwd-normalization.js';
 import { isInsideWorkTree } from './repo.js';
 import { readBranch } from './branch.js';
 import { readModifiedFiles, parseStatusPorcelain } from './status.js';
@@ -15,6 +22,7 @@ import { readCommitsToday } from './commits.js';
 import { runGit } from './run-git.js';
 import { parseWorktreeListPorcelain, type WorktreeListEntry } from './worktree-list.js';
 import { canonicalPath, sameCanonicalPath } from './canonical-path.js';
+import { findRepoRoot } from './repo-roots.js';
 
 /**
  * Unlike the main `cwd` path (which uses `readModifiedFiles`, graceful on any failure, D-025),
@@ -105,6 +113,65 @@ async function readWorktrees(
   return { worktrees, rejectedWorktrees };
 }
 
+/** Read once, same pattern `application/eligibility-assembly.ts`/`cli/session-reference.ts`
+ * already use for `core/cwd-normalization.ts` (S3-T5): the function itself stays pure and platform
+ * is a parameter, the real `process.platform` is only ever read here, at the one call site. */
+const PLATFORM_HINT: PathPlatformHint = process.platform === 'win32' ? 'win32' : 'posix';
+
+/**
+ * E/S ceiling, not product judgment (D-032's own text: "rotulado no código como E/S e não
+ * julgamento de produto" — the same distinction docs/QUESTOES.md Q-025 already drew for
+ * `MAX_BRIEFING_SCAN_DAYS`, and exported the same way that constant is, for the same reason: a
+ * test proving the ceiling is respected shouldn't need to build 9 real repositories on disk when
+ * it can pass a smaller limit instead). Each visited root costs several `git` subprocess calls
+ * (`readFacts` below spawns branch/status/commits/worktree-list, plus a status+commits pair per
+ * worktree it finds) — a session touching two or three repositories (frontend + backend, the
+ * common case D-032 exists for) stays well inside this; the excess beyond it is counted in
+ * `reposNotVisited`, never silently dropped (D-025).
+ */
+export const MAX_GIT_ROOTS_TO_VISIT = 8;
+
+/** Adds `root` to `roots` unless it's `null` or already present under `core/cwd-normalization.ts`'s
+ * comparison key — first-seen raw spelling wins and is what's kept (for `readFacts`/display), only
+ * the KEY used to detect a duplicate is normalized (D-032: "normalizar a raiz antes de
+ * desduplicar", reusing S3-T5 rather than reimplementing it). */
+function addUniqueRoot(roots: string[], seenKeys: Set<string>, root: string | null): void {
+  if (root === null) {
+    return;
+  }
+  const key = normalizeCwdForComparison(root, PLATFORM_HINT);
+  if (seenKeys.has(key)) {
+    return;
+  }
+  seenKeys.add(key);
+  roots.push(root);
+}
+
+/**
+ * Every distinct repository root among `cwd` and `touchedFiles` (D-032), `cwd`'s own root always
+ * first — so it's never the entry dropped by `MAX_GIT_ROOTS_TO_VISIT` when a session touches more
+ * repositories than the ceiling allows (docs/PLANO-DE-ENTREGA.md S4-T0: "o `cwd` de lançamento
+ * continua valendo quando for repositório").
+ */
+async function discoverRootsToVisit(
+  cwd: string,
+  touchedFiles: readonly string[],
+): Promise<{ readonly roots: string[]; readonly filesOutsideRepository: number }> {
+  const [cwdRoot, ...fileRoots] = await Promise.all([
+    findRepoRoot(cwd),
+    ...touchedFiles.map((file) => findRepoRoot(file)),
+  ]);
+  const filesOutsideRepository = fileRoots.filter((root) => root === null).length;
+
+  const roots: string[] = [];
+  const seenKeys = new Set<string>();
+  addUniqueRoot(roots, seenKeys, cwdRoot);
+  for (const root of fileRoots) {
+    addUniqueRoot(roots, seenKeys, root);
+  }
+  return { roots, filesOutsideRepository };
+}
+
 export interface GitAdapterOptions {
   /** The project's single source of "now" (D-019) — read once per `readFacts` call, resolving
    * "commits do dia" against the local calendar day at the moment of the call. */
@@ -143,5 +210,42 @@ export class GitAdapter implements GitReader {
       },
       rejectedWorktrees: worktreeData.rejectedWorktrees,
     };
+  }
+
+  /**
+   * D-032: `readFacts` above answers for a single, caller-supplied `cwd` only — this answers for
+   * every repository a session actually touched, deriving candidate roots from `touchedFiles`
+   * instead of assuming the launch `cwd` is where the work happened (see this port method's own
+   * docstring in `core/ports.ts`).
+   *
+   * `maxRootsToVisit` defaults to `MAX_GIT_ROOTS_TO_VISIT` and exists as a parameter (not read
+   * from a module constant directly) for the exact reason `application/find-pending-briefing.ts
+   * #findPendingBriefing` already takes `maxScanDays` as a parameter: a test proving the ceiling
+   * is respected can pass a small number instead of building enough real repositories on disk to
+   * reach the production default. Every real caller (`application/evidence-gathering.ts`) uses the
+   * two-argument form and gets the real ceiling.
+   */
+  async readEvidenceAcrossRepos(
+    cwd: string,
+    touchedFiles: readonly string[],
+    maxRootsToVisit: number = MAX_GIT_ROOTS_TO_VISIT,
+  ): Promise<GitEvidenceAcrossRepos> {
+    const { roots, filesOutsideRepository } = await discoverRootsToVisit(cwd, touchedFiles);
+    const toVisit = roots.slice(0, maxRootsToVisit);
+    const reposNotVisited = roots.length - toVisit.length;
+
+    const results = await Promise.all(toVisit.map((root) => this.readFacts(root)));
+    const repositories: RepositoryGitFacts[] = [];
+    results.forEach((result, index) => {
+      if (result.hasGit) {
+        repositories.push({ root: toVisit[index]!, ...result.facts });
+      }
+      // A `.git` entry existing but `readFacts` answering `hasGit: false` would be surprising —
+      // `findRepoRoot` and `isInsideWorkTree` trust the same marker — but tolerated rather than
+      // assumed impossible (D-025): the root is simply not counted as a repository, no error
+      // raised and the other roots are unaffected.
+    });
+
+    return { repositories, filesOutsideRepository, reposNotVisited };
   }
 }

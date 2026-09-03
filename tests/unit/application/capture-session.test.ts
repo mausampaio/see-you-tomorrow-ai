@@ -79,7 +79,9 @@ describe('captureSession — handoff assembly', () => {
         lastPrompts: [],
         assistantMessages: [],
         touchedFiles: [],
-        git: unchangedGitFacts,
+        git: [{ root: session.cwd, ...unchangedGitFacts }],
+        filesOutsideRepository: 0,
+        reposNotVisited: 0,
       };
       const storage = new FakeStorage(DEFAULT_TEST_CONFIG);
       await storage.saveHandoff(DAY, {
@@ -545,7 +547,9 @@ describe('captureSession — dry-run (S2-T5)', () => {
       lastPrompts: [],
       assistantMessages: [],
       touchedFiles: [],
-      git: unchangedGitFacts,
+      git: [{ root: session.cwd, ...unchangedGitFacts }],
+      filesOutsideRepository: 0,
+      reposNotVisited: 0,
     };
     const storage = new FakeStorage(DEFAULT_TEST_CONFIG);
     await storage.saveHandoff(DAY, {

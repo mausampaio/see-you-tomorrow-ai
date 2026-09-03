@@ -18,6 +18,7 @@ import {
   serializeEarlyWarningState,
 } from './early-warning-schema.js';
 import {
+  HANDOFF_SCHEMA_MIGRATIONS,
   HANDOFF_SCHEMA_VERSION,
   parseHandoffDocument,
   serializeHandoff,
@@ -27,7 +28,7 @@ import {
   parseResumedSessionsDocument,
   serializeResumedSessionIds,
 } from './resumed-sessions-schema.js';
-import { resolveSchemaVersion } from './schema-version.js';
+import { resolveSchemaVersion, type SchemaMigration } from './schema-version.js';
 import { writeFileAtomic } from './atomic-write.js';
 
 /**
@@ -42,10 +43,16 @@ import { writeFileAtomic } from './atomic-write.js';
  * Returns `null` when the file doesn't exist yet (D-025: absence, not corruption) — deciding what
  * "nothing written yet" resolves to is each caller's own job, because `readConfig`'s empty
  * defaults and `readEarlyWarningState`'s empty sets aren't the same shape.
+ *
+ * `migrations` defaults to `{}` — every document except the handoff (D-032, S4-T0) still has no
+ * migration registered at all (`schema-version.ts`'s own top comment). `readHandoff`/
+ * `readOneHandoffOrRejection` below are the first callers to pass a real, non-empty table
+ * (`HANDOFF_SCHEMA_MIGRATIONS`).
  */
 async function readVersionedDocument(
   filePath: string,
   expectedVersion: number,
+  migrations: Readonly<Record<number, SchemaMigration>> = {},
 ): Promise<Record<string, unknown> | null> {
   let text: string;
   try {
@@ -70,10 +77,14 @@ async function readVersionedDocument(
     );
   }
 
-  // No migration exists yet for either document at version 1 (schema-version.ts's top comment
-  // explains why the table below is empty, not stubbed). `resolveSchemaVersion` throws
-  // `UnsupportedSchemaVersionError` on anything other than exactly `expectedVersion`.
-  return resolveSchemaVersion(filePath, parsed as Record<string, unknown>, {}, expectedVersion);
+  // `resolveSchemaVersion` throws `UnsupportedSchemaVersionError` on anything other than exactly
+  // `expectedVersion` for which no migration is registered in `migrations`.
+  return resolveSchemaVersion(
+    filePath,
+    parsed as Record<string, unknown>,
+    migrations,
+    expectedVersion,
+  );
 }
 
 /**
@@ -107,7 +118,11 @@ async function readOneHandoffOrRejection(
   filePath: string,
 ): Promise<Handoff | RejectedDiscoveryRecord | null> {
   try {
-    const resolved = await readVersionedDocument(filePath, HANDOFF_SCHEMA_VERSION);
+    const resolved = await readVersionedDocument(
+      filePath,
+      HANDOFF_SCHEMA_VERSION,
+      HANDOFF_SCHEMA_MIGRATIONS,
+    );
     return resolved === null ? null : parseHandoffDocument(resolved);
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
@@ -190,7 +205,11 @@ export class StorageAdapter implements Storage {
 
   async readHandoff(day: Day, sessionId: string): Promise<Handoff | null> {
     const filePath = this.handoffPath(day, sessionId);
-    const resolved = await readVersionedDocument(filePath, HANDOFF_SCHEMA_VERSION);
+    const resolved = await readVersionedDocument(
+      filePath,
+      HANDOFF_SCHEMA_VERSION,
+      HANDOFF_SCHEMA_MIGRATIONS,
+    );
     if (resolved === null) {
       // No capture made today for this session yet (D-025): normal, not an error.
       return null;

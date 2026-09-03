@@ -129,6 +129,16 @@ Cada adapter contra o mundo real, mas num mundo de mentira controlado.
   `resumed.json` (S3-T3, por `day`): arquivo ausente é conjunto vazio (D-025), JSON inválido e
   `schemaVersion` desconhecida rejeitam de forma visível, e uma segunda escrita substitui o
   conjunto inteiro (não incrementa) — mesmo padrão de `early-warnings.json`.
+  **D-032 (S4-T0), a primeira migração real do projeto:** `tests/integration/storage/
+  handoff.test.ts`, describe "D-032 migration from schemaVersion 1" — um documento v1 **bruto**
+  (JSON escrito à mão, nunca via `serializeHandoff`, que só grava a versão atual) com `facts.git`
+  singular é lido como lista de um elemento, com `root` preenchido a partir do `cwd` de topo do
+  documento; `facts.git: null` migra para `[]`; `filesOutsideRepository`/`reposNotVisited` voltam
+  `null` (nunca `0` — D-025, um v1 nunca mediu nenhum dos dois); `listHandoffs` (o caminho que o
+  briefing do dia usa) migra transparentemente também; e ler o mesmo arquivo duas vezes produz o
+  resultado idêntico as duas vezes, com o arquivo em disco inalterado entre as leituras — prova de
+  que a migração só traduz em memória, nunca reescreve (seguro para `--dry-run` e para
+  `seeya end-day --session` repetido no mesmo dia).
 - **`generation/`**: um script falso de `claude` colocado no PATH do teste, que devolve JSON
   canned, JSON inválido, código de saída != 0, e um que trava (para testar o timeout).
   **Nenhum teste da suíte chama a API de verdade.** Obrigatório: um teste que passa contexto com
@@ -146,6 +156,16 @@ Cada adapter contra o mundo real, mas num mundo de mentira controlado.
 - **`git/`**: repositório de teste construído em `tmpdir` com dois worktrees, um sujo e um
   limpo, commits datados de hoje e de ontem. Verificar enumeração, estado por worktree e o
   recorte de "commits do dia". Mais um caso com `cwd` que não é repositório.
+  **D-032 (S4-T0), `readEvidenceAcrossRepos`:** dois repositórios git reais em `tmpdir` mais um
+  `cwd` que não é nenhum dos dois — aceite obrigatório de "sessão fora de qualquer repositório,
+  arquivos tocados em dois repositórios, produz os dois". Mais: raiz do `cwd` de lançamento
+  mantida mesmo sem `touchedFiles` apontando para ela; arquivo tocado fora de qualquer
+  repositório contado em `filesOutsideRepository`, nunca descartado em silêncio; o mesmo
+  repositório alcançado pelo `cwd` e por um arquivo tocado não é visitado duas vezes (normalizado
+  antes de desduplicar, reusando `core/cwd-normalization.ts`); e o excedente de
+  `MAX_GIT_ROOTS_TO_VISIT` aparece em `reposNotVisited` — exercitado com um parâmetro de override
+  no método (mesmo padrão de `findPendingBriefing#maxScanDays`), para não precisar criar nove
+  repositórios reais em disco só para estourar o limite de produção.
 - **`process/`**: iniciar um processo filho trivial, verificar liveness, terminar com graça,
   verificar que morreu. Por plataforma.
 - **`notification/`**: cada backend verifica os argumentos montados, nunca o toast aparecendo.

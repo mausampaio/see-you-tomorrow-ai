@@ -15,7 +15,7 @@
  * não existe logger" is why this isn't logged either — see docs/QUESTOES.md for this gap flagged
  * for the PO.
  */
-import type { GitReader, TranscriptReader } from '../core/ports.js';
+import type { GitEvidenceAcrossRepos, GitReader, TranscriptReader } from '../core/ports.js';
 import type {
   DiscoveredSession,
   EvidenceSource,
@@ -57,22 +57,38 @@ async function gatherTranscript(
   }
 }
 
+const EMPTY_GIT_EVIDENCE: GitEvidenceAcrossRepos = {
+  repositories: [],
+  filesOutsideRepository: 0,
+  reposNotVisited: 0,
+};
+
 interface GitGatherResult {
-  readonly facts: HandoffFacts['git'];
+  readonly evidence: GitEvidenceAcrossRepos;
   readonly responded: boolean;
 }
 
-/** `git` counts as answered whenever `cwd` is a repository at all (`hasGit: true`) — regardless of
- * whether anything happened today (docs/ESPECIFICACAO.md's own table: "Disponível quando: `cwd` é
- * repositório"), never gated on "had activity" the way `noRecentActivity` gates eligibility. */
-async function gatherGit(gitReader: GitReader, cwd: string): Promise<GitGatherResult> {
+/**
+ * `git` counts as answered whenever AT LEAST ONE repository was found among `touchedFiles`/`cwd`
+ * (D-032's own text: "`sources` continua listando `git` quando ao menos um repositório
+ * respondeu") — regardless of whether anything happened there today (docs/ESPECIFICACAO.md's own
+ * table: "Disponível quando: `cwd` é repositório"), never gated on "had activity" the way
+ * `noRecentActivity` gates eligibility.
+ *
+ * A thrown error here — the whole multi-repository walk failing, not just one repository within
+ * it (`GitAdapter#readEvidenceAcrossRepos` already isolates per-root failures on its own) —
+ * degrades to "git did not respond at all", same as the pre-D-032 single-`readFacts` behavior.
+ */
+async function gatherGit(
+  gitReader: GitReader,
+  cwd: string,
+  touchedFiles: readonly string[],
+): Promise<GitGatherResult> {
   try {
-    const result = await gitReader.readFacts(cwd);
-    return result.hasGit
-      ? { facts: result.facts, responded: true }
-      : { facts: null, responded: false };
+    const evidence = await gitReader.readEvidenceAcrossRepos(cwd, touchedFiles);
+    return { evidence, responded: evidence.repositories.length > 0 };
   } catch {
-    return { facts: null, responded: false };
+    return { evidence: EMPTY_GIT_EVIDENCE, responded: false };
   }
 }
 
@@ -87,16 +103,20 @@ export interface GatheredEvidence {
  * discovery strategy (S1-T3) ever produces `SessionWithPid`, so a guaranteed PID IS the "registry
  * answered" signal (`session.cwd`/`session.name` from the transcript-scan strategy, S1-T8, are a
  * *reconstruction*, not the registry, so they don't count here).
+ *
+ * **Sequential, not `Promise.all`, since D-032.** Git evidence now follows `touchedFiles`
+ * (D-032: "a evidência de git segue os `touchedFiles`, não o `cwd` de lançamento"), and
+ * `touchedFiles` only exists once the transcript read (or its "no transcript" empty default) has
+ * resolved — there is no set of repositories to visit before that. The transcript read stays the
+ * one this waits on; it never waits on git in return.
  */
 export async function gatherEvidence(
   transcriptReader: TranscriptReader,
   gitReader: GitReader,
   session: DiscoveredSession,
 ): Promise<GatheredEvidence> {
-  const [transcript, git] = await Promise.all([
-    gatherTranscript(transcriptReader, session),
-    gatherGit(gitReader, session.cwd),
-  ]);
+  const transcript = await gatherTranscript(transcriptReader, session);
+  const git = await gatherGit(gitReader, session.cwd, transcript.facts.touchedFiles);
 
   const sources: EvidenceSource[] = [];
   if (git.responded) {
@@ -110,7 +130,12 @@ export async function gatherEvidence(
   }
 
   return {
-    facts: { ...transcript.facts, git: git.facts },
+    facts: {
+      ...transcript.facts,
+      git: git.evidence.repositories,
+      filesOutsideRepository: git.evidence.filesOutsideRepository,
+      reposNotVisited: git.evidence.reposNotVisited,
+    },
     sources,
   };
 }
