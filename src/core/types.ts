@@ -306,10 +306,14 @@ export interface WorktreeFacts {
 }
 
 /**
- * `facts.git`'s shape (`docs/ESPECIFICACAO.md` § "Formato do handoff") once `cwd` is already
- * confirmed to be inside a git working tree — see `GitReadResult` in `core/ports.ts` for the
- * "not a repo at all" case this type deliberately doesn't represent (D-024/D-025: that's a
- * different, less-specific state, not a `GitFacts` with everything empty).
+ * `facts.git`'s per-repository shape (`docs/ESPECIFICACAO.md` § "Formato do handoff") once a
+ * candidate root is already confirmed to be inside a git working tree — see `GitReadResult` in
+ * `core/ports.ts` for the "not a repo at all" case this type deliberately doesn't represent
+ * (D-024/D-025: that's a different, less-specific state, not a `GitFacts` with everything empty).
+ *
+ * **D-032: one session may carry several of these now** (`RepositoryGitFacts[]` below, via
+ * `HandoffFacts.git`) — this type itself is unchanged, still exactly one repository's facts; it's
+ * `RepositoryGitFacts` that adds the `root` a caller needs once there can be more than one.
  */
 export interface GitFacts {
   /** `null` is the main `cwd`'s own detached `HEAD` — same reasoning as `WorktreeFacts.branch`. */
@@ -319,6 +323,34 @@ export interface GitFacts {
   readonly commitsToday: readonly GitCommit[];
   /** Every *other* worktree of this repository — never includes `cwd`'s own entry (S2-T1). */
   readonly worktrees: readonly WorktreeFacts[];
+}
+
+/**
+ * One repository's `GitFacts`, tagged with the repository's own root directory (D-032, S4-T0).
+ * Before this task, `HandoffFacts.git` carried a single `GitFacts | null`, implicitly "whatever
+ * `cwd` itself points at" — that broke the moment a maintainer's own capture came back with
+ * `sources: ["transcript","registry"]` and zero git facts, because the session launched from
+ * `C:\code`, the *parent* of the repository (`C:\code\see-you-tomorrow-ai`) all the real work
+ * happened in. Evidence now follows `touchedFiles` (D-032's own text: "sobe de cada arquivo até
+ * achar um `.git`, desduplica pela raiz"), so a list needs each entry to say WHICH repository it
+ * describes — `root` is that label, produced by `adapters/git/repo-roots.ts#findRepoRoot` and
+ * de-duplicated via `core/cwd-normalization.ts` (S3-T5, reused rather than reimplemented — see
+ * `adapters/git/git-adapter.ts#readEvidenceAcrossRepos`).
+ *
+ * Not folded into `GitFacts` itself: every existing reader of a bare `GitFacts` (`WorktreeFacts`'s
+ * sibling shape, `core/evidence.ts`'s old single-repo token) has no use for a `root` field, and
+ * D-024's own reasoning — give a shape only the fields the cases that need it actually use — argues
+ * against bolting one on everywhere just for this one new list.
+ */
+export interface RepositoryGitFacts extends GitFacts {
+  /**
+   * Absolute path to this repository's root, exactly as `findRepoRoot` resolved it — not
+   * necessarily byte-identical to how the user's shell or Claude Code itself originally spelled the
+   * directory. Normalized only enough to DEDUPLICATE two spellings of the same root
+   * (`core/cwd-normalization.ts`), never to compare against anything else: this is a display/
+   * identity value, not a second comparison key a caller should build its own logic on.
+   */
+  readonly root: string;
 }
 
 /**
@@ -373,12 +405,43 @@ export type CaptureMode = 'lean' | 'deep';
  * receives bare `SessionFacts` (`core/ports.ts`), because the model's prompt and the handoff's own
  * `facts` field serve different purposes and don't need to carry the same shape.
  *
- * `git: null` when `cwd` isn't a git repository at all (`GitReadResult.hasGit === false`) — a
- * real, ordinary state (D-025), never a `GitFacts` with every field at its emptiest standing in
- * for "no repo here".
+ * **D-032: `git` is a LIST, one entry per repository discovered among `touchedFiles` and the
+ * session's own launch `cwd`** — replaces the single `GitFacts | null` this field carried before a
+ * real capture of the maintainer's own session came back `sources: ["transcript","registry"]` with
+ * zero git facts, because the session launched from `C:\code`, the *parent* of the repository all
+ * the actual work happened in (`C:\code\see-you-tomorrow-ai`), and evidence-gathering only ever
+ * asked git about the launch `cwd` itself. `git: []` means no repository was found among every path
+ * this session touched — a real, ordinary absence of evidence (D-025), never a `GitFacts` with
+ * every field at its emptiest standing in for "no repo here" the way the old `null` sentinel did.
  */
 export interface HandoffFacts extends SessionFacts {
-  readonly git: GitFacts | null;
+  readonly git: readonly RepositoryGitFacts[];
+  /**
+   * How many distinct `touchedFiles` entries could not be traced up to ANY git repository at all
+   * (D-032's own measurement on the session that motivated it: 12 of 47) — declared instead of
+   * silently dropped (D-025's "conte e declare" applied to files instead of a whole missing
+   * source). Deliberately excludes the launch `cwd` itself when IT isn't a repository: `sources`
+   * already carries that fact (no `RepositoryGitFacts` entry rooted there), and folding it in here
+   * would report the exact same absence twice under two different names.
+   *
+   * `null` only for a handoff migrated up from schemaVersion 1
+   * (`adapters/storage/handoff-schema.ts`'s migration, D-032's own mandatory-migration text): that
+   * shape never tracked this at all, so `0` would claim a measurement this project never took, not
+   * really "zero files" (D-025's "ausência não vira afirmação", applied to a migrated record
+   * instead of a freshly gathered one). Every handoff captured under D-032 always writes a real
+   * number, `0` included.
+   */
+  readonly filesOutsideRepository: number | null;
+  /**
+   * How many repository roots were discovered among `touchedFiles`/`cwd` but skipped for staying
+   * inside `adapters/git/git-adapter.ts`'s `MAX_GIT_ROOTS_TO_VISIT` — an I/O ceiling (each visit
+   * costs several `git` subprocess calls), never a judgment about which repository matters more
+   * (D-032's own text: "rotulado no código como E/S e não julgamento de produto" — the same
+   * distinction docs/QUESTOES.md Q-025 already drew for `MAX_BRIEFING_SCAN_DAYS`). Same
+   * migrated-record `null` as `filesOutsideRepository` above; a live capture always writes a real
+   * number, `0` meaning "every discovered root was visited".
+   */
+  readonly reposNotVisited: number | null;
 }
 
 /**

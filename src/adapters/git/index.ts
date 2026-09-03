@@ -9,3 +9,4 @@ export { parseCommitLog } from './commits.js';
 export { parseWorktreeListPorcelain, type WorktreeListEntry } from './worktree-list.js';
 export { isInsideWorkTree } from './repo.js';
 export { readBranch } from './branch.js';
+export { findRepoRoot } from './repo-roots.js';

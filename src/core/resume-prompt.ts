@@ -80,7 +80,7 @@ function renderFactsOnlyBody(handoff: Handoff): string {
       'before assuming anything is finished (D-025: absence of analysis is not evidence of' +
       ' completion).',
     factLines.join('\n'),
-    renderGitBlock(facts.git),
+    renderGitBlock(facts.git, facts.filesOutsideRepository, facts.reposNotVisited),
   ].join('\n\n');
 }
 
