@@ -13,9 +13,10 @@ describe('resolveSchemaVersion', () => {
 
   // Proves the DISPATCH MECHANISM ("reading a document of an old schemaVersion triggers
   // migration", docs/TESTES.md § storage/) using a synthetic migration built only inside this
-  // test. There is no real migration in production yet (only schemaVersion 1 has ever existed) —
-  // see schema-version.ts's top comment for why one isn't invented just to have something to run
-  // here.
+  // test, independent of the one real production migration (the handoff's v1->v2, D-032 — see
+  // adapters/storage/handoff-schema.ts#HANDOFF_SCHEMA_MIGRATIONS and its own dedicated integration
+  // coverage in tests/integration/storage/handoff.test.ts). See schema-version.ts's top comment
+  // for why every OTHER document still has no migration invented just to exercise one.
   it('applies a registered migration to bring an older document up to the expected version', () => {
     const migrateV1ToV2: SchemaMigration = (document) => ({
       ...document,

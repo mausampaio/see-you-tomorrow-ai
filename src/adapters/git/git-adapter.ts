@@ -121,13 +121,15 @@ const PLATFORM_HINT: PathPlatformHint = process.platform === 'win32' ? 'win32' :
 /**
  * E/S ceiling, not product judgment (D-032's own text: "rotulado no código como E/S e não
  * julgamento de produto" — the same distinction docs/QUESTOES.md Q-025 already drew for
- * `MAX_BRIEFING_SCAN_DAYS`). Each visited root costs several `git` subprocess calls (`readFacts`
- * below spawns branch/status/commits/worktree-list, plus a status+commits pair per worktree it
- * finds) — a session touching two or three repositories (frontend + backend, the common case
- * D-032 exists for) stays well inside this; the excess beyond it is counted in `reposNotVisited`,
- * never silently dropped (D-025).
+ * `MAX_BRIEFING_SCAN_DAYS`, and exported the same way that constant is, for the same reason: a
+ * test proving the ceiling is respected shouldn't need to build 9 real repositories on disk when
+ * it can pass a smaller limit instead). Each visited root costs several `git` subprocess calls
+ * (`readFacts` below spawns branch/status/commits/worktree-list, plus a status+commits pair per
+ * worktree it finds) — a session touching two or three repositories (frontend + backend, the
+ * common case D-032 exists for) stays well inside this; the excess beyond it is counted in
+ * `reposNotVisited`, never silently dropped (D-025).
  */
-const MAX_GIT_ROOTS_TO_VISIT = 8;
+export const MAX_GIT_ROOTS_TO_VISIT = 8;
 
 /** Adds `root` to `roots` unless it's `null` or already present under `core/cwd-normalization.ts`'s
  * comparison key — first-seen raw spelling wins and is what's kept (for `readFacts`/display), only
@@ -215,13 +217,21 @@ export class GitAdapter implements GitReader {
    * every repository a session actually touched, deriving candidate roots from `touchedFiles`
    * instead of assuming the launch `cwd` is where the work happened (see this port method's own
    * docstring in `core/ports.ts`).
+   *
+   * `maxRootsToVisit` defaults to `MAX_GIT_ROOTS_TO_VISIT` and exists as a parameter (not read
+   * from a module constant directly) for the exact reason `application/find-pending-briefing.ts
+   * #findPendingBriefing` already takes `maxScanDays` as a parameter: a test proving the ceiling
+   * is respected can pass a small number instead of building enough real repositories on disk to
+   * reach the production default. Every real caller (`application/evidence-gathering.ts`) uses the
+   * two-argument form and gets the real ceiling.
    */
   async readEvidenceAcrossRepos(
     cwd: string,
     touchedFiles: readonly string[],
+    maxRootsToVisit: number = MAX_GIT_ROOTS_TO_VISIT,
   ): Promise<GitEvidenceAcrossRepos> {
     const { roots, filesOutsideRepository } = await discoverRootsToVisit(cwd, touchedFiles);
-    const toVisit = roots.slice(0, MAX_GIT_ROOTS_TO_VISIT);
+    const toVisit = roots.slice(0, maxRootsToVisit);
     const reposNotVisited = roots.length - toVisit.length;
 
     const results = await Promise.all(toVisit.map((root) => this.readFacts(root)));

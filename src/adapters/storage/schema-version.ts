@@ -1,18 +1,24 @@
 /**
  * Generic detect-and-decide mechanism for `schemaVersion` (docs/ARQUITETURA.md § `storage/`:
  * "`schemaVersion` em todo documento persistido, com migração explícita" — no exception per
- * file). `config.json` is the only caller today (S1-T5); this is written so a future document
- * (the handoff, S2-T2; `DayState`, S4-T2) can register its own migrations here instead of
- * reinventing the detection from scratch.
+ * file). `config.json` was the only caller for a long time (S1-T5); this was written so a future
+ * document could register its own migrations here instead of reinventing the detection from
+ * scratch, and the handoff (D-032, S4-T0) is the first one that actually needed to.
  *
- * **There is only ever version 1 today — no migration is registered for anything.** Writing a
- * fake migration just to have something to exercise in production would be exactly the kind of
- * "affirming what isn't known yet" this project's decisions warn against (D-025's spirit, applied
- * to code instead of data). What's tested (tests/unit/adapters/storage/schema-version.test.ts) is
- * the *mechanism*: given a migrations table (empty in production, a synthetic one built only
- * inside that test), an older version with a registered migration is upgraded step by step to the
- * current version; an older version with no registered migration, or a version newer than this
- * build knows about, is refused outright — never silently read as if it were compatible.
+ * **`config.json`/`early-warnings.json`/`resumed.json` still have no migration registered at
+ * all — only version 1 has ever existed for those.** Writing a fake migration for them just to
+ * have something to exercise in production would be exactly the kind of "affirming what isn't
+ * known yet" this project's decisions warn against (D-025's spirit, applied to code instead of
+ * data). **The handoff is the exception**: `HANDOFF_SCHEMA_VERSION` moved 1 → 2 under D-032 (`git`
+ * became a list), and `adapters/storage/handoff-schema.ts#HANDOFF_SCHEMA_MIGRATIONS` registers the
+ * real migration this mechanism was built to eventually carry. What's tested here
+ * (tests/unit/adapters/storage/schema-version.test.ts) is still the *mechanism* in isolation, with
+ * its own synthetic migrations — the handoff's real one has its own dedicated integration coverage
+ * (`tests/integration/storage/handoff.test.ts`, "D-032 migration from schemaVersion 1") against an
+ * actual file on disk, not a migrations table built inline: an older version with a registered
+ * migration is upgraded step by step to the current version; an older version with no registered
+ * migration, or a version newer than this build knows about, is refused outright — never silently
+ * read as if it were compatible.
  */
 
 export type SchemaMigration = (document: Record<string, unknown>) => Record<string, unknown>;

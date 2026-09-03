@@ -61,6 +61,16 @@ const handoffFactsSchema = z.object({
  * tracked either, so `0` would claim a measurement this project never took (D-025's "ausência não
  * vira afirmação", applied here to a migrated record instead of a freshly gathered one).
  *
+ * **The wrapped entry's `root` is the document's own top-level `cwd`.** A v1 `GitFacts` had no
+ * `root` field at all — it didn't need one, because there was only ever implicitly one repository,
+ * "whatever the session's `cwd` pointed to". `cwd` is exactly that implicit repository's identity,
+ * so it's the only honest value to backfill (D-032 itself: the launch `cwd` "continua valendo
+ * quando for repositório" — this is that same repository, from before this task gave it an
+ * explicit label). A `cwd` that isn't a string (an already-malformed document) leaves `root`
+ * absent instead of inventing one — `handoffDocumentSchema`'s own validation catches that right
+ * after this returns, same as any other pre-existing malformation this migration doesn't try to
+ * fix.
+ *
  * Registered against `resolveSchemaVersion` (`schema-version.ts`) by `adapters/storage/index.ts`,
  * exactly the mechanism that module's own top comment already anticipated for "a future document"
  * — this is the first one to actually need it. Only reshapes `facts.git`/adds the two new keys;
@@ -74,7 +84,14 @@ function migrateHandoffV1ToV2(document: Record<string, unknown>): Record<string,
       ? (document.facts as Record<string, unknown>)
       : {};
   const oldGit = facts.git;
-  const git = oldGit === null || oldGit === undefined ? [] : [oldGit];
+  const git =
+    oldGit === null || oldGit === undefined || typeof oldGit !== 'object'
+      ? []
+      : [
+          typeof document.cwd === 'string'
+            ? { ...(oldGit as Record<string, unknown>), root: document.cwd }
+            : oldGit,
+        ];
   return {
     ...document,
     schemaVersion: 2,

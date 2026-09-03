@@ -91,13 +91,18 @@ describe('buildResumePrompt — source: "deterministic" (honest, not empty)', ()
           lastPrompts: ['fix the flaky test'],
           assistantMessages: [],
           touchedFiles: ['src/parser.ts'],
-          git: {
-            branch: 'main',
-            dirty: true,
-            modifiedFiles: ['src/parser.ts'],
-            commitsToday: [],
-            worktrees: [],
-          },
+          git: [
+            {
+              root: 'c:\\code\\projeto',
+              branch: 'main',
+              dirty: true,
+              modifiedFiles: ['src/parser.ts'],
+              commitsToday: [],
+              worktrees: [],
+            },
+          ],
+          filesOutsideRepository: 0,
+          reposNotVisited: 0,
         },
       }),
     );
@@ -130,7 +135,9 @@ describe('buildResumePrompt — source: "deterministic" (honest, not empty)', ()
           lastPrompts: [],
           assistantMessages: [],
           touchedFiles: [],
-          git: null,
+          git: [],
+          filesOutsideRepository: 0,
+          reposNotVisited: 0,
         },
       }),
     );
