@@ -1489,7 +1489,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Ver também:* **Q-044**, sobre o truncamento em 500 caracteres ter cortado justamente a
       conclusão da mensagem que originou a inversão.
 
-- [ ] **S4-T0 — A evidência não pode ficar presa ao `cwd` de lançamento.** Aprovada pelo
+- [~] **S4-T0 — A evidência não pode ficar presa ao `cwd` de lançamento.** Aprovada pelo
       mantenedor em 2026-08-30. **O problema, observado no primeiro teste real:** a sessão subiu
       de `C:\Users\<usuario>` e o trabalho aconteceu numa pasta criada durante a conversa. O
       `GitReader` olhou para o diretório pessoal — que não é repositório — e não achou nada, então
@@ -1549,6 +1549,60 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Fora de escopo:* mudar o que o `--session`/`ignore` fazem com caminho (já resolvido na
       S3-T5 — **reuse**, não reescreva), e qualquer tentativa de adivinhar um repositório
       "principal" para voltar ao singular.
+
+      **Implementado em 2026-09-03.** `core/types.ts#RepositoryGitFacts` (`GitFacts` + `root`)
+      substitui `GitFacts | null` em `HandoffFacts.git`, que vira `readonly
+      RepositoryGitFacts[]`; `filesOutsideRepository`/`reposNotVisited` entram como `number | null`
+      no mesmo tipo, `null` reservado para handoff migrado de schemaVersion 1 (D-025: uma versão
+      antiga nunca mediu nenhum dos dois, e `0` alegaria uma medição que não existiu).
+      `core/ports.ts#GitReader` ganha `readEvidenceAcrossRepos(cwd, touchedFiles)`, devolvendo
+      `GitEvidenceAcrossRepos`. A descoberta de raiz é I/O puro em
+      `adapters/git/repo-roots.ts#findRepoRoot` (`fs.stat` de `.git`, subindo diretório por
+      diretório — nunca `git rev-parse --show-toplevel` por arquivo, mais caro à toa) e a
+      orquestração — desduplicar por `core/cwd-normalization.ts` (S3-T5, reusado sem alteração),
+      manter a raiz do `cwd` sempre em primeiro no corte do limite (item 6), e aplicar
+      `MAX_GIT_ROOTS_TO_VISIT` (8, exportado e com parâmetro de override pelo mesmo motivo de
+      `findPendingBriefing#maxScanDays`: teste não precisa criar 9 repositórios reais em disco) —
+      vive em `adapters/git/git-adapter.ts#GitAdapter.readEvidenceAcrossRepos`.
+      `application/evidence-gathering.ts#gatherEvidence` deixou de rodar transcript e git em
+      paralelo: git agora depende de `touchedFiles`, que só existe depois que o transcript (ou seu
+      padrão vazio) resolve — sequencial por necessidade, não por descuido, comentado no código.
+      `git` continua em `sources[]` sempre que **ao menos um** repositório respondeu (item 7 do
+      escopo/D-013).
+      **Migração:** `adapters/storage/handoff-schema.ts` sobe `HANDOFF_SCHEMA_VERSION` de 1 para 2
+      e registra `HANDOFF_SCHEMA_MIGRATIONS` (mecanismo de `schema-version.ts`, até agora vazio em
+      produção — esta é a primeira migração real do projeto). A migração mora no schema, não em
+      `resolveSchemaVersion` nem numa função de leitura separada: `resolveSchemaVersion` já existia
+      genérico exatamente para receber uma tabela por documento, e `adapters/storage/index.ts`
+      passa `HANDOFF_SCHEMA_MIGRATIONS` só nos dois pontos que leem handoff
+      (`readHandoff`/`listHandoffs`), sem tocar `readConfig`/`readEarlyWarningState`/
+      `readResumedSessionIds`. A migração **nunca reescreve o arquivo em disco** — só traduz em
+      memória a cada leitura — porque `resolveSchemaVersion` é puro (recebe o documento parseado,
+      devolve outro objeto) e `StorageAdapter` nunca chama uma escrita depois de uma leitura; isso
+      cai de graça a favor do `--dry-run` (que já não grava nada) e de quem lê o mesmo handoff duas
+      vezes no mesmo dia (`listHandoffs`, chamado de novo a cada `seeya end-day --session`
+      subsequente): a segunda leitura migra de novo, do mesmo arquivo v1 inalterado, para o mesmo
+      resultado — testado explicitamente (`tests/integration/storage/handoff.test.ts`, "reading the
+      same v1 file twice produces the identical result... no write-on-read"). O `root` do
+      repositório único de um documento v1 é preenchido a partir do `cwd` de topo do próprio
+      documento (era exatamente essa a leitura implícita antes de existir `root`).
+      **Testado:** os dois casos do aceite têm teste de integração dedicado — dois repositórios
+      git reais em `tmpdir`, com um `cwd` fora dos dois, em
+      `tests/integration/git/git-adapter.test.ts` (mais o caso do item 6: raiz do `cwd` mantida
+      mesmo sem `touchedFiles` nela; o caso do item 5: arquivo fora de qualquer repo contado; e o
+      caso do item 7: excedente do limite declarado, via o parâmetro de override); e um documento
+      v1 **bruto** (JSON escrito à mão, nunca via `serializeHandoff`, que só escreve a versão atual)
+      em `tests/integration/storage/handoff.test.ts`, describe "D-032 migration from schemaVersion
+      1" — cobre `readHandoff`, `listHandoffs`, `git: null` migrando para `[]`, e a idempotência da
+      leitura. Toda fixture/duplo que construía `HandoffFacts`/`Handoff` literalmente foi atualizada
+      para a forma nova (lista + dois campos novos) nos testes já existentes.
+      **Verificado, não só assumido:** `npm run verificar` e `npm run verificar:linux` verdes,
+      `core/` e `application/` em 100% (o piso de S1-T12 continua valendo por diretório, não só no
+      agregado).
+      **Questão registrada:** `docs/QUESTOES.md` **Q-046** — nomes novos que ainda não estão no
+      glossário do `AGENTS.md` (`RepositoryGitFacts`, `readEvidenceAcrossRepos`,
+      `GitEvidenceAcrossRepos`, `filesOutsideRepository`, `reposNotVisited`) e o valor de
+      `MAX_GIT_ROOTS_TO_VISIT`, para confirmação do mantenedor.
 
 - [~] **S4-T1 — `adapters/notification`** conforme o Spike B, com a cadeia de fallback e o
       contrato mínimo **sem ações**. Validação manual do `activationType="protocol"` com esquema
