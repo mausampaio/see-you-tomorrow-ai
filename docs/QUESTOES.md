@@ -3769,3 +3769,128 @@ result both times" — o arquivo em disco é conferido *entre* as duas leituras 
 `schemaVersion: 1`.
 
 **Resposta:** _(em aberto)_
+
+---
+
+## Q-048 — S4-T0g: a hipótese do `createGitFixture` caiu — os "9min42" eram `npm ci` travado, não teste
+
+**Tarefa:** S4-T0g
+**Bloqueia:** não — mas muda a ação da própria tarefa: **nenhum código foi alterado** (nem
+`tests/integration/git/`, nem `vitest.config.ts`), porque a medição não sustenta que havia algo
+para consertar ali.
+
+**O que a tarefa pedia medir.** O plano registrava `windows-latest` em 582s (9min42) no merge da
+S4-T0, contra ~120-160s nos sete merges/commits anteriores, com a suspeita principal de que
+`createGitFixture` (repositório git real por teste, em `tmpdir`) fosse a causa — testes cresceram
+1,4x, o tempo "cresceu" 4,3x.
+
+**Medido, passo 1 — local, nesta máquina Windows (dev), `--reporter=verbose`.**
+`npx vitest run --project unit --project integration --project guards` (o que
+`npm run cobertura`/`verificar` roda), 1126 testes, soma de durações por arquivo:
+
+| diretório | soma (ms) | % do total |
+|---|---:|---:|
+| `tests/integration/guards/` | 263.597 | 79% |
+| `tests/integration/git/` | 17.964 | 5,4% |
+| `tests/integration/process/` | 12.919 | 3,9% |
+| resto | ~38.000 | ~11% |
+| **total (soma de todos os testes)** | **333.696** | 100% |
+
+Dentro de `guards/`: `eslint-restrictions.test.ts` (123.650ms/9 testes, incluindo um estouro de
+orçamento por contenção — a mesma assinatura da Q-030a), `dependency-cruiser.test.ts`
+(63.894ms/21 testes), `layer-matrix.test.ts` (62.403ms/22 testes). Dentro de `git/`:
+`git-adapter.test.ts` sozinho soma 17.295ms em 14 testes (até 3,4s no pior teste), `primitives.test.ts`
+669ms em 6 testes. **Já aqui a suspeita do `createGitFixture` fica fraca**: o diretório inteiro que
+ela habita é ~20x menor que `guards/`, que já existe desde o Sprint 0 e não cresceu com a S4-T0.
+
+**Medido, passo 2 — o runner real (`gh run view --log`), não esta máquina.** Em vez de confiar no
+número total do job (que mistura infraestrutura com teste), separei os passos do workflow em 7
+execuções recentes do `windows-latest`:
+
+| execução | `Instala as dependências` (`npm ci`) | `Roda o portão` (tsc+lint+depcruise+build+cobertura) | total do job |
+|---|---:|---:|---:|
+| S4-T0c merge | 10s | 105s | 134s |
+| Q-041 correct docs | 11s | 106s | 138s |
+| S4-T0d merge | 10s | 98s | 137s |
+| D-032 docs | 8s | 95s | 121s |
+| S4-T0e merge | 13s | 103s | 144s |
+| **S4-T0 merge** | **427s** | **135s** | **582s** |
+| plan S4-T0f/g (falhou, mesmo código pós-S4-T0) | 8s | 102s* | ~124s |
+
+*a etapa falhou no meio (ver abaixo), mas o próprio vitest reportou `Duration 70.76s` antes da
+falha — a mesma ordem de grandeza dos outros.
+
+**O achado central: o passo que de fato roda testes (`Roda o portão`) nunca saiu de ~95-135s em
+nenhuma das 7 execuções — nem antes nem depois da S4-T0.** O salto de 582s inteiro vem de
+`Instala as dependências`: 8-13s em toda execução, exceto na do merge S4-T0, onde levou **427s**
+(7 minutos) para instalar as mesmas 217 dependências, com cache do npm restaurado com sucesso
+(`Cache restored successfully`, log da própria etapa) e **nenhuma mensagem de erro, retry ou aviso
+no meio** — só silêncio entre `npm ci` e `added 217 packages in 7m`. `package-lock.json` não mudou
+nesse commit (conferido via `gh api .../commits/<sha>`), então não é invalidação de cache. É o
+formato clássico de uma rede/registro travando por trás de um `npm ci` sem produzir log — uma
+falha de infraestrutura do runner, não deste projeto.
+
+**Medido, passo 3 — reporter verbose do próprio runner, arquivo por arquivo, na execução seguinte
+à S4-T0 (`docs: plan S4-T0f e S4-T0g`, já com os 1124 testes pós-S4-T0).** Essa execução falhou
+em `termination.test.ts` (Windows: CTRL_BREAK_EVENT via console attach), sem relação nenhuma com
+git — não abro questão nova para essa falha, só registro que o log dela é a fonte destes números,
+porque foi a única execução recente com `--reporter` verboso o bastante para isolar por arquivo:
+
+| arquivo (Windows CI real) | duração | nº testes |
+|---|---:|---:|
+| `guards/eslint-restrictions.test.ts` | 47.351ms | 9 |
+| `guards/dependency-cruiser.test.ts` | 38.317ms | 21 |
+| `guards/layer-matrix.test.ts` | 36.423ms | 22 |
+| `guards/test-projects.test.ts` | 4.728ms | 6 |
+| `guards/coverage.test.ts` | 3.180ms | 2 |
+| `guards/child-process-timeout.test.ts` | 419ms | 2 |
+| `guards/coverage-directories.test.ts` | 17ms | 15 |
+| **soma `guards/`** | **~130.435ms** | **77** |
+| `git/git-adapter.test.ts` | 10.223ms | 14 |
+| `git/primitives.test.ts` | 348ms | 6 |
+| **soma `git/` (o suspeito)** | **~10.571ms** | **20** |
+
+Duração agregada de testes reportada pelo vitest nessa execução: 161,19s. `guards/` é ~81% disso;
+`git/` (`createGitFixture` incluído) é ~6,6%. No pior teste individual de `git-adapter.test.ts`
+(o que monta dois repositórios com worktree + commits datados), o tempo foi 1.429ms — real, mas
+nem perto de explicar 4x coisa nenhuma.
+
+**Conclusão, dita como a tarefa pediu: a hipótese do `createGitFixture` caiu, e a "desproporção" em
+si não existe onde o número fazia parecer que existia.**
+
+1. O passo que executa testes de verdade no Windows CI está estável em ~95-135s há pelo menos 7
+   execuções, crescendo proporcionalmente ao crescimento de 1,4x nos testes (134s→135s a
+   105s→135s, uma faixa de +15 a +40%) — **não 4,3x**.
+2. O número que assustou (582s / 9min42) foi 73% consumido por um `npm ci` que travou uma única
+   vez, sem relação com `package-lock.json`, com código de teste, ou com `tmpdir`/git. É reprodutível
+   como "às vezes `npm ci` trava no `windows-latest`", não como "este projeto ficou mais lento".
+3. Mesmo isolando só o passo de teste, `git/` (o suspeito) nunca foi o maior consumidor —
+   `guards/` (que spawna `eslint`/`depcruise` reais por teste, arquitetura de Sprint 0, sem
+   relação com a S4-T0) sempre foi 10-12x mais caro, e já está documentado como tal desde a Q-025
+   (S2-T8) e a Q-030a (S3-T5) — este projeto já sabia que processo real do Windows é caro, só não
+   tinha juntado os dois fatos (esse custo é de `guards/`, não do que a S4-T0 acrescentou).
+
+**O que eu NÃO fiz, e por quê.** Não toquei `tests/integration/git/_fixtures.ts` nem
+`vitest.config.ts`: não há medição que sustente um problema ali para consertar. Mexer em
+`createGitFixture` "para resolver a lentidão do Windows" seria consertar um sintoma que não existe
+à custa de arriscar cobertura real de git por uma economia de ~10s num job que já está na ordem de
+grandeza esperada em 6 das últimas 7 execuções. Isso seria exatamente o erro que a S2-T8 se recusou
+a cometer, na direção oposta: trocar tempo de manutenção por uma melhora que a medição não pede.
+
+Também não toquei `tests/integration/guards/` — é onde o tempo realmente está, mas está fora do
+escopo que esta tarefa me deu (`tests/integration/` git e `vitest.config.ts`, por suspeita
+específica do `createGitFixture`) e é um custo **pré-existente**, já registrado duas vezes
+(Q-025, Q-030a), não uma regressão da S4-T0. Registro aqui como achado, não como conserto: se o
+mantenedor quiser reduzir o custo de `guards/` (~130s de ~161s agregados no Windows), é uma tarefa
+nova, com o mesmo cuidado de medição no runner real que a Q-025 usou para `powershell.exe` — não
+um adendo a esta.
+
+**Opções que enxergo:** A) fechar S4-T0g sem mudança de código — o "aceite" (job na ordem de
+grandeza anterior, ~2min, sem perder cobertura) já está cumprido em 6 das 7 execuções medidas, e a
+sétima foi uma falha de infraestrutura fora do controle do repositório. B) abrir uma issue/nota
+separada para o custo de `guards/` no Windows (não urgente — já é aceito desde a Q-025/Q-030a — mas
+agora com número atualizado: ~130s). C) investigar por que `npm ci` travou naquela execução
+específica (cache do `actions/setup-node`, versão do npm no runner, etc.) — mas sem outra ocorrência
+igual nas 6 execuções vizinhas, não há o que reproduzir; monitorar é a única ação disponível.
+
+**Resposta:** _(em aberto)_
