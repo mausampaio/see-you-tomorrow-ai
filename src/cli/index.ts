@@ -12,14 +12,22 @@
  * -tested without spawning this file; only the end-to-end journey (docs/TESTES.md's e2e nº1)
  * exercises this module for real, against the compiled `dist/cli/index.js`.
  */
+import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { z } from 'zod';
 import packageJson from '../../package.json' with { type: 'json' };
-import { buildCliContext, buildEndDayContext, buildStartDayContext } from './composition.js';
+import {
+  buildCliContext,
+  buildDaemonContext,
+  buildEndDayContext,
+  buildStartDayContext,
+} from './composition.js';
 import { runSessionsCommand } from './sessions-command.js';
 import { runStatusCommand } from './status-command.js';
 import { runEndDayCommand } from './end-day-command.js';
 import { runStartDayCommand } from './start-day-command.js';
+import { runDaemonLauncher, runDaemonWorker } from './daemon-command.js';
+import { DAEMON_CHILD_ENV_VAR } from '../adapters/process/daemon-launch.js';
 
 const PackageJsonSchema = z.object({
   version: z.string(),
@@ -108,6 +116,28 @@ program
     if (exitCode !== 0) {
       process.exitCode = exitCode;
     }
+  });
+
+program
+  .command('daemon')
+  .description(
+    'Start the long-running daemon that watches sessions and triggers the end-of-day capture ' +
+      'at the configured time (D-005). Runs detached from this terminal — closing the window or ' +
+      'logging out does not stop it. A second instance refuses to start while one is already ' +
+      'running.',
+  )
+  .action(async () => {
+    if (process.env[DAEMON_CHILD_ENV_VAR] === '1') {
+      const deps = await buildDaemonContext();
+      const exitCode = await runDaemonWorker(deps, process.pid);
+      if (exitCode !== 0) {
+        process.exitCode = exitCode;
+      }
+      return;
+    }
+    const { storage, processControl } = await buildDaemonContext();
+    const scriptPath = fileURLToPath(import.meta.url);
+    console.log(await runDaemonLauncher(storage, processControl, { scriptPath, args: ['daemon'] }));
   });
 
 program.parseAsync(process.argv).catch((error: unknown) => {
