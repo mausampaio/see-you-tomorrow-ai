@@ -61,8 +61,16 @@ export function renderRelativeAge(daysAgo: number): string {
 /** S3-T6: `pendingItems`/`tomorrowPlan` are lists, and the first real terminal read of this
  * output showed why that matters — `join('; ')` turned five items into one run-on line nobody
  * could parse at a glance. One item per line, indented under its own `label:` line, the same
- * shape `renderPickerQuestion` already uses for its own numbered list. */
-function renderItemList(label: string, items: readonly string[]): string {
+ * shape `renderPickerQuestion` already uses for its own numbered list.
+ *
+ * **Exported for `cli/format-end-day.ts` to reuse as-is (S4-T0h).** `seeya end-day` hit the exact
+ * same bug this function was written to fix — `pendingItems`/`tomorrowPlan` never printed at all
+ * there, and the captured-session block had no per-line list to fall back on. A second copy of
+ * this same six-line function in `cli/` would be the duplication AGENTS.md § "Estilo de código"
+ * rules out (same reuse precedent as `core/briefing.ts#formatSessionListingLine`, cited on its own
+ * docstring); this stays in `core/` because it's still pure text shaping with no I/O, not a `cli/`
+ * responsibility being pulled upward. */
+export function renderItemList(label: string, items: readonly string[]): string {
   return [`    ${label}:`, ...items.map((item) => `      - ${item}`)].join('\n');
 }
 
