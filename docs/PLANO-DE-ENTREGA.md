@@ -1619,6 +1619,79 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       `GitEvidenceAcrossRepos`, `filesOutsideRepository`, `reposNotVisited`) e o valor de
       `MAX_GIT_ROOTS_TO_VISIT`, para confirmação do mantenedor.
 
+- [ ] **S4-T0f — Teste de unidade que spawna processo real está na faixa errada.** Achado em
+      2026-09-04, investigando um vermelho no CI de Windows.
+
+      **O que falhou.** `tests/unit/adapters/process/proc-start.test.ts`, caso
+      *"win32: recheck says the PID is gone"*, com `Test timed out in 5000ms` — **primeira vez em
+      oito execuções**. Rerun do mesmo commit passou, então é contenção, não defeito
+      determinístico.
+
+      **Mas a fragilidade é estrutural, não azar.** Esse teste chama a plataforma `win32` de
+      verdade: ele **spawna `powershell.exe`**. Medido nesta máquina, quente: 500–880ms por
+      chamada, duas por arquivo. E o `docs/TESTES.md` define a faixa assim:
+
+      > *"unidade — core/ e transcript/ — **sem I/O, sem relógio real**"*
+
+      **Um teste que spawna processo está na faixa que proíbe I/O.** Ele usa o default de 5000ms
+      do vitest porque **ninguém lhe deu orçamento** — e ninguém deu porque a faixa promete que
+      não precisa. Ele é frágil **por construção**.
+
+      **A pista do conserto está no próprio docstring dele:** o PID é impossível de propósito,
+      para a busca falhar em qualquer plataforma, e o que se afirma é **só a rotulagem**
+      (`processGone` × `unavailable`), decidida pelo `recheck` **injetado**. O spawn real é
+      **incidental** — o teste não precisa do powershell para responder, precisa que a captura
+      falhe.
+
+      *Escopo:* tornar o teste genuinamente puro, injetando a falha de captura em vez de
+      provocá-la com processo real. O projeto já injeta `platform` e `recheck` exatamente para
+      isso — a costura existe, falta usá-la aqui.
+
+      *Alternativas descartadas, e por quê:* **subir o timeout** trata o sintoma e deixa I/O numa
+      faixa que promete não ter; **mover para `tests/integration/process/`** é honesto mas mantém
+      processo real para testar lógica pura — e a cobertura real daquela função contra processo
+      de verdade **já existe** em `tests/integration/process/liveness.test.ts`, com orçamento.
+
+      *Enquanto estiver aí:* varra `tests/unit/` atrás de **outros** testes que fazem I/O. Se
+      houver mais, **liste na Q-047** em vez de consertar todos — quero decidir o alcance.
+
+      *Aceite:* o caso `win32` não spawna processo nenhum, e a asserção sobre a rotulagem
+      continua valendo.
+
+- [ ] **S4-T0g — O CI de Windows quadruplicou de tempo com a S4-T0.** Achado na mesma
+      investigação, e é o achado maior.
+
+      **Medido**, duração do job `windows-latest` nas últimas oito execuções verdes:
+
+      ```
+      582s  merge: S4-T0          <- 
+      144s  merge: S4-T0e
+      121s  docs: D-032
+      130s  docs: amend S4-T0e
+      157s  docs: plan S4-T0e
+      137s  merge: S4-T0d
+      138s  docs: correct Q-041
+      134s  merge: S4-T0c
+      ```
+
+      De ~2min15 para **9min42**. Os testes cresceram **1,4x** (de ~800 para 1124); o tempo
+      cresceu **4,3x**. A desproporção é o ponto — não é "mais testes", é outra coisa.
+
+      **Suspeita principal, a confirmar medindo:** as suítes novas criam **repositórios git reais**
+      em `tmpdir` (`createGitFixture`), e operação de git no Windows é cara. **Meça por arquivo
+      antes de mexer** — a S2-T8 já ensinou que a causa provável pode não ser a causa.
+
+      **Por que isto importa mais que o número:** este é o portão que se espera antes de publicar.
+      Quadruplicar a espera muda como se trabalha, e o efeito **piora sozinho** conforme a suíte
+      cresce. Foi também o que encheu o runner o bastante para a S4-T0f aparecer.
+
+      *Direções possíveis, nenhuma decidida:* reusar um repositório por **arquivo** em vez de por
+      teste; pagar a criação uma vez em `globalSetup`, como já se fez com o shim do `csc.exe`
+      (S2-T8); ou reduzir o que precisa de repositório real. **Escolha com a medição na mão.**
+
+      *Aceite:* o job de Windows volta para a ordem de grandeza anterior **sem** perder cobertura
+      real de git — e o relatório diz onde estava o tempo, não só que melhorou.
+
 - [~] **S4-T1 — `adapters/notification`** conforme o Spike B, com a cadeia de fallback e o
       contrato mínimo **sem ações**. Validação manual do `activationType="protocol"` com esquema
       `seeya://` no Windows; se não se provar, o produto segue sem ações clicáveis e nada quebra.
