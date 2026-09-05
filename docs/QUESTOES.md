@@ -3789,27 +3789,41 @@ exatamente o que `docs/PLANO-DE-ENTREGA.md` já tinha registrado como achado ao 
 **O conserto.** Segui a pista do próprio docstring do teste: o que se prova é só a rotulagem
 (`processGone` × `unavailable`), decidida pelo `recheck` injetado — o spawn é incidental. Em vez
 de extrair essa lógica para fora de `captureObservedProcStart` (o que exigiria expor `afterFailure`
-como API pública só para o teste alcançar), injetei o **comando em si**: `captureDarwin` e
-`captureWindows` (`src/adapters/process/proc-start.ts`) agora recebem um `run: CommandRunner`
-(tipo novo em `src/adapters/process/spawn-stdout.ts`, `(command, args, env?) =>
-Promise<string | undefined>`) em vez de chamar `runForStdout` por import global.
-`captureObservedProcStart` ganhou um quarto parâmetro, `run = runForStdout`, no mesmo espírito do
-`platform = process.platform` que já existia: todo chamador de produção (`adapters/process/
-index.ts`, `tests/e2e/sessions.test.ts`, `tests/integration/*`) continua passando só `(pid,
-recheck)` e recebe o `run` real por default; só o teste de unidade substitui um fake que resolve
-na hora.
+como API pública só para o teste alcançar), injetei o **comando em si**: `captureWindows`
+(`src/adapters/process/proc-start.ts`) agora recebe um `run: CommandRunner` (tipo novo em
+`src/adapters/process/spawn-stdout.ts`, `(command, args, env?) => Promise<string | undefined>`) em
+vez de chamar `runForStdout` por import global. `captureObservedProcStart` ganhou um quarto
+parâmetro, `run = runForStdout`, no mesmo espírito do `platform = process.platform` que já
+existia: todo chamador de produção (`adapters/process/index.ts`, `tests/e2e/sessions.test.ts`,
+`tests/integration/*`) continua passando só `(pid, recheck)` e recebe o `run` real por default; só
+o teste de unidade substitui um fake que resolve na hora, e só para o caso `win32`.
+
+**Por que só `captureWindows`, não `captureDarwin` também — e um achado no caminho.** Minha
+primeira versão injetou `run` nos dois, por simetria. `npm run cobertura` (rodado antes de
+declarar a tarefa pronta, não depois) mostrou por quê isso era exagero: `adapters/process` caiu de
+80,88% para **79,71%** de branches, abaixo do piso de 80% de `docs/TESTES.md`/`vitest.config.ts`.
+Causa: o `ps` real que `captureDarwin` spawnava no teste de unidade (via `IMPOSSIBLE_PID`, 27–29ms
+medidos) era a **única** cobertura real, em toda a suíte, do branch de falha de
+`spawn-stdout.ts#runForStdout` (código de saída ≠ 0 / evento `error`) — a suíte de integração só
+cobre o caminho de sucesso (processo vivo de verdade), nunca o de falha. Trocar esse `ps` real por
+um fake apagou essa cobertura de vez. Vale registrar como achado à parte, do mesmo tipo que a
+S4-T0g mediu hoje para o CI: **a hipótese "isto também precisa do seam" não se sustentou quando
+medida**, e a medição (não a simetria) é que decidiu. Versão final: só `captureWindows` recebe
+`run` — é a única chamada que era realmente lenta (500–880ms de `powershell.exe`, contra 27–29ms
+de `ps`) —, `captureDarwin` continua chamando `runForStdout` direto, e a cobertura voltou a
+81,15%.
 
 **Por que não é costura só-de-teste, na minha leitura.** É a mesma forma que
 `adapters/notification/backend.ts` já usa (`CommandRunner`, injetado como `options.run`,
 default `spawnCommand`) pelo motivo que aquele arquivo documenta: "verificar os argumentos
 montados... sem nunca iniciar um `powershell.exe`/`notify-send`/`osascript` real" — e é também
 a regra geral do `AGENTS.md` ("biblioteca de terceiro que faz I/O fica atrás de uma porta...
-injeção por parâmetro, nunca por import global"), que `captureDarwin`/`captureWindows` violavam
-antes desta tarefa. Se o mantenedor achar que isto é forte demais para uma tarefa "pequena", a
-alternativa que eu tinha na manga era expor `afterFailure` publicamente e testar só ela, direto —
-mais simples, mas perde a cobertura das duas condições reais dentro de `captureDarwin`/
-`captureWindows` (`stdout === undefined`, regex falhando), que hoje só são exercitadas pelo teste
-de unidade (a suíte de integração só cobre o caminho de sucesso, processo vivo de verdade).
+injeção por parâmetro, nunca por import global"), que `captureWindows` violava antes desta tarefa.
+Se o mantenedor achar que isto é forte demais para uma tarefa "pequena", a alternativa que eu
+tinha na manga era expor `afterFailure` publicamente e testar só ela, direto — mais simples, mas
+perde a cobertura da condição real dentro de `captureWindows` (`stdout === undefined`, regex
+falhando), que hoje só é exercitada pelo teste de unidade (a suíte de integração só cobre o
+caminho de sucesso, processo vivo de verdade).
 
 **Escolhas que fiz e que gostaria de confirmar:**
 
@@ -3818,10 +3832,10 @@ de unidade (a suíte de integração só cobre o caminho de sucesso, processo vi
 `adapters/process/spawn-stdout.ts`, novo: `(command, args, env?) => Promise<string | undefined>`).
 Não tentei unificar: o de notificação carrega `exitCode`/`stdout`/`stderr` porque os backends
 precisam do código de saída para decidir sucesso; o de `proc-start.ts` mantém a forma simples que
-`runForStdout` já tinha (`undefined` em qualquer falha), que é exatamente o que
-`captureDarwin`/`captureWindows` já esperavam antes desta tarefa — mudar a forma teria efeito
-fora do escopo. **Minha escolha:** manter os dois, mesmo nome, sem lugar comum — se isso incomodar
-por deriva de nome, é candidato a entrar no glossário do `AGENTS.md` como termo de porta.
+`runForStdout` já tinha (`undefined` em qualquer falha), que é exatamente o que `captureWindows`
+já esperava antes desta tarefa — mudar a forma teria efeito fora do escopo. **Minha escolha:**
+manter os dois, mesmo nome, sem lugar comum — se isso incomodar por deriva de nome, é candidato a
+entrar no glossário do `AGENTS.md` como termo de porta.
 
 **2) `captureLinux` continua lendo `/proc/<pid>/stat` de verdade (`fs.readFile`), não ganhou
 seam.** Não é o achado original (a fragilidade medida era só `powershell.exe`), e uma leitura de
@@ -3857,14 +3871,18 @@ achado, é o comportamento já pretendido.
 
 **Relatório de medição (antes/depois), arquivo isolado
 (`npx vitest run --project unit tests/unit/adapters/process/proc-start.test.ts --reporter=verbose`,
-mesma máquina, três execuções cada, faixa observada):**
+mesma máquina, duas a três execuções cada, faixa observada):**
 
 | Caso | Antes | Depois |
 |---|---|---|
-| `win32: recheck says the PID is gone` | 815ms | 0ms |
+| `win32: recheck says the PID is gone` | 815ms | 0-1ms |
 | `win32: recheck says the PID still exists` | 761ms | 0ms |
-| `darwin` (as duas variantes, efeito colateral do mesmo seam) | 27–29ms | 0–1ms |
-| Arquivo inteiro, tempo de execução dos testes (`tests` no resumo do vitest) | 1.64s | 11ms |
-| Arquivo inteiro, `Duration` total reportada (inclui transform/import) | 3.41s | 800ms |
+| `darwin` (as duas variantes — **sem mudança**: continua chamando `runForStdout` real, ver acima) | 27–29ms | 19–26ms |
+| Arquivo inteiro, tempo de execução dos testes (`tests` no resumo do vitest) | 1.64s | 55ms |
+| Arquivo inteiro, `Duration` total reportada (inclui transform/import) | 3.41s | 988ms |
+
+**Cobertura (`npm run cobertura`, `adapters/process`, branches — o número mais apertado):**
+antes da tarefa, 80,88%; com o seam nos dois (`captureDarwin`+`captureWindows`), 79,71% (**quebra
+o portão**, achado acima); com o seam só em `captureWindows` (versão entregue), 81,15%.
 
 **Resposta:** _(em aberto)_
