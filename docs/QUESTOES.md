@@ -3769,3 +3769,102 @@ result both times" — o arquivo em disco é conferido *entre* as duas leituras 
 `schemaVersion: 1`.
 
 **Resposta:** _(em aberto)_
+
+---
+
+## Q-047 — S4-T0f: seam nova para tirar o spawn real do teste de unidade, e uma varredura de outros testes com I/O real
+
+**Tarefa:** S4-T0f
+**Bloqueia:** não — a tarefa foi entregue com a solução mínima (mesmo padrão de Q-017/Q-019/
+Q-021/Q-022/Q-023/Q-027/Q-046), mas registro porque abre um parâmetro novo em
+`captureObservedProcStart` e porque a varredura pedida achou dois casos que não conserto aqui.
+
+**O que motivou.** `tests/unit/adapters/process/proc-start.test.ts`, caso `win32: recheck says
+the PID is gone`, chamava `captureObservedProcStart(pid, recheck, 'win32')` de verdade, que
+spawna `powershell.exe`. Medido nesta máquina antes do conserto: 761–815ms por chamada, duas por
+arquivo (`npx vitest run ... --reporter=verbose`, números na seção "Relatório" abaixo). Isso é
+exatamente o que `docs/PLANO-DE-ENTREGA.md` já tinha registrado como achado ao abrir a tarefa
+(500–880ms), e é o motivo do `Test timed out in 5000ms` de uma das oito execuções.
+
+**O conserto.** Segui a pista do próprio docstring do teste: o que se prova é só a rotulagem
+(`processGone` × `unavailable`), decidida pelo `recheck` injetado — o spawn é incidental. Em vez
+de extrair essa lógica para fora de `captureObservedProcStart` (o que exigiria expor `afterFailure`
+como API pública só para o teste alcançar), injetei o **comando em si**: `captureDarwin` e
+`captureWindows` (`src/adapters/process/proc-start.ts`) agora recebem um `run: CommandRunner`
+(tipo novo em `src/adapters/process/spawn-stdout.ts`, `(command, args, env?) =>
+Promise<string | undefined>`) em vez de chamar `runForStdout` por import global.
+`captureObservedProcStart` ganhou um quarto parâmetro, `run = runForStdout`, no mesmo espírito do
+`platform = process.platform` que já existia: todo chamador de produção (`adapters/process/
+index.ts`, `tests/e2e/sessions.test.ts`, `tests/integration/*`) continua passando só `(pid,
+recheck)` e recebe o `run` real por default; só o teste de unidade substitui um fake que resolve
+na hora.
+
+**Por que não é costura só-de-teste, na minha leitura.** É a mesma forma que
+`adapters/notification/backend.ts` já usa (`CommandRunner`, injetado como `options.run`,
+default `spawnCommand`) pelo motivo que aquele arquivo documenta: "verificar os argumentos
+montados... sem nunca iniciar um `powershell.exe`/`notify-send`/`osascript` real" — e é também
+a regra geral do `AGENTS.md` ("biblioteca de terceiro que faz I/O fica atrás de uma porta...
+injeção por parâmetro, nunca por import global"), que `captureDarwin`/`captureWindows` violavam
+antes desta tarefa. Se o mantenedor achar que isto é forte demais para uma tarefa "pequena", a
+alternativa que eu tinha na manga era expor `afterFailure` publicamente e testar só ela, direto —
+mais simples, mas perde a cobertura das duas condições reais dentro de `captureDarwin`/
+`captureWindows` (`stdout === undefined`, regex falhando), que hoje só são exercitadas pelo teste
+de unidade (a suíte de integração só cobre o caminho de sucesso, processo vivo de verdade).
+
+**Escolhas que fiz e que gostaria de confirmar:**
+
+**1) Dois tipos `CommandRunner`, mesmo nome, formas diferentes, em dois módulos diferentes**
+(`adapters/notification/backend.ts`: `(command, args) => Promise<SpawnResult>`;
+`adapters/process/spawn-stdout.ts`, novo: `(command, args, env?) => Promise<string | undefined>`).
+Não tentei unificar: o de notificação carrega `exitCode`/`stdout`/`stderr` porque os backends
+precisam do código de saída para decidir sucesso; o de `proc-start.ts` mantém a forma simples que
+`runForStdout` já tinha (`undefined` em qualquer falha), que é exatamente o que
+`captureDarwin`/`captureWindows` já esperavam antes desta tarefa — mudar a forma teria efeito
+fora do escopo. **Minha escolha:** manter os dois, mesmo nome, sem lugar comum — se isso incomodar
+por deriva de nome, é candidato a entrar no glossário do `AGENTS.md` como termo de porta.
+
+**2) `captureLinux` continua lendo `/proc/<pid>/stat` de verdade (`fs.readFile`), não ganhou
+seam.** Não é o achado original (a fragilidade medida era só `powershell.exe`), e uma leitura de
+`fs` contra um caminho inexistente falha na hora (`ENOENT`), sem custo perceptível — não é I/O
+lento, é I/O. Pela letra de `docs/TESTES.md` ("unidade... sem I/O"), ainda sobra um `readFile`
+real no teste de unidade depois desta tarefa. **Minha escolha:** deixar como está — injetar leitura
+de arquivo também exigiria um segundo tipo de seam (`FileReader`-like) só para fechar uma lacuna
+que nunca causou vermelho, e a tarefa pede resistir a crescer. Acho que a letra da faixa fica
+tecnicamente incompleta; a fragilidade que ela existe para evitar, não.
+
+**A varredura de `tests/unit/` (pedida, não consertada aqui).** Além do arquivo desta tarefa, achei
+dois testes que dependem do relógio real (`setTimeout` de verdade, não um `Clock` injetado):
+
+- `tests/unit/application/concurrency.test.ts` — dois casos (`returns results in the same order...`
+  e `never runs more than limit tasks at once`) usam `setTimeout` real com atrasos de 5–30ms para
+  criar sobreposição observável entre tarefas assíncronas concorrentes.
+- `tests/unit/application/end-day.test.ts` — a classe `ConcurrencyTrackingStorage` (linhas 46–57)
+  usa `setTimeout(resolve, 5)` real pelo mesmo motivo (prova de concorrência limitada, aceite da
+  S2-T3).
+
+Nenhum dos dois spawna processo — são atrasos de dezenas de milissegundos dentro do próprio
+processo do teste, uma classe de risco bem menor que `powershell.exe` —, mas ainda são "relógio
+real" pela letra de `docs/TESTES.md` ("nenhum teste depende do relógio real: `Clock` é sempre
+injetado"), e a técnica (atraso real para forçar sobreposição) é exatamente o tipo de coisa que
+fica mais lenta e mais instável conforme a máquina de CI fica mais carregada — a mesma forma de
+risco que motivou esta tarefa, só que ainda não mordeu. Não abri conserto para nenhum dos dois:
+a tarefa pediu para listar, não resolver, e resolver exigiria decidir como simular concorrência
+sem relógio real (fake timers do vitest, ou uma barreira controlada por promessas em vez de
+tempo) — decisão de desenho, não achado.
+`tests/unit/guards/node-types.test.ts` importa `node:fs` mas documenta explicitamente que nunca
+chama `existsSync` de verdade (só referencia o símbolo para forçar a checagem de tipo) — não é um
+achado, é o comportamento já pretendido.
+
+**Relatório de medição (antes/depois), arquivo isolado
+(`npx vitest run --project unit tests/unit/adapters/process/proc-start.test.ts --reporter=verbose`,
+mesma máquina, três execuções cada, faixa observada):**
+
+| Caso | Antes | Depois |
+|---|---|---|
+| `win32: recheck says the PID is gone` | 815ms | 0ms |
+| `win32: recheck says the PID still exists` | 761ms | 0ms |
+| `darwin` (as duas variantes, efeito colateral do mesmo seam) | 27–29ms | 0–1ms |
+| Arquivo inteiro, tempo de execução dos testes (`tests` no resumo do vitest) | 1.64s | 11ms |
+| Arquivo inteiro, `Duration` total reportada (inclui transform/import) | 3.41s | 800ms |
+
+**Resposta:** _(em aberto)_

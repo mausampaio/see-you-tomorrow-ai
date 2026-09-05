@@ -1619,7 +1619,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       `GitEvidenceAcrossRepos`, `filesOutsideRepository`, `reposNotVisited`) e o valor de
       `MAX_GIT_ROOTS_TO_VISIT`, para confirmação do mantenedor.
 
-- [ ] **S4-T0f — Teste de unidade que spawna processo real está na faixa errada.** Achado em
+- [~] **S4-T0f — Teste de unidade que spawna processo real está na faixa errada.** Achado em
       2026-09-04, investigando um vermelho no CI de Windows.
 
       **O que falhou.** `tests/unit/adapters/process/proc-start.test.ts`, caso
