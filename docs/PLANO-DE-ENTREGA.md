@@ -1826,6 +1826,43 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       e a especificação diz que aquele comando não escreve nada). O daemon é a única coisa que vê
       sessões **continuamente**, que é o que o D-018 quer dizer com "assim que a sessão é vista".
       Ver `src/adapters/discovery/early-warnings.ts`.
+
+      **ATUALIZAÇÃO (2026-09-05): esta entrada é do Sprint 0, e cinco coisas mudaram desde
+      então. Leia isto antes do texto acima.**
+
+      **1. A decisão de agenda já existe e é pura.** A S4-T2 entregou `core/schedule.ts`, que
+      devolve **união discriminada de seis variantes** (`disabled`, `skipped`, `alreadyEnded`,
+      `waiting`, `leadTimeWarning`, `endOfDay`) mais um `nextState`. O daemon **consome**, não
+      redecide. E o `nextState` só deve ser persistido **depois** de a ação ter sucesso — a
+      função pura nunca assume que o efeito aconteceu.
+
+      **2. O `DayState` ainda NÃO é persistido, e persistir é desta tarefa.** A S4-T2 entregou o
+      tipo de domínio de propósito sem disco, deixando a forma para quem fosse gravar. O
+      `AGENTS.md` § Idioma **já reserva** `estado.json` e `Storage.saveState` — use esses nomes.
+      **D-027: chave que vai para disco é barata agora e cara depois.**
+
+      **3. O limite de retentativa mora aí, e a Q-040 já disse por quê.** A S4-T00e fez handoff
+      determinístico **deixar de bloquear** nova captura no mesmo dia — correto para uso à mão, e
+      em laço vira retentativa a cada ciclo se o modelo estiver falhando de verdade, gastando
+      dinheiro sem melhorar nada. A contagem **não** pode ser reconstruída dos handoffs
+      (`saveHandoff` **sobrescreve**, não acumula), então ela mora no `DayState`.
+
+      **4. A cadência foi resolvida por medição, e o resultado é o mais simples.** O Spike J
+      mediu que o cache de prompt vive na faixa de **uma hora** (quente aos 18 minutos, tier de
+      1h em toda escrita). Isso **derrubou** o argumento — vindo do Spike I, por analogia com o
+      away summary — de que o daemon precisaria de detecção fina de ociosidade de 5 minutos.
+      **O desenho segue o da especificação:** laço de 30s decidindo por relógio de parede,
+      captura no horário efetivo. Não construa captura contínua.
+
+      **5. Notificação e escopo já existem.** A S4-T1 entregou a porta `Notifier` e a cadeia de
+      fallback (primeiro disponível vence; nenhum disponível cai para stderr **sem lançar**). A
+      D-031 já está implementada no `endDay`, então o daemon herda o escopo certo — captura o
+      que está vivo e o que morreu por acidente, lista o que foi fechado.
+
+      **Um cuidado que só aparece em laço:** o `end-day` à mão é uma execução por dia; o daemon
+      chama a captura **repetidamente**. Tudo que é aceitável uma vez — falha de geração, sessão
+      inelegível, notificação que não sobe — passa a acontecer N vezes. **Nada disso pode virar
+      enxurrada de aviso nem de gasto.** Pense em quem deixa a máquina ligada no fim de semana.
 - [ ] **S4-T4 — `seeya snooze`, `seeya skip-today`, `seeya config`.**
 - [ ] **S4-T5 — `seeya daemon --stop/--status`.**
       *Aceite do sprint:* e2e 6, 7 e 8 passam. Um dia inteiro de uso real sem intervenção.
