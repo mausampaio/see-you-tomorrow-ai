@@ -1964,6 +1964,46 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       lugar nenhum) e a legibilidade de `captureModel`/`budgetPerSessionUsd` ficarem presos ao
       valor do início do daemon (ao contrário de `relevanceHours`, que é relido a cada ciclo)
       estão registrados na Q-049 para o mantenedor decidir, não decididos aqui.
+- [ ] **S4-T3b — O daemon precisa deixar rastro quando falha, e o lock precisa desempatar PID.**
+      Saída da **Q-049**, respondida em 2026-09-05. **Antes da S4-T5**, que vai querer ler as duas
+      coisas.
+
+      **Parte 1 — erro de ciclo vira estado, não fluxo.** Hoje o `scheduler/loop.ts` tem um
+      `catch {}` deliberado: o daemon engole erro de ciclo. Um processo de fundo que falha sem
+      rastro **fica vivo, parece saudável e não faz nada** — a pessoa descobre no dia seguinte,
+      quando o briefing não existe, e não há o que investigar.
+
+      **Logger está descartado:** o daemon sobe desanexado com `stdio` ignorado (D-005) — não tem
+      para onde escrever —, e arquivo de log traz rotação, tamanho, retenção: várias chaves em
+      disco (D-027) para um problema com solução menor.
+
+      *Escopo:* gravar no `estado.json` **que já existe** o último erro e a **contagem de ciclos
+      consecutivos que falharam**. O que a pessoa precisa não é "o que deu errado às 14h32", é
+      **"faz três horas que não consigo trabalhar"**.
+
+      *E uma notificação, uma só:* se o daemon falhar em **todos** os ciclos por um período longo,
+      isso é acionável e merece **um** aviso — não um por erro. Mesmo padrão que o **D-018** já usa
+      nos avisos precoces. **Notificar por ciclo é a enxurrada que o brief da S4-T3 proibiu.**
+      Escolha o período e **justifique**; se não houver base, escolha o mais conservador e diga.
+
+      **Parte 2 — o lock desempata por `procStart`.** Hoje ele guarda só o PID. **PID reciclado faz
+      um lock morto parecer vivo** → o segundo daemon recusa subir → **nenhum daemon roda**, e a
+      pessoa acha que está ligado. O erro oposto (dois daemons) é ruim mas **barulhento**; este é
+      silencioso, e o D-025 existe contra ausência parecendo presença.
+
+      *A maquinaria já existe:* a S1-T13 fez `ProcessControl.isAlive(pid, procStart)` exatamente
+      para isso, e o `adapters/process/proc-start.ts` já captura o valor. O lock grava o
+      `procStart` na escrita e compara na leitura. **Não construa maquinaria nova.**
+
+      *Cuidado do D-025, que o `resolveIsAlive` já tem:* `procStart` que não pode ser capturado ou
+      comparado (`unavailable`) **não** significa "morto" — cai para a checagem básica e o lock
+      **continua respeitado**. Ausência de evidência não vira licença para subir um segundo daemon.
+
+      *Aceite:* daemon que falha em vários ciclos deixa rastro legível no estado do dia e avisa
+      **uma** vez; lock apontando para PID reciclado é reconhecido como morto; lock cujo
+      `procStart` é indisponível **continua sendo respeitado**. **Os três com teste** — o terceiro
+      é o que impede o conserto de virar o defeito oposto.
+
 - [ ] **S4-T4 — `seeya snooze`, `seeya skip-today`, `seeya config`.**
 - [ ] **S4-T5 — `seeya daemon --stop/--status`.**
       *Aceite do sprint:* e2e 6, 7 e 8 passam. Um dia inteiro de uso real sem intervenção.

@@ -4214,6 +4214,61 @@ oito primeiras escolhas como estão, ou pedir ajuste em qualquer uma antes de ma
 
 ---
 
+**Resposta parcial (2026-09-05): os dois itens que eu não deixaria envelhecer.** Os outros oito
+seguem em aberto e nenhum bloqueia.
+
+---
+
+**1) O daemon engole erro de ciclo em silêncio — resolvido virando ESTADO, não fluxo.**
+
+Você fez a coisa certa perguntando antes de inventar um logger (AGENTS.md). E o problema é real:
+**um daemon que falha sem deixar rastro é o pior modo de falha que um processo de fundo tem.**
+Ele fica vivo, parece saudável, e não faz nada. A pessoa só descobre no dia seguinte, quando o
+briefing não existe — e aí não há nada para investigar.
+
+**Logger está descartado, e não por preguiça.** O daemon sobe desanexado com `stdio` ignorado
+(D-005): **ele não tem para onde escrever**. Um logger significaria arquivo novo, rotação,
+tamanho máximo, política de retenção — várias chaves em disco (D-027) para um problema que tem
+solução menor.
+
+**A solução é registrar no `estado.json` que já existe:** o **último erro** e a **contagem de
+ciclos consecutivos que falharam**. Erro deixa de ser fluxo e vira **estado do dia**, que é o que
+a pessoa precisa saber — não "o que deu errado às 14h32", e sim **"faz três horas que não
+consigo fazer meu trabalho"**.
+
+**E aí ele aparece onde a pessoa já vai olhar**, sem canal novo: o `seeya daemon --status`
+(**S4-T5**, a próxima tarefa) é o consumidor natural, e o briefing do dia é o segundo.
+
+**Mais uma notificação, e uma só.** Se o daemon falhar em **todos** os ciclos por um período
+longo, isso é acionável e merece **um** aviso — não um por erro. É o padrão que o **D-018** já
+estabeleceu para os avisos precoces: avisa uma vez, não repete. Notificar por ciclo seria
+exatamente a enxurrada que o brief da S4-T3 proibiu.
+
+---
+
+**2) O lock sem desempate por `procStart` — acrescentar, e a maquinaria já existe.**
+
+O risco não é teórico e a direção da falha importa. **PID reciclado faz um lock morto parecer
+vivo** → o segundo daemon recusa subir → **nenhum daemon roda**. A pessoa acha que está ligado.
+
+Compare com o erro oposto — lock vivo parecendo morto → dois daemons → captura dobrada, aviso
+dobrado, gasto dobrado. **Ruim, mas barulhento.** O primeiro é silencioso, e este projeto tem uma
+orientação inteira (D-025) contra deixar ausência parecer presença.
+
+**E o conserto é barato porque a maquinaria foi construída para isto.** A S1-T13 fez
+`ProcessControl.isAlive(pid, procStart)` exatamente para desempatar PID reciclado, e o
+`adapters/process/proc-start.ts` já captura o valor. O lock passa a gravar o `procStart` do
+processo no momento da escrita e a comparar na leitura. **Não é maquinaria nova; é usar a que
+existe.**
+
+**Com o cuidado que o D-025 impõe, e que o `resolveIsAlive` já tem:** quando o `procStart` não
+pode ser capturado ou comparado (`unavailable`), o resultado **não** é "morto" — cai para a
+checagem básica e o lock **continua respeitado**. Ausência de evidência não vira licença para
+subir um segundo daemon.
+
+**Vira a S4-T3b**, antes da S4-T5 — porque o `--status` vai querer ler os dois: o erro
+persistido e um lock em que se possa confiar.
+
 ## Q-050 — S4-T0h: reuso do `renderItemList`, e truncar em vez de quebrar o `understanding`
 
 **Tarefa:** S4-T0h
