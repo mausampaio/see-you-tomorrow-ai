@@ -29,9 +29,10 @@ import { runForStdout, type CommandRunner } from './spawn-stdout.js';
 
 type ExistenceRecheck = (pid: number) => Promise<boolean>;
 
-/** One platform's capture strategy. `run` is unused by `captureLinux` (it reads `/proc` directly,
- * no subprocess involved) but is part of the shared shape so `CAPTURE_BY_PLATFORM` stays a single
- * record type instead of a per-platform union. */
+/** One platform's capture strategy. `run` is unused by `captureLinux`/`captureDarwin` (neither
+ * takes it — see `captureWindows`'s own docstring for why only that one does) but is part of the
+ * shared shape so `CAPTURE_BY_PLATFORM` stays a single record type instead of a per-platform
+ * union. */
 type PlatformCapture = (
   pid: number,
   recheck: ExistenceRecheck,
@@ -93,16 +94,14 @@ async function captureLinux(pid: number, recheck: ExistenceRecheck): Promise<Pro
  * verified on real macOS hardware — no Mac was available in this environment.** The command and
  * env are exactly what the spike documented; only the disambiguation-on-failure logic here is new.
  *
- * `run` defaults to the real `runForStdout` in production (see `captureObservedProcStart`) and is
- * only ever substituted by a test (S4-T0f, Q-047) — a fake that resolves instantly, so the branch
- * below is exercised without spawning a real `ps`.
+ * **Still calls `runForStdout` directly, unlike `captureWindows` (S4-T0f, Q-047).** `ps` is a
+ * lightweight, near-instant binary — the unit test's own IMPOSSIBLE_PID case measured 27-29ms per
+ * call here, nothing like `powershell.exe`'s 500-880ms — so there was no flakiness to fix, and
+ * this real call is what still gives `spawn-stdout.ts#runForStdout`'s failure path (non-zero exit,
+ * `ENOENT` if `ps` isn't on `PATH`) its only real-process coverage anywhere in the suite.
  */
-async function captureDarwin(
-  pid: number,
-  recheck: ExistenceRecheck,
-  run: CommandRunner,
-): Promise<ProcStartCapture> {
-  const stdout = await run('ps', ['-o', 'lstart=', '-p', String(pid)], {
+async function captureDarwin(pid: number, recheck: ExistenceRecheck): Promise<ProcStartCapture> {
+  const stdout = await runForStdout('ps', ['-o', 'lstart=', '-p', String(pid)], {
     ...process.env,
     LC_ALL: 'C',
     TZ: 'UTC',
@@ -148,7 +147,7 @@ async function captureWindows(
 
 const CAPTURE_BY_PLATFORM: Record<string, PlatformCapture> = {
   linux: (pid, recheck) => captureLinux(pid, recheck),
-  darwin: captureDarwin,
+  darwin: (pid, recheck) => captureDarwin(pid, recheck),
   win32: captureWindows,
 };
 
@@ -159,11 +158,12 @@ const CAPTURE_BY_PLATFORM: Record<string, PlatformCapture> = {
  * same shape of not-knowing D-025 already asks for.
  *
  * `run` (a `CommandRunner`, `spawn-stdout.ts`) defaults to the real `runForStdout` — every
- * production call site leaves it at the default and gets a real `ps`/`powershell.exe`. It exists
- * as a parameter, rather than `captureDarwin`/`captureWindows` importing `runForStdout` globally,
- * for the same reason `recheck` and `platform` already are: AGENTS.md's injection rule
- * ("biblioteca de terceiro que faz I/O fica atrás de uma porta"), and the specific payoff is
- * S4-T0f's unit test (Q-047) substituting a fake that never launches a real subprocess.
+ * production call site leaves it at the default and gets a real `powershell.exe` on Windows. Only
+ * `captureWindows` takes it (see that function's own docstring for why `captureDarwin` doesn't);
+ * it exists as a parameter, rather than `captureWindows` importing `runForStdout` globally, for
+ * the same reason `recheck` and `platform` already are: AGENTS.md's injection rule ("biblioteca de
+ * terceiro que faz I/O fica atrás de uma porta"), and the specific payoff is S4-T0f's unit test
+ * (Q-047) substituting a fake that never launches a real `powershell.exe`.
  */
 export function captureObservedProcStart(
   pid: number,

@@ -51,17 +51,19 @@ describe('parseLinuxProcStat', () => {
  * `recheck` — never the specific OS error text, and (S4-T0f, Q-047) never by way of a real
  * subprocess.
  *
- * **`unavailableRun` stands in for macOS's `ps` and Windows' `powershell.exe`.** Before this test
- * injected `run`, the `win32` case measured 500-880ms per call on a warm machine — a real
- * `powershell.exe` launch, twice per file — well past what `docs/TESTES.md` promises for the unit
- * faixa ("sem I/O") and exactly what turned one CI run red with vitest's unbudgeted 5000ms default
- * (docs/PLANO-DE-ENTREGA.md S4-T0f). `captureDarwin`/`captureWindows` call `run` instead of
- * `runForStdout` directly for precisely this reason; production leaves `run` at its default (the
- * real `runForStdout`) and only this test substitutes a fake that resolves instantly with no
- * usable output, driving the exact same failure branch a real, absent PID would. `linux` still
- * reads `/proc/<pid>/stat` for real — a single failed `fs.readFile` against a nonexistent path, not
- * a spawn, so `run` is simply unused on that branch (`unavailableRun` is passed anyway, for a
- * uniform `it.each` call).
+ * **`unavailableRun` stands in for Windows' `powershell.exe` only.** Before this test injected
+ * `run`, the `win32` case measured 500-880ms per call on a warm machine — a real `powershell.exe`
+ * launch, twice per file — well past what `docs/TESTES.md` promises for the unit faixa ("sem
+ * I/O") and exactly what turned one CI run red with vitest's unbudgeted 5000ms default
+ * (docs/PLANO-DE-ENTREGA.md S4-T0f). `captureWindows` calls `run` instead of `runForStdout`
+ * directly for precisely this reason; production leaves `run` at its default (the real
+ * `runForStdout`) and only this test substitutes a fake that resolves instantly with no usable
+ * output, driving the exact same failure branch a real, absent PID would. `linux` and `darwin`
+ * don't take `run` at all (`unavailableRun` is passed anyway, for a uniform `it.each` call, and is
+ * simply ignored on those two branches) — `linux` still reads `/proc/<pid>/stat` for real (a
+ * single failed `fs.readFile`, not a spawn) and `darwin` still spawns real `ps` (27-29ms measured,
+ * nowhere near `powershell.exe`'s cost, and this is what keeps
+ * `spawn-stdout.ts#runForStdout`'s own failure branch covered — see Q-047).
  */
 describe('captureObservedProcStart — failure disambiguation, no real subprocess', () => {
   const IMPOSSIBLE_PID = 999_999_999;
