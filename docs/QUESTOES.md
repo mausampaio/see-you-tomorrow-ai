@@ -4042,4 +4042,172 @@ agora com número atualizado: ~130s). C) investigar por que `npm ci` travou naqu
 específica (cache do `actions/setup-node`, versão do npm no runner, etc.) — mas sem outra ocorrência
 igual nas 6 execuções vizinhas, não há o que reproduzir; monitorar é a única ação disponível.
 
+---
+
+## Q-049 — S4-T3 (o daemon): dez escolhas registradas, um limite justificado, e uma verificação manual que não cabe em teste automatizado
+
+**Tarefa:** S4-T3
+**Bloqueia:** não — nenhuma das dez impediu a entrega; `npm run verificar` e `npm run
+verificar:linux` estão verdes (medido nesta máquina, o segundo via Docker Desktop com container
+Linux real). Registro no mesmo espírito de Q-037/Q-040/Q-041: cada uma tem leitura alternativa
+razoável, e a tarefa pediu explicitamente para registrar em vez de decidir calado.
+
+**1) `Storage.readState` é nome novo, não reservado literalmente pelo `AGENTS.md`.** A tabela de
+"Identificadores que vão para disco" só cita `saveState` (S4-T2, junto com `estado.json`). Segui o
+par `read<Noun>`/`save<Noun>` que `readConfig`/`readEarlyWarningState`/`readHandoff`/`readBriefing`/
+`readResumedSessionIds` já estabelecem — `readState` é a única leitura óbvia desse padrão para o
+mesmo documento. **Opções:** A) confirma `readState` como o nome. B) outro nome era a intenção
+original e ficou faltando na tabela. **Minha escolha:** A.
+
+**2) `estado.json` é um arquivo único na raiz de `~/.seeya/`, não um por dia.** A Q-037 item 6
+(S4-T2) já tinha aberto essa escolha para esta tarefa, citando `resumed.json` (por `days/<day>/`)
+como a alternativa. Fui com arquivo único porque é literalmente o que D-006 diz ("persistido em
+`estado.json`", sem menção a pasta por dia) e porque `DayState.day` já existe especificamente para
+se autodetectar obsoleto (`core/schedule.ts#resetIfNewDay`) — um arquivo por dia tornaria esse
+campo redundante com o próprio nome do arquivo. **Opções:** A) arquivo único (o que implementei).
+B) `days/<day>/estado.json`, com o reset vindo de "arquivo de hoje não existe" em vez de comparar
+`day`. **Minha escolha:** A — B jogaria fora a mecânica que a S4-T2 já tinha construído e testado
+para esse propósito.
+
+**3) O limite de retentativa é 3, escolhido sem base numérica na spec — meu critério está no
+comentário de `core/capture-retry.ts`, resumido aqui.** A tarefa pediu explicitamente "escolha o
+mais conservador" na ausência de base. Raciocínio: a janela de retentativa por turno ativo
+(5 min, a 30s por poll) permite até ~10 tentativas no pior caso; 3 gasta menos de um terço desse
+teto antes de desistir de uma sessão cujo modelo está genuinamente quebrado, tolerando ainda assim
+uma falha transitória isolada (uma queda de rede) sem desistir na primeira. Não medi custo real de
+retentativa (exigiria gastar dinheiro do mantenedor só para calibrar um número) — é uma escolha de
+engenharia, não uma medição. **Opções:** A) 3 (o que implementei). B) um número maior, mais perto
+do teto de ~10, para tolerar mais transitórios. C) 1 (zero tolerância a qualquer falha). **Minha
+escolha:** A, como o mais conservador que ainda tolera um blip isolado.
+
+**4) A retentativa de turno ativo (5 min) sai do MESMO laço de 30s, adiando só a persistência de
+`endOfDayFired` — não inventei um segundo laço.** A spec (§ "Comportamento do daemon") descreve o
+comportamento ("adia a captura... por até 5 minutos, tentando de novo") mas não a mecânica. Decidi
+aproveitar o próprio contrato que `core/schedule.ts#ScheduleDecisionResult` já documenta ("o
+chamador só leva o `nextState` adiante depois de agir com sucesso") — literalmente: enquanto
+alguma sessão capturada nesta chamada ainda vier `capturedDuringActiveTurn: true`, o poll persiste
+tudo MENOS `endOfDayFired`, e o próximo poll de 30s pergunta a mesma coisa de novo. `application/
+endDay` nunca soube que existe uma "janela de retentativa" — ele só roda de novo, e D-026 já
+impede recapturar quem já foi capturado de verdade. **Isto também é o que resolve o item 3
+(retentativa de geração) de graça**: é a MESMA chamada repetida de `endDay` que faria uma sessão
+com modelo quebrado ser tentada de novo a cada 30s se ela também estivesse presa em turno ativo —
+o limite de tentativas (item 3) é o que corta isso antes dos ~10 polls do teto natural.
+**Descoberta ao implementar, não hipótese do brief:** um dia SEM nenhuma sessão em turno ativo
+finaliza no primeiro poll, sempre — ou seja, o limite de retentativa de geração só importa de
+verdade quando a MESMA sessão está presa em turno ativo E com o modelo quebrado ao mesmo tempo.
+Fora dessa combinação específica, `endOfDayFired` vira `true` na primeira tentativa e não há
+"laço" de verdade batendo na mesma sessão de novo naquele dia — o que reduz, mas não elimina, a
+urgência do item 3 (ainda vale para a combinação citada, que é exatamente o cenário que o brief
+descreveu). **Opções:** A) reaproveitar o mesmo laço de 30s via adiamento de `endOfDayFired` (o
+que implementei). B) um laço de retentativa dedicado, com seu próprio intervalo mais curto — mas
+isso reabriria a pergunta que o Spike J já fechou (não construir captura contínua). **Minha
+escolha:** A.
+
+**5) O limiar de "atraso" na notificação de encerramento é 5 minutos — o mesmo número da janela
+de turno ativo, de propósito, não coincidência.** A S4-T2 devolveu `delayMs` cru exatamente para
+esta tarefa decidir o limiar (Q-037 item 3). `core/schedule.ts` já documenta a faixa real:
+"≤30s" para disparo no horário, "horas" para máquina suspensa — qualquer limiar nesse intervalo
+resolve a distinção. Escolhi 5 min em vez de um terceiro número arbitrário porque um encerramento
+que precisou do orçamento de retentativa inteiro para fechar (item 4) também merece o aviso de
+atraso, mesmo quando a causa foi turno ativo e não suspensão — a notificação não distingue as duas
+causas, só o fato de ter demorado. **Opções:** A) 5 min, reaproveitando o número (o que
+implementei). B) um limiar menor (ex.: 2 min) para um aviso mais sensível. C) um limiar maior
+(ex.: 15 min) para não confundir com a retentativa de turno ativo. **Minha escolha:** A.
+
+**6) O lock de instância única (`daemon.lock`) NÃO tem desempate por `procStart`.** D-005 pede
+"lockfile com PID e verificação de liveness" — não menciona desempate de PID reciclado, ao
+contrário do registro de sessões do Claude Code (que a spec trata explicitamente). Considerei
+replicar o mesmo desempate, mas isso exigiria o `seeya` conseguir descrever o PRÓPRIO horário de
+início no momento do spawn, uma capacidade que `adapters/process/proc-start.ts` hoje só oferece
+para RE-observar um PID já conhecido, não para autodescrição. A consequência de não ter o
+desempate é um falso positivo raro (um PID reciclado por um processo não relacionado faz um
+`seeya daemon` legítimo recusar por engano) — pequena e reversível (apagar `daemon.lock`, ou usar
+o `--status`/`--stop` da S4-T5 quando existir), ao contrário de matar a sessão errada de um
+usuário. Documentado no próprio `core/daemon-lock.ts`. **Opções:** A) sem desempate, risco aceito
+e documentado (o que implementei). B) construir a autodescrição de `procStart` só para isto.
+**Minha escolha:** A — B seria uma funcionalidade nova para um risco estreito.
+
+**7) `seeya daemon` usa uma variável de ambiente (`SEEYA_DAEMON_CHILD`) para diferenciar
+lançador de worker, não uma flag `--run` escondida.** `commander` não tem um jeito limpo de
+esconder uma opção do `--help` mantendo as outras visíveis. Uma variável de ambiente já carrega o
+mesmo sinal "isto não é para um humano digitar" que o D-017 usa na direção oposta (variáveis que o
+`seeya` REMOVE antes de spawnar `claude`) — aqui é uma variável que o `seeya` ACRESCENTA antes de
+spawnar a si mesmo. **Nome novo, fora do glossário do `AGENTS.md`** — não é uma chave de disco
+(não é persistida), mas é um identificador que atravessa um `spawn`, então sinalizo aqui pelo
+mesmo espírito do "termo novo entra no glossário antes de entrar no código". **Opções:** A)
+variável de ambiente (o que implementei). B) flag `--run` mesmo que apareça no `--help`, com a
+descrição deixando claro que é de uso interno. **Minha escolha:** A.
+
+**8) `captureModel`/`budgetPerSessionUsd` ficam presos ao valor de quando o daemon subiu;
+`relevanceHours` é relido a cada poll.** Descobri a assimetria construindo `buildDaemonContext`:
+`relevanceHours` afeta CORREÇÃO de descoberta (quais sessões aparecem), então reconstruo o
+`SessionProvider` a cada poll com o config fresco. `captureModel`/`budgetPerSessionUsd` só afetam
+os geradores (`LeanHandoffGenerator`/`DeepHandoffGenerator`), construídos uma vez no início do
+daemon — um `seeya config` mudando o modelo só passa a valer depois do daemon reiniciar. Não
+estendi o mesmo tratamento aos geradores por orçamento de tempo desta tarefa (exigiria os mesmos
+fechamentos que `buildSessionProvider` já usa, espalhados por mais dois campos) e porque o
+`AGENTS.md`/a tarefa não pediram paridade explícita entre os dois casos. Documentado em
+`cli/composition.ts#buildDaemonContext`. **Opções:** A) aceitar a assimetria, documentada (o que
+implementei). B) estender o mesmo padrão de fechamento aos dois geradores agora. **Minha
+escolha:** A — sinalizando para quem revisar decidir se B vale a pena.
+
+**9) Nenhum registro de diagnóstico quando um poll falha — o erro é engolido em silêncio.**
+`scheduler/loop.ts#runDaemon` precisa sobreviver a uma falha de poll sem morrer (o próprio brief:
+"o perigo que só existe em laço"), mas o `AGENTS.md` § "Registro e saída" é explícito: não
+inventar formato de logger no meio de uma tarefa, abrir questão se precisar registrar algo e não
+houver onde. É exatamente esta situação — o daemon roda com `stdio: 'ignore'` (D-005), então
+mesmo um `console.error` não iria a lugar nenhum, e não há arquivo de log neste projeto ainda.
+**Isto é uma lacuna real, não uma decisão que resolvi:** hoje, se o daemon começar a falhar todo
+poll (por exemplo, `~/.seeya/config.json` corromper), ele continua "vivo" (o processo não morre) e
+continua tentando a cada 30s, mas ninguém tem como saber disso sem instrumentar manualmente. Não
+inventei um logger para resolver isto — só registro que a lacuna existe e cito o `AGENTS.md` que
+pede exatamente este registro em vez de invenção. **Opções:** A) aceitar a lacuna por ora,
+registrada aqui, decisão de logger fica para uma tarefa própria (formato, destino, nível — como o
+`AGENTS.md` já antecipa). B) o mantenedor decide um formato mínimo agora (ex.: um arquivo de texto
+simples em `~/.seeya/daemon.log`) e isto vira uma tarefa pequena antes da S4-T5. **Resposta:**
+_(aguardando)_
+
+**10) `scheduler/notices.ts` duplica uma fatia pequena de `cli/end-day-notice.ts` (S4-T1) em vez
+de compartilhar código.** `scheduler/` não pode importar `cli/` (matriz de camadas,
+`docs/ARQUITETURA.md`) — mover `buildEndDayNotice` para `application/` deixaria os dois lados
+compartilharem, mas seria reestruturar um arquivo já aprovado de outra tarefa por uma dúzia de
+linhas, e o aviso do daemon precisa dizer algo que o do `end-day` nunca precisa (se o fechamento
+saiu atrasado, item 5) — os dois textos nunca seriam idênticos de qualquer forma. **Opções:** A)
+duplicação pequena, deliberada (o que implementei). B) mover `buildEndDayNotice`/`pluralize` para
+`application/` agora, para os dois lados importarem. **Minha escolha:** A — o custo de reestruturar
+um arquivo de outra tarefa aprovada pareceu maior que a duplicação de ~15 linhas.
+
+**O que NÃO se sustentou ao encostar no código: a premissa de que eu precisaria "entender a
+interação com o Spike G antes de mexer em terminação" (do texto que despachou a tarefa) já estava
+resolvida por tarefas anteriores, sem nada novo para mim decidir.** `D-005` (emendado) e
+`adapters/process/termination-windows.ts` já documentam, com medição, exatamente por que o daemon
+desanexado (sem console) é IMUNE ao próprio Ctrl+Break que gera para encerrar sessões — "por
+construção", nas palavras do próprio D-005. Não toquei nada em `adapters/process/termination*.ts`;
+o daemon só chama `application/endDay`, que já usa `ProcessControl.terminateGracefully` sem
+mudança nenhuma. Registro isto porque o texto que despachou a tarefa tratava como um risco a
+investigar, e a investigação (leitura de D-005 + o comentário de `termination-windows.ts`) mostrou
+que já não havia risco a resolver — só a ler e confirmar.
+
+**Verificação manual do desanexamento (o aceite que não se prova com teste de unidade).** Medido
+nesta máquina: `npm run build`, depois `node dist/cli/index.js daemon` com `USERPROFILE` apontado
+para uma pasta descartável (`HOME` é bloqueado neste ambiente de execução por isolamento de git;
+`USERPROFILE` não) numa invocação de shell, PID relatado (437448) confirmado vivo por `tasklist`
+numa SEGUNDA invocação de shell independente (cada uma nasce e morre sozinha — se o daemon
+estivesse preso à primeira, teria morrido com ela), `daemon.lock` confirmado em disco com o mesmo
+PID, e uma terceira invocação tentando subir de novo recusou corretamente ("already running").
+Processo encerrado e pasta removida ao final. **O que isto não é**: uma pessoa fechando uma janela
+de terminal interativa de verdade — é um processo de shell terminando. O mecanismo testado
+(processo pai morre; filho `detached`+`stdio: 'ignore'`+`unref()` continua) é o mesmo nos dois
+casos, mas registro a diferença em vez de apresentar como idêntico.
+
+**Testes e2e (6, 7, 8 de `docs/TESTES.md`) continuam sem existir — motivo em `docs/TESTES.md`, não
+repetido aqui.** Resumo: 7 depende de comandos da S4-T4 que ainda não existem; 6 exigiria injetar
+relógio no binário compilado (não há esse ponto de injeção hoje, e o laço só dispara em janelas
+reais de 30s); 8 seria possível isoladamente, mas fica para quando os três nascerem juntos como a
+jornada "dia inteiro de uso real" que o aceite do sprint pede.
+
+**Opções que enxergo para o review, além dos itens 9/10 já com opções em aberto:** confirmar as
+oito primeiras escolhas como estão, ou pedir ajuste em qualquer uma antes de marcar a tarefa `[x]`.
+**Resposta:** _(aguardando)_
+
 **Resposta:** _(em aberto)_

@@ -104,6 +104,32 @@ O que precisa estar coberto com rigor, porque é onde os bugs vão doer:
   descarte — testado que a nota nunca contém "discarded"/"candidate" nesse caso, para não inventar
   "0 descartadas" onde não há descarte para reportar.
 
+- **Orçamento de retentativa por sessão (S4-T3, Q-040 item 3)**: `core/capture-retry.ts` isolado —
+  contagem abaixo do limite não exclui, exatamente no limite exclui (`MAX_CAPTURE_ATTEMPTS_PER_SESSION_PER_DAY`,
+  hoje 3), um a menos não exclui (os dois lados da fronteira, nunca só o proibido). Uma lista vazia
+  de `sessionId`s devolve o MESMO objeto `DayState` (sem cópia à toa). No `scheduler/`: um poll cujo
+  `leanGenerator` sempre falha, chamado repetidamente sobre a MESMA sessão presa em turno ativo
+  (`tests/unit/scheduler/poll.test.ts`), mostra a contagem subindo 1 por chamada e, ao atingir o
+  limite, um generator que lança se for chamado prova que a próxima chamada nem tenta — sem
+  depender de contar invocações, depender de que a chamada erra o teste inteiro se acontecer.
+- **Decisão de lock de instância única (D-005)**: `core/daemon-lock.ts#decideLockAcquisition`
+  isolada — ausente ou PID morto adquire, PID vivo recusa nomeando o dono. Sem desempate por
+  `procStart` (limitação aceita e documentada no próprio arquivo — ver docs/PLANO-DE-ENTREGA.md
+  S4-T3). `scheduler/lock.ts` testado por cima disso com `Storage`/`ProcessControl` em memória:
+  `checkDaemonLock` nunca escreve; `acquireDaemonLock` só escreve no caso `'acquire'`.
+- **O laço do daemon nunca redecide a agenda, só consome (S4-T3)**: `scheduler/poll.ts` exercitado
+  com o pipeline REAL de `application/endDay` (não substituído por fake) — aviso de antecedência
+  não repete numa segunda chamada no mesmo instante; encerramento no horário e encerramento
+  atrasado (`delayMs` cruzando o limiar de 5 min) produzem avisos com título distinguível; uma
+  sessão com escrita nos últimos 60s NÃO finaliza o dia (`endOfDayFired` continua `false`) mesmo
+  já tendo sido capturada (a spec pede "captura assim mesmo" — o teste prova que o handoff foi
+  gravado E que o dia continua em aberto, as duas coisas ao mesmo tempo, porque confundi-las seria
+  o bug real); esgotado o orçamento de 5 min, finaliza mesmo com sessão ainda em turno ativo.
+- **O laço tolera uma falha de poll sem morrer (S4-T3)**: `scheduler/loop.ts#runDaemon` com um
+  poll que lança na primeira chamada e resolve normalmente na segunda — a segunda chamada
+  acontece (docs/PLANO-DE-ENTREGA.md S4-T3: "o perigo que só existe em laço"). `shouldStop`
+  interrompe o laço entre ciclos, nunca no meio de um, e limpa o lock ao parar de forma limpa.
+
 Cobertura mínima: **`core/` 95%**, demais diretórios de produção **80%**. Configurado por
 diretório no vitest, e o CI falha abaixo disso.
 
@@ -168,6 +194,17 @@ Cada adapter contra o mundo real, mas num mundo de mentira controlado.
   repositórios reais em disco só para estourar o limite de produção.
 - **`process/`**: iniciar um processo filho trivial, verificar liveness, terminar com graça,
   verificar que morreu. Por plataforma.
+  **`daemon-launch.ts#spawnDetachedDaemon` (S4-T3)**: spawna um processo real reaproveitando o
+  fixture `graceful-child.mjs` (S1-T2), confirma que fica vivo, é alcançável (`processExists`) e
+  que `SEEYA_DAEMON_CHILD` chega no ambiente do filho. **O que este teste NÃO prova**: sobrevivência
+  ao encerramento do processo que o spawnou — nenhum teste dentro da própria suíte consegue provar
+  isso de si mesmo (exigiria morrer e algo de fora checar depois). Ver docs/PLANO-DE-ENTREGA.md
+  S4-T3 para a verificação manual que cobre essa lacuna.
+- **`storage/` (S4-T3, adição)**: `estado.json` e `daemon.lock` seguem o mesmo roteiro de
+  `early-warnings.json` — ausência é `null`/dia vazio (D-025), JSON inválido e `schemaVersion`
+  desconhecida rejeitam de forma visível, uma escrita substitui o documento inteiro (nunca
+  mescla), e `captureAttemptsToday` ausente no documento (arquivo mais antigo ou editado à mão)
+  volta `{}` em vez de falhar a leitura inteira.
 - **`notification/`**: cada backend verifica os argumentos montados, nunca o toast aparecendo.
   **Implementado com o comando externo injetável (`CommandRunner`), não um binário falso em
   `PATH`** (S4-T1): ao contrário de `claude` (D-015 exige provar integridade através de um
@@ -230,6 +267,21 @@ Rodam o binário `seeya` compilado, com `HOME`/`USERPROFILE` apontando para `tmp
 6. Daemon, com relógio injetado, dispara aviso prévio e depois o encerramento.
 7. `seeya snooze +30m` empurra o disparo; `seeya skip-today` cancela.
 8. Segunda instância do daemon recusa subir por causa do lock.
+
+**S4-T3 (2026-09-05): 6, 7 e 8 continuam sem teste e2e — não é esquecimento, é ordem de
+dependência.** O item 7 precisa de `seeya snooze`/`seeya skip-today`, que são a S4-T4, ainda não
+implementada. O item 6 precisa de "relógio injetado" no binário **compilado** — hoje
+`cli/index.ts` sempre usa `systemClock` real, sem nenhum ponto de injeção, e o laço só dispara em
+janelas de 30s de tempo real (`scheduler/loop.ts#POLL_INTERVAL_MS`), o que tornaria este teste
+"poucos e caros" em "caro demais": esperar minutos de relógio real por jornada. O item 8 é o único
+dos três sem dependência de outra tarefa e SERIA possível hoje (o lock já existe e já foi medido
+manualmente contra o binário real, docs/PLANO-DE-ENTREGA.md S4-T3) — deixado para quando os outros
+dois entrarem juntos, para o e2e nascer como uma jornada "dia inteiro de uso real" coerente (o
+próprio aceite do sprint), em vez de uma peça isolada que a S4-T5 teria que revisitar de qualquer
+forma. A cobertura de integração (`tests/integration/process/daemon-launch.test.ts`,
+`tests/integration/cli/daemon-command.test.ts`, `tests/unit/scheduler/loop.test.ts`) já prova cada
+peça isoladamente contra processo/lock reais; o que falta é só a jornada ponta a ponta pelo
+binário compilado.
 
 ## Contrato — a faixa que protege contra o mundo mudar
 
