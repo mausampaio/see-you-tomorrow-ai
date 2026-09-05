@@ -1840,7 +1840,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       reset de virada de dia vivendo no `core/` em vez de esperar a chave de disco de S4-T3/S4-T4).
       29 testes em `tests/unit/core/schedule.test.ts`, incluindo os dois dias de virada de horário
       de verão com `TZ` forçado e restaurado. `npm run verificar` e `npm run verificar:linux` verdes.
-- [ ] **S4-T3 — Daemon.** Loop, lockfile de instância única, recuperação de disparo atrasado.
+- [~] **S4-T3 — Daemon.** Loop, lockfile de instância única, recuperação de disparo atrasado.
       **Sobe desanexado do shell que o chamou** (D-005, emendado): `detached` + `stdio` ignorado
       + `unref()`. Não é comando em segundo plano — sobrevive a fechar a janela e a deslogar.
       No Windows isso significa **console nenhum**, e é o que torna o daemon inalcançável pelo
@@ -1889,6 +1889,81 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       chama a captura **repetidamente**. Tudo que é aceitável uma vez — falha de geração, sessão
       inelegível, notificação que não sobe — passa a acontecer N vezes. **Nada disso pode virar
       enxurrada de aviso nem de gasto.** Pense em quem deixa a máquina ligada no fim de semana.
+
+      **Implementado em 2026-09-05.** `src/scheduler/` (novo): `poll.ts#pollOnce` — um ciclo,
+      chamado a cada 30s por `loop.ts#runDaemon` via `Clock.sleep` (D-019: porta ganhou `sleep`,
+      nenhum `setTimeout` fora de `adapters/relogio`). Avisos precoces (Q-024) rodam em **todo**
+      ciclo, antes da decisão de agenda — `discoverEarlyWarnings` já deduplica sozinho, então
+      "sem repetir para a mesma sessão" vem de graça. `decideSchedule` é consumida, nunca
+      redecidida; `nextState` só é persistido depois da ação ter sucesso.
+
+      **Retentativa de turno ativo (5 min) sai do MESMO laço de 30s, sem laço novo.** Enquanto uma
+      sessão capturada vier com `capturedDuringActiveTurn: true`, o poll grava tudo MENOS
+      `endOfDayFired` — o próximo ciclo pergunta a mesma coisa de novo, e `endDay` naturalmente só
+      recaptura quem ainda está em turno (D-026 já barra o resto). Finaliza quando ninguém mais
+      está em turno ativo OU o orçamento de 5 min estoura (mesmo `delayMs` que decide "atrasado").
+
+      **`DayState.captureAttemptsToday`** (campo novo, `core/types.ts`) é o limite de retentativa
+      da Q-040 item 3: `core/capture-retry.ts` conta, por `sessionId`, toda captura que **não**
+      terminou com `source: "model"` (falha total ou `deterministic`/`noTranscript`) e exclui
+      quem chega a **3 tentativas** (`MAX_CAPTURE_ATTEMPTS_PER_SESSION_PER_DAY`, justificado no
+      comentário: conservador, sem base numérica na spec, e ainda assim engatilha antes do teto
+      natural de ~10 polls da janela de 5 min). `scheduler/capture-filter.ts` vira isso num
+      `EndDayOptions.sessionFilter` — a peça que a S4-T00e já tinha apontado como o encaixe.
+
+      **Persistência.** `Storage` ganhou `readState`/`saveState` (`~/.seeya/estado.json`, D-006,
+      arquivo único na raiz — não um por dia, porque `DayState.day` já se autodetecta como
+      obsoleto, ver Q-037 item 6) e `readDaemonLock`/`writeDaemonLock`/`clearDaemonLock`
+      (`~/.seeya/daemon.lock`, D-005). Ambos seguem o padrão versionado já usado por
+      `config.json`/`early-warnings.json` (`adapters/storage/state-schema.ts`,
+      `daemon-lock-schema.ts`).
+
+      **Instância única (D-005).** `core/daemon-lock.ts#decideLockAcquisition` é pura: lock
+      ausente ou com PID morto → adquire; PID vivo → recusa, nomeando quem segura. **Sem
+      desempate por `procStart`** — risco aceito e documentado no próprio arquivo (PID reciclado
+      recusaria por engano um daemon legítimo; consequência pequena e reversível, ao contrário do
+      registro de sessões do Claude Code). Checado duas vezes: o lançador confere antes de
+      spawnar (feedback imediato, sem gastar um processo à toa); o worker confere de novo com o
+      próprio PID, e essa é a checagem que vale de verdade.
+
+      **Subida desanexada (D-005).** `adapters/process/daemon-launch.ts#spawnDetachedDaemon`:
+      `detached: true` + `stdio: 'ignore'` + `.unref()`. `seeya daemon` sem a variável de ambiente
+      `SEEYA_DAEMON_CHILD` é o **lançador** (verifica o lock, spawna o worker com essa variável
+      setada, imprime o PID e sai); com ela, é o **worker** (o laço de verdade, sem console — daí
+      não haver flag `--run` escondida no `--help`: uma variável de ambiente já carrega o mesmo
+      sinal "isto não é para um humano digitar" que o D-017 usa na outra direção).
+
+      **Como o desanexamento foi testado.** `tests/integration/process/daemon-launch.test.ts` e
+      `tests/integration/cli/daemon-command.test.ts` spawnam um processo real (reaproveitando o
+      fixture `graceful-child.mjs` do S1-T2) e confirmam que ele fica vivo, é alcançável e
+      responde a sinal — prova que a chamada produz um processo real, não uma simulação. Nenhum
+      teste AUTOMATIZADO prova sobrevivência ao fechamento do terminal (exigiria o processo de
+      teste morrer e algo de fora checar depois), mas a verificação manual foi feita, e mediu o
+      que o aceite pede: `npm run build` seguido de `node dist/cli/index.js daemon` numa invocação
+      do Bash tool (com `USERPROFILE` apontado para uma pasta descartável — `HOME` é bloqueado
+      neste ambiente por motivo de isolamento de git, `USERPROFILE` não), e o PID relatado
+      (437448) checado vivo por `tasklist` **numa segunda invocação do Bash tool** — cada chamada
+      é um processo de shell novo, que nasce e morre sozinho, então se o daemon estivesse preso
+      àquele shell já teria morrido junto. `daemon.lock` confirmado em disco com o mesmo PID; uma
+      terceira invocação tentando `seeya daemon` de novo recusou com "already running (pid
+      437448)" — o guarda de instância única também medido contra o binário real, não só contra
+      fakes. Processo encerrado e pasta descartável removida ao final. Isto é uma janela de shell
+      terminando, não uma janela de terminal interativa sendo fechada por um humano — mas o
+      mecanismo que garante os dois (processo pai morre, filho `detached`/`unref` continua) é o
+      mesmo, e é isso que estava em teste.
+
+      **Cobertura:** `core/` 100% (`capture-retry.ts`, `daemon-lock.ts` novos, 100% cada);
+      `scheduler/` 98.85%/97.82%/95%/100%. `npm run verificar` e `npm run verificar:linux` verdes
+      (medido nesta máquina via Docker Desktop, container Linux real, não emulado).
+
+      **Não implementado nesta tarefa, por estar fora do escopo que o plano já separa:**
+      `seeya daemon --stop/--status` é a S4-T5; `seeya snooze`/`skip-today`/`config` são a S4-T4
+      (o daemon já lê `estado.json`/`config.json` a cada ciclo, então uma dessas escritas
+      concorrentes já é visível no próximo poll, sem mudança nenhuma aqui). Registro de
+      diagnóstico (o daemon roda com `stdio: 'ignore'` — uma falha de poll é engolida, sem log em
+      lugar nenhum) e a legibilidade de `captureModel`/`budgetPerSessionUsd` ficarem presos ao
+      valor do início do daemon (ao contrário de `relevanceHours`, que é relido a cada ciclo)
+      estão registrados na Q-049 para o mantenedor decidir, não decididos aqui.
 - [ ] **S4-T4 — `seeya snooze`, `seeya skip-today`, `seeya config`.**
 - [ ] **S4-T5 — `seeya daemon --stop/--status`.**
       *Aceite do sprint:* e2e 6, 7 e 8 passam. Um dia inteiro de uso real sem intervenção.

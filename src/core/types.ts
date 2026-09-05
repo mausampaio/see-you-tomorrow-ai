@@ -605,6 +605,33 @@ export interface DayState {
    * local day once `true` — a day that already closed doesn't reopen because of a later snooze
    * (there is nothing left to delay). */
   readonly endOfDayFired: boolean;
+  /**
+   * How many capture attempts (`application/endDay`, called by `scheduler/`) have already counted
+   * against each `sessionId` today — added in S4-T3, docs/QUESTOES.md Q-040 item 3. Keyed by
+   * `sessionId`, resets with the rest of `DayState` at local midnight (`core/schedule.ts`'s
+   * `resetIfNewDay`/`emptyDayState`, which this field rides along with for free — nothing here
+   * needed to change to get that reset, since both just spread `...current`/return a fresh
+   * `emptyDayState(today)`).
+   *
+   * **Only incremented for an outcome that ISN'T a fresh, model-sourced success**
+   * (`scheduler/capture-retry.ts#recordCaptureAttempts`): a full capture failure, or a captured
+   * handoff whose `source` is `deterministic`/`noTranscript` (Q-040: neither is a verdict from the
+   * model about the session, so `core/eligibility.ts`'s anti-duplication doesn't block a retry on
+   * its own — see that file's condition 5). Why this has to be daemon-owned state, not derived from
+   * handoffs already on disk: `Storage.saveHandoff` **overwrites**, one handoff per session per day
+   * (Q-040) — there is no history of past attempts to recount from, only the latest one.
+   *
+   * **Why this counter exists at all.** `seeya end-day` run once by hand tolerates a failing
+   * generation call just fine — the person sees the failure and moves on. The daemon's own
+   * active-turn retry (docs/ESPECIFICACAO.md § "Comportamento do daemon": up to 5 minutes,
+   * `scheduler/poll.ts`) calls `endDay` again every ~30s poll during that window, and a session
+   * whose model call is genuinely broken (quota, network, a down endpoint) would otherwise be
+   * re-attempted on every one of those polls — money spent on every retry, with the same failure
+   * guaranteed each time. `scheduler/capture-retry.ts#sessionsExhaustedToday` reads this map to
+   * exclude an exhausted `sessionId` from `EndDayOptions.sessionFilter` on the NEXT attempt, so the
+   * waste is bounded instead of repeating for the rest of the active-turn window.
+   */
+  readonly captureAttemptsToday: Readonly<Record<string, number>>;
 }
 
 // Own block at the end of the file on purpose (S4-T0b), same reasoning as every addition above

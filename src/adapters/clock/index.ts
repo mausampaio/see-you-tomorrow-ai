@@ -15,4 +15,9 @@ export const systemClock: Clock = {
   now(): Date {
     return new Date();
   },
+  sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      setTimeout(resolve, ms);
+    });
+  },
 };

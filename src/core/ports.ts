@@ -30,6 +30,14 @@ import type {
  */
 export interface Clock {
   now(): Date;
+  /**
+   * Resolves after `ms` real milliseconds — the daemon's poll cadence (S4-T3,
+   * docs/ESPECIFICACAO.md: "loop de verificação a cada 30 s") waits on this instead of a bare
+   * `setTimeout` so `scheduler/` never calls a timer directly (D-019: `setTimeout`/`setInterval`
+   * only exist in `adapters/clock/`). A test's `Clock` double resolves this however it needs to
+   * (instantly, or after recording that it was called) without ever starting a real timer.
+   */
+  sleep(ms: number): Promise<void>;
 }
 
 /**
@@ -96,6 +104,12 @@ export interface DiscoveryResult {
 export interface SessionProvider {
   list(): Promise<DiscoveryResult>;
 }
+
+// Own import line on purpose (S4-T3), same self-contained pattern already established below
+// (`GitFacts`, `ResumeOutcome`): `DayState` now exists (S4-T2) for `readState`/`saveState` below,
+// and `DaemonLockInfo` (`core/daemon-lock.ts`) is this task's own new type for the daemon lock.
+import type { DayState } from './types.js';
+import type { DaemonLockInfo } from './daemon-lock.js';
 
 /**
  * Persistence at `~/.seeya/` (D-027). Implemented by `adapters/storage/` (S1-T5). The root is
@@ -269,6 +283,74 @@ export interface Storage {
    * shape).
    */
   saveResumedSessionIds(day: Day, sessionIds: ReadonlySet<string>): Promise<void>;
+
+  /**
+   * Reads `~/.seeya/estado.json` (D-006's own text names this exact file; AGENTS.md § "Idioma"
+   * reserves it and the `saveState` method name below for S4-T3) — the daemon's `DayState`
+   * bookkeeping (`core/schedule.ts`, S4-T2). `null` when nothing has been persisted yet on this
+   * machine (D-025: a machine that never ran the daemon, or never called `seeya
+   * snooze`/`skip-today`, is not an error) — the caller (`scheduler/poll.ts`) is what turns `null`
+   * into `core/schedule.ts#emptyDayState(today)`, because building that default needs `today`
+   * (from `Clock`), which this port has no way to supply on its own. A file that exists but is
+   * malformed rejects — same corruption policy as `readConfig`/`readEarlyWarningState` above.
+   *
+   * **Single file, not one per day** (S4-T3, D-027's "escolha com cuidado" applied here): unlike
+   * `resumed.json` (keyed under `days/<day>/`), `estado.json` sits at the `~/.seeya/` root, next to
+   * `config.json`/`early-warnings.json`. `DayState.day` is what lets a single file represent
+   * "today's" bookkeeping and self-detect a stale previous day — `core/schedule.ts`'s own
+   * `resetIfNewDay` already depends on that field existing on the persisted value, which only holds
+   * if the same file is reused and re-interpreted across days rather than a fresh one appearing
+   * per day (see `core/types.ts#DayState`'s own docstring, Q-037 item 6, for why the reset has to
+   * be decidable from the value alone).
+   */
+  readState(): Promise<DayState | null>;
+
+  /**
+   * Persists `state` at `~/.seeya/estado.json`, atomically — the `nextState` half of
+   * `core/schedule.ts#ScheduleDecisionResult`, written only AFTER the caller's own action for this
+   * poll succeeded (that file's top comment: "this file never assumes an action succeeded" — this
+   * method is where the caller's confirmation actually lands). Also what `seeya
+   * snooze`/`skip-today` (S4-T4) write to, independent of whether the daemon is running
+   * (docs/ESPECIFICACAO.md § those two commands: "funcionam com ou sem daemon rodando — o estado é
+   * persistido, não guardado em memória") — which is also why `scheduler/poll.ts` re-reads this
+   * with `readState()` at the START of every single poll instead of keeping its own in-memory copy
+   * across iterations: a concurrent `seeya snooze` has to be visible on the very next poll.
+   */
+  saveState(state: DayState): Promise<void>;
+
+  /**
+   * Reads `~/.seeya/daemon.lock` (D-005's own text names this exact file) — S4-T3's single-instance
+   * guard. `null` when no daemon has ever run on this machine (D-025). A file that exists but is
+   * malformed rejects, same policy as every other document here — a hand-edited or truncated lock
+   * file is a real problem to surface, never silently read as "no daemon running".
+   *
+   * Liveness is NOT this port's job: `core/daemon-lock.ts#decideLockAcquisition` is what turns the
+   * returned `pid` plus a separate `ProcessControl.isAlive` call into an accept/refuse decision —
+   * this method only ever reports what the file currently says, a fact independent of whether that
+   * PID still exists.
+   */
+  readDaemonLock(): Promise<DaemonLockInfo | null>;
+
+  /**
+   * Unconditionally overwrites `~/.seeya/daemon.lock` with `lock`, atomically — called once,
+   * right after `core/daemon-lock.ts#decideLockAcquisition` returns `'acquire'`
+   * (`scheduler/lock.ts`). Not a create-if-absent primitive: the accept/refuse decision already
+   * happened by the time this runs, so there is nothing left for this method itself to guard —
+   * see `core/daemon-lock.ts`'s own top comment for the race window this accepts (no `procStart`
+   * tie-break, and a small gap between the read that informed `decideLockAcquisition` and this
+   * write, same shape of trade-off as every other "human runs a CLI command" tool in this project).
+   */
+  writeDaemonLock(lock: DaemonLockInfo): Promise<void>;
+
+  /**
+   * Removes `~/.seeya/daemon.lock`, tolerating it already being absent (D-025: a lock that was
+   * never written, or was already cleared, is not an error to clear again) — best-effort cleanup
+   * called on a clean daemon shutdown (`scheduler/lock.ts`). A daemon that dies uncleanly (crash,
+   * `taskkill`, a Windows session with no console to deliver a signal to at all, D-005) simply never
+   * calls this — the NEXT `seeya daemon` start is what notices the stale lock, via
+   * `readDaemonLock` + a liveness check, not this method.
+   */
+  clearDaemonLock(): Promise<void>;
 }
 
 /**

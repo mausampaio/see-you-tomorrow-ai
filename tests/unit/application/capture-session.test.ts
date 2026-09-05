@@ -52,7 +52,7 @@ function buildDeps(overrides: Partial<EndDayDeps> = {}): EndDayDeps {
     deepGenerator: succeedingGenerator({ understanding: '', pendingItems: [], tomorrowPlan: [] }),
     storage: new FakeStorage(DEFAULT_TEST_CONFIG),
     processControl: new FakeProcessControl(),
-    clock: { now: () => NOW },
+    clock: { now: () => NOW, sleep: () => Promise.resolve() },
     forkCleanup: new FakeForkCleanup(),
     ...overrides,
   };

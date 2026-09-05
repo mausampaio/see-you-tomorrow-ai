@@ -17,3 +17,6 @@ export * from './termination.js';
 export * from './early-warnings.js';
 export * from './ports.js';
 export * from './fork-cleanup.js';
+export * from './schedule.js';
+export * from './capture-retry.js';
+export * from './daemon-lock.js';

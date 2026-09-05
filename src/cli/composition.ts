@@ -19,13 +19,18 @@ import type { Config } from '../core/types.js';
 import { processControl as realProcessControl } from '../adapters/process/index.js';
 import { systemClock } from '../adapters/clock/index.js';
 import { StorageAdapter } from '../adapters/storage/index.js';
-import { DiscoverySessionProvider, DiscoveryForkCleanup } from '../adapters/discovery/index.js';
+import {
+  DiscoverySessionProvider,
+  DiscoveryForkCleanup,
+  discoverEarlyWarnings,
+} from '../adapters/discovery/index.js';
 import { TranscriptFileReader } from '../adapters/transcript/index.js';
 import { GitAdapter } from '../adapters/git/index.js';
 import { LeanHandoffGenerator, DeepHandoffGenerator } from '../adapters/generation/index.js';
 import { ClaudeSessionResumer } from '../adapters/resumption/index.js';
 import { notifier as realNotifier } from '../adapters/notification/index.js';
 import type { EndDayDeps } from '../application/types.js';
+import type { DaemonDeps } from '../scheduler/index.js';
 
 export interface CliHome {
   readonly claudeHome: string;
@@ -174,4 +179,70 @@ export function buildStartDayContext(homeDir: string = os.homedir()): Promise<St
   // type stays `Promise<StartDayContext>` for the same reason those two are async, so `index.ts`
   // can `await` every `build*Context` call uniformly without caring which ones actually do I/O.
   return Promise.resolve({ storage, clock, sessionResumer });
+}
+
+/**
+ * `seeya daemon`'s own composition (S4-T3): every port `scheduler/` orchestrates, wired to its
+ * real adapter — same generators/`ForkCleanup`/`GitReader`/`TranscriptReader` `buildEndDayContext`
+ * already wires for `seeya end-day`, since the daemon calls the exact same `application/endDay`
+ * pipeline (docs/PLANO-DE-ENTREGA.md S4-T3's own brief: "a S4-T1 entregou a porta `Notifier`... o
+ * daemon herda o escopo certo").
+ *
+ * **`buildSessionProvider` is a closure, not a pre-built `SessionProvider`** — see
+ * `scheduler/types.ts#DaemonDeps.buildSessionProvider`'s own docstring for why a long-running
+ * daemon can't reuse one instance built once at startup the way every other, short-lived command
+ * safely does: a later `seeya config` edit to `relevanceHours` has to take effect on the daemon's
+ * very next poll, not just after the daemon itself restarts.
+ *
+ * **`discoverEarlyWarnings` is likewise a closure** over this function's own `home`/`storage` —
+ * `scheduler/` cannot import `adapters/discovery/` at all (docs/ARQUITETURA.md's layer matrix), so
+ * this is what lets `scheduler/poll.ts` call the real S1-T7 detection without ever naming it.
+ *
+ * **Known, accepted limitation: `leanGenerator`/`deepGenerator` are NOT closures.** Both are built
+ * once, here, from whatever `captureModel`/`budgetPerSessionUsd` `config.json` held at daemon
+ * startup — unlike `relevanceHours` (which affects discovery correctness: which sessions even show
+ * up) and unlike the schedule/eligibility values `scheduler/poll.ts` re-reads every single poll, a
+ * later `seeya config` edit to the capture model or budget only takes effect after the daemon
+ * itself restarts. Accepted because the daemon already restarts on any config edit that matters
+ * MORE (the scheduling ones), and rebuilding two generator instances every 30s poll for a value
+ * that changes rarely, if ever, during a daemon's lifetime is complexity this task's brief doesn't
+ * ask for — flagged in docs/QUESTOES.md Q-049 rather than silently accepted.
+ */
+export async function buildDaemonContext(homeDir: string = os.homedir()): Promise<DaemonDeps> {
+  const home = resolveCliHome(homeDir);
+  const clock = systemClock;
+  const storage = buildStorage(home);
+  const config = await storage.readConfig();
+  const generatorOptions = {
+    model: config.captureModel,
+    budgetPerSessionUsd: config.budgetPerSessionUsd,
+  };
+  return {
+    clock,
+    storage,
+    notifier: realNotifier,
+    processControl: realProcessControl,
+    transcriptReader: new TranscriptFileReader({ claudeHome: home.claudeHome }),
+    gitReader: new GitAdapter({ clock }),
+    leanGenerator: new LeanHandoffGenerator(generatorOptions),
+    deepGenerator: new DeepHandoffGenerator({
+      ...generatorOptions,
+      seeyaHome: home.seeyaHome,
+      clock,
+    }),
+    forkCleanup: new DiscoveryForkCleanup({
+      claudeHome: home.claudeHome,
+      seeyaHome: home.seeyaHome,
+      clock,
+    }),
+    buildSessionProvider: (relevanceHours) =>
+      buildSessionProvider(home, clock, realProcessControl, relevanceHours),
+    discoverEarlyWarnings: async (sessions) => {
+      const result = await discoverEarlyWarnings(sessions, {
+        claudeHome: home.claudeHome,
+        storage,
+      });
+      return result.earlyWarnings;
+    },
+  };
 }
