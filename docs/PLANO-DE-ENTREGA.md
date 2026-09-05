@@ -1750,7 +1750,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* uma execução com duas sessões capturadas cabe na tela sem rolagem infinita, e
       **a lista de pendências é visível sem abrir arquivo nenhum**.
 
-- [ ] **S4-T0i — O relatório sai bilíngue quando o dia tem sessões em idiomas diferentes.**
+- [ ] **S4-T0i — Tornar deliberado o idioma do conteúdo gerado (D-033).**
       Observado na mesma captura de tela: a sessão do projeto saiu **em português** e a
       `seeya-todo-test` **em inglês**, no mesmo relatório.
 
