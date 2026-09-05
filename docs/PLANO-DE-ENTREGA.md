@@ -1692,6 +1692,57 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* o job de Windows volta para a ordem de grandeza anterior **sem** perder cobertura
       real de git — e o relatório diz onde estava o tempo, não só que melhorou.
 
+- [ ] **S4-T0h — A saída do `end-day` mostra a prosa e esconde a lista.** Achado pelo mantenedor
+      em 2026-09-05, com captura de tela de uma execução real. **É a S3-T6 outra vez, no outro
+      comando** — aquele conserto nunca atravessou para cá.
+
+      **O que a tela mostra.** Por sessão capturada, o `cli/format-end-day.ts` imprime
+      `mode/source/terminated` e depois o **`Understanding` inteiro, sem quebra**. Numa execução
+      com sonnet isso deu **1682 caracteres** correndo até a largura do terminal — parede única.
+
+      **E o que ele NÃO imprime:** `pendingItems` e `tomorrowPlan`. Quem acabou de encerrar o dia
+      recebe a **narrativa** e não recebe **a lista do que ficou pendente** — que é a parte curta,
+      acionável, e a razão de rodar o comando. **Isso não é formatação ruim, é a informação
+      errada.** A prosa faz sentido no `summary.md`, que existe para ser lido com calma; o
+      terminal é o lugar da lista.
+
+      *Escopo 1:* a lista pendente aparece no terminal, item por linha. O `core/consolidated-plan.ts`
+      já tem `renderItemList` fazendo exatamente isso para o `start-day` (S3-T6) — **avalie
+      reusar em vez de escrever outro**, com o cuidado de não arrastar `core/` para uma
+      responsabilidade de `cli/`.
+
+      *Escopo 2:* a prosa para de ser parede. Quebra em coluna legível — e **considere se ela
+      deve aparecer inteira**, dado que já está no `summary.md`. Um resumo curto, ou nada, pode
+      ser melhor que 1682 caracteres. **Decida e explique**; não é obrigatório mantê-la.
+
+      *Cuidado:* o `end-day` também imprime seções que **não** podem sumir — inelegíveis com
+      motivo, falhas, avisos de terminação (Q-007), limpeza de forks, e a nota de escopo
+      (S4-T0c/S4-T0d). Legibilidade não pode virar omissão: a D-022 e a D-025 valem aqui, e
+      **nenhum balde pode ser silenciosamente descartado**.
+
+      *Fora de escopo:* o idioma. Ver o item próprio abaixo.
+
+      *Aceite:* uma execução com duas sessões capturadas cabe na tela sem rolagem infinita, e
+      **a lista de pendências é visível sem abrir arquivo nenhum**.
+
+- [ ] **S4-T0i — O relatório sai bilíngue quando o dia tem sessões em idiomas diferentes.**
+      Observado na mesma captura de tela: a sessão do projeto saiu **em português** e a
+      `seeya-todo-test` **em inglês**, no mesmo relatório.
+
+      **Não é defeito de código — é decisão de produto que ninguém tomou.** O modelo espelha o
+      idioma da sessão capturada, e num dia com sessões mistas o `summary.md` e o terminal ficam
+      bilíngues. A **D-028** fixa inglês para o que é **público** (CLI, docs), e o conteúdo
+      gerado a partir da conversa do usuário nunca foi classificado.
+
+      *As opções, e nenhuma é obviamente certa:* espelhar o idioma da sessão (o que já acontece,
+      por acidente); fixar um idioma no prompt de captura; ou tornar isso configurável.
+      Espelhar tem argumento real — o handoff é lido por quem escreveu a sessão. Fixar tem outro
+      — um briefing consolidado com quatro sessões em três idiomas é pior que qualquer escolha
+      única.
+
+      **Não implemente antes de decidir.** Abra a questão com as opções e o custo de cada uma; a
+      escolha é do mantenedor.
+
 - [~] **S4-T1 — `adapters/notification`** conforme o Spike B, com a cadeia de fallback e o
       contrato mínimo **sem ações**. Validação manual do `activationType="protocol"` com esquema
       `seeya://` no Windows; se não se provar, o produto segue sem ações clicáveis e nada quebra.

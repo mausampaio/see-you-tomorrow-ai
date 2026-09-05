@@ -3684,6 +3684,37 @@ antes de ver um exemplo real de falso positivo.
 
 ---
 
+> **EVIDÊNCIA PARCIAL (2026-09-05), e é parcial de propósito — não marque como validada.**
+>
+> O mantenedor rodou capturas reais antes e depois da emenda, e as três formas ficam
+> comparáveis porque o mesmo trecho de sessão foi capturado várias vezes:
+>
+> | captura | modelo | inventou ID | conclusão invertida |
+> |---|---|---|---|
+> | 02/09 `bak2` | sonnet @0,50 | **SIM** | não |
+> | 02/09 | haiku @0,25, **antes** | não | **SIM** |
+> | 05/09 `bak` | haiku @0,25, **depois** | não | não |
+> | 05/09 | sonnet @0,50, **depois** | não | não |
+>
+> **O dado mais forte é a última linha:** o sonnet foi quem inventou os cinco identificadores no
+> dia 02, e depois da emenda não inventou. Mesmo modelo, mesmo orçamento, prompt diferente.
+>
+> **E há um sinal direto da segunda cláusula funcionando.** A captura da sessão
+> `seeya-todo-test` escreveu, por conta própria: *"its explanation was cut off mid-sentence, so
+> full details are unknown/partial"*. É exatamente o caso da **Q-044** — mensagem de assistente
+> truncada — sendo **reportada como parcial** em vez de completada por invenção. A outra captura
+> registrou não saber qual modelo gerou uma medição anterior, em vez de escolher um.
+>
+> **Por que isto ainda não é validação.** As duas falhas precisaram de **gatilhos específicos**:
+> uma categoria conhecida sem a lista (as worktrees) e um resultado de busca visto pela metade.
+> Nas sessões de 05/09 esses gatilhos **não estavam claramente presentes** — a armadilha pode
+> simplesmente não ter sido armada. Concluir "funciona" a partir disto seria cometer, na leitura
+> da evidência, o mesmo erro que a emenda existe para impedir no modelo.
+>
+> **O que fecharia:** uma captura de uma sessão que **arme a armadilha** — em que se discuta uma
+> categoria sem enumerá-la, ou se deixe uma busca inconclusiva. Aí a instrução resiste ou não, e
+> a resposta vale. Até lá: **encorajador, inconclusivo.**
+
 ## Q-046 — Nove escolhas fazendo S4-T0 (D-032: evidência de git por repositório, e a migração), registradas para confirmação
 
 **Tarefa:** S4-T0
