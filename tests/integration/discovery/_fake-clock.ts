@@ -11,4 +11,9 @@ export class FakeClock implements Clock {
   now(): Date {
     return this.instant;
   }
+
+  /** No test in this suite waits on the daemon's poll cadence — resolves immediately. */
+  sleep(): Promise<void> {
+    return Promise.resolve();
+  }
 }

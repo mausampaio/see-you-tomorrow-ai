@@ -5,10 +5,11 @@
  * não se negociam"). `cli/` is the only place that resolves the real root and constructs this
  * class (D-020).
  */
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile, readdir, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import type { Briefing, RejectedDiscoveryRecord, Storage } from '../../core/ports.js';
-import type { Config, Day, EarlyWarningState, Handoff } from '../../core/types.js';
+import type { Config, Day, DayState, EarlyWarningState, Handoff } from '../../core/types.js';
+import type { DaemonLockInfo } from '../../core/daemon-lock.js';
 import { EMPTY_EARLY_WARNING_STATE } from '../../core/early-warnings.js';
 import { isEnoent } from './fs-errors.js';
 import { CONFIG_SCHEMA_VERSION, DEFAULT_CONFIG, parseConfigDocument } from './config-schema.js';
@@ -28,6 +29,12 @@ import {
   parseResumedSessionsDocument,
   serializeResumedSessionIds,
 } from './resumed-sessions-schema.js';
+import { STATE_SCHEMA_VERSION, parseStateDocument, serializeState } from './state-schema.js';
+import {
+  DAEMON_LOCK_SCHEMA_VERSION,
+  parseDaemonLockDocument,
+  serializeDaemonLock,
+} from './daemon-lock-schema.js';
 import { resolveSchemaVersion, type SchemaMigration } from './schema-version.js';
 import { writeFileAtomic } from './atomic-write.js';
 
@@ -274,5 +281,56 @@ export class StorageAdapter implements Storage {
       this.resumedSessionsPath(day),
       JSON.stringify(serializeResumedSessionIds(sessionIds)),
     );
+  }
+
+  /** `~/.seeya/estado.json` (D-006, S4-T3 — `core/ports.ts#Storage.readState`'s own docstring has
+   * the full "why a single root-level file" reasoning). */
+  private statePath(): string {
+    return path.join(this.seeyaHome, 'estado.json');
+  }
+
+  async readState(): Promise<DayState | null> {
+    const resolved = await readVersionedDocument(this.statePath(), STATE_SCHEMA_VERSION);
+    if (resolved === null) {
+      // No daemon poll or seeya snooze/skip-today has run on this machine yet (D-025): the caller
+      // (scheduler/poll.ts) is what turns this into core/schedule.ts#emptyDayState(today), since
+      // building that default needs `today`, which this port has no Clock to resolve on its own.
+      return null;
+    }
+    return parseStateDocument(resolved);
+  }
+
+  async saveState(state: DayState): Promise<void> {
+    await writeFileAtomic(this.statePath(), JSON.stringify(serializeState(state)));
+  }
+
+  /** `~/.seeya/daemon.lock` (D-005, S4-T3). */
+  private daemonLockPath(): string {
+    return path.join(this.seeyaHome, 'daemon.lock');
+  }
+
+  async readDaemonLock(): Promise<DaemonLockInfo | null> {
+    const resolved = await readVersionedDocument(this.daemonLockPath(), DAEMON_LOCK_SCHEMA_VERSION);
+    if (resolved === null) {
+      // No daemon has ever run on this machine yet (D-025), not an error.
+      return null;
+    }
+    return parseDaemonLockDocument(resolved);
+  }
+
+  async writeDaemonLock(lock: DaemonLockInfo): Promise<void> {
+    await writeFileAtomic(this.daemonLockPath(), JSON.stringify(serializeDaemonLock(lock)));
+  }
+
+  async clearDaemonLock(): Promise<void> {
+    try {
+      await unlink(this.daemonLockPath());
+    } catch (error) {
+      // Already absent (D-025: clearing a lock that was never written, or already cleared, is not
+      // an error) — anything else (permission denied, a locked file) is a real problem to surface.
+      if (!isEnoent(error)) {
+        throw new Error(`clearing ${this.daemonLockPath()} failed: ${String(error)}`);
+      }
+    }
   }
 }

@@ -100,7 +100,8 @@ export function computeEffectiveEndOfDay(
 }
 
 /** The bookkeeping a local day starts from — no skip, no snooze, no notification fired yet
- * (D-025: a day nobody has touched yet is not an error, and isn't half-way through anything). */
+ * (D-025: a day nobody has touched yet is not an error, and isn't half-way through anything).
+ * `captureAttemptsToday` (S4-T3) starts empty the same way — nothing has been retried yet. */
 export function emptyDayState(day: Day): DayState {
   return {
     day,
@@ -108,6 +109,7 @@ export function emptyDayState(day: Day): DayState {
     snoozeMinutesTotal: 0,
     firedLeadTimesInMinutes: [],
     endOfDayFired: false,
+    captureAttemptsToday: {},
   };
 }
 

@@ -40,6 +40,10 @@ export class FakeClock implements Clock {
   now(): Date {
     return this.instant;
   }
+  /** No test in this file ever waits on the daemon's poll cadence — resolves immediately. */
+  sleep(): Promise<void> {
+    return Promise.resolve();
+  }
 }
 
 export class FakeSessionProvider implements SessionProvider {
@@ -258,6 +262,29 @@ export class FakeStorage implements Storage {
   saveResumedSessionIds(day: string, sessionIds: ReadonlySet<string>): Promise<void> {
     this.resumedSessionIdsByDay.set(day, new Set(sessionIds));
     return Promise.resolve();
+  }
+
+  // S4-T3: `estado.json`/`daemon.lock` are the scheduler's own concern, never touched by
+  // `application/endDay`'s pipeline — same "reject loudly" convention this fake already uses above
+  // for `readEarlyWarningState`/`saveEarlyWarningState`, which `endDay` also never calls directly.
+  readState(): ReturnType<Storage['readState']> {
+    return Promise.reject(new Error('FakeStorage.readState is not exercised by endDay'));
+  }
+
+  saveState(): ReturnType<Storage['saveState']> {
+    return Promise.reject(new Error('FakeStorage.saveState is not exercised by endDay'));
+  }
+
+  readDaemonLock(): ReturnType<Storage['readDaemonLock']> {
+    return Promise.reject(new Error('FakeStorage.readDaemonLock is not exercised by endDay'));
+  }
+
+  writeDaemonLock(): ReturnType<Storage['writeDaemonLock']> {
+    return Promise.reject(new Error('FakeStorage.writeDaemonLock is not exercised by endDay'));
+  }
+
+  clearDaemonLock(): ReturnType<Storage['clearDaemonLock']> {
+    return Promise.reject(new Error('FakeStorage.clearDaemonLock is not exercised by endDay'));
   }
 }
 

@@ -152,6 +152,7 @@ describe('applySnooze', () => {
       snoozeMinutesTotal: 15,
       firedLeadTimesInMinutes: [],
       endOfDayFired: false,
+      captureAttemptsToday: {},
     });
   });
 });
@@ -178,6 +179,7 @@ describe('applySkipToday', () => {
       snoozeMinutesTotal: 0,
       firedLeadTimesInMinutes: [],
       endOfDayFired: false,
+      captureAttemptsToday: {},
     });
   });
 });
@@ -320,6 +322,7 @@ describe('decideSchedule — midnight rollover (docs/TESTES.md)', () => {
       snoozeMinutesTotal: 120,
       firedLeadTimesInMinutes: [30, 15],
       endOfDayFired: true,
+      captureAttemptsToday: { 'some-session-id': 2 },
     };
     const { decision, nextState } = decideSchedule(
       config,
