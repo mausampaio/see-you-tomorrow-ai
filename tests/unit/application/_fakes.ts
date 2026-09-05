@@ -19,6 +19,7 @@ import type {
 } from '../../../src/core/ports.js';
 import type {
   Config,
+  DayState,
   DiscoveredSession,
   EarlyWarningState,
   GeneratedUnderstanding,
@@ -26,6 +27,7 @@ import type {
   ResumeOutcome,
   SessionFacts,
 } from '../../../src/core/types.js';
+import type { DaemonLockInfo } from '../../../src/core/daemon-lock.js';
 
 /**
  * Named doubles for `application/endDay`'s ports (docs/TESTES.md § Testes: "duplo de I/O é
@@ -271,7 +273,11 @@ export class FakeStorage implements Storage {
     return Promise.reject(new Error('FakeStorage.readState is not exercised by endDay'));
   }
 
-  saveState(): ReturnType<Storage['saveState']> {
+  saveState(state: DayState): ReturnType<Storage['saveState']> {
+    // Named/typed (not dropped to zero parameters) so a subclass overriding this to spy on the
+    // argument has a real parameter to type its override against — same reasoning
+    // `FakeForkCleanup#cleanup` above already gives for its own unused parameter.
+    void state;
     return Promise.reject(new Error('FakeStorage.saveState is not exercised by endDay'));
   }
 
@@ -279,7 +285,8 @@ export class FakeStorage implements Storage {
     return Promise.reject(new Error('FakeStorage.readDaemonLock is not exercised by endDay'));
   }
 
-  writeDaemonLock(): ReturnType<Storage['writeDaemonLock']> {
+  writeDaemonLock(lock: DaemonLockInfo): ReturnType<Storage['writeDaemonLock']> {
+    void lock;
     return Promise.reject(new Error('FakeStorage.writeDaemonLock is not exercised by endDay'));
   }
 
