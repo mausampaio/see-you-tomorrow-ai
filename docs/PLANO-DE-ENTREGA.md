@@ -1658,7 +1658,32 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* o caso `win32` não spawna processo nenhum, e a asserção sobre a rotulagem
       continua valendo.
 
-- [ ] **S4-T0g — O CI de Windows quadruplicou de tempo com a S4-T0.** Achado na mesma
+- [~] **S4-T0g — O CI de Windows *pareceu* quadruplicar com a S4-T0 — e não foi isso.** Achado na mesma
+
+      > **CORREÇÃO (2026-09-05, medido — a premissa desta tarefa era minha e estava errada).**
+      > Eu li a **duração total do job** e atribuí ao código. Medindo **por passo**, em 7
+      > execuções do `windows-latest`, o passo de teste/build ficou entre **95 e 135s em todas
+      > elas**, antes e depois da S4-T0 — crescimento de 15% a 40%, coerente com os 1,4x de
+      > testes, **não** com 4,3x.
+      >
+      > Os 582s vieram **73% de um `npm ci` que travou por ~7 minutos**, com cache quente, sem
+      > erro registrado e com o `package-lock.json` inalterado naquele commit — ruído de
+      > infraestrutura, sem relação com código deste repositório.
+      >
+      > **A hipótese do `createGitFixture` caiu.** Por arquivo, no CI real:
+      > `tests/integration/git/` = **~6,6%** do tempo agregado (~10,6s). O peso está em
+      > `tests/integration/guards/` = **~81%** (~130s de 161s), que roda `eslint` e
+      > `dependency-cruiser` como processos reais — custo **pré-existente desde o Sprint 0**, já
+      > documentado na Q-025/Q-030a, e **não** regressão da S4-T0.
+      >
+      > **Nenhum código foi mudado, e essa é a entrega certa.** Otimizar o `createGitFixture`
+      > trocaria cobertura real de git por ~10s num job que já estava na ordem de grandeza
+      > esperada em 6 de 7 execuções medidas. O agente mediu antes de mexer, como a tarefa
+      > exigia, e a medição disse para não mexer.
+      >
+      > **Fica registrado como o erro que foi:** medir tempo de parede e chamar de regressão de
+      > código é a mesma classe de engano que a S2-T8 e a Q-030a já tinham nomeado — atribuir
+      > causa antes de isolar variável. Ver **Q-048** para as tabelas.
       investigação, e é o achado maior.
 
       **Medido**, duração do job `windows-latest` nas últimas oito execuções verdes:
@@ -1742,6 +1767,23 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
       **Não implemente antes de decidir.** Abra a questão com as opções e o custo de cada uma; a
       escolha é do mantenedor.
+
+      **Medido (Q-048): a hipótese do `createGitFixture` caiu, e a "desproporção" some quando o
+      job é separado por etapa.** Isolando `Instala as dependências` (`npm ci`) de `Roda o portão`
+      (tsc+lint+depcruise+build+cobertura) em 7 execuções reais do `windows-latest`
+      (`gh run view --log`), o passo que roda teste de verdade ficou entre **95s e 135s em todas
+      elas**, antes e depois da S4-T0 — um crescimento de +15% a +40%, proporcional ao 1,4x de
+      testes, não 4,3x. Os 582s inteiros vieram **73% de um único `npm ci`** que travou por 7
+      minutos com cache já restaurado e nenhum erro no log — infraestrutura do runner, não código
+      deste projeto (`package-lock.json` não mudou nesse commit). No log verboso da execução
+      seguinte (já com os 1124 testes), `tests/integration/guards/` (spawns reais de
+      `eslint`/`dependency-cruiser`, existente desde o Sprint 0, já custoso — Q-025, Q-030a) é
+      **~81%** do tempo agregado de teste no Windows; `tests/integration/git/` (o suspeito) é
+      **~6,6%**. **Nenhum código foi alterado** (nem `_fixtures.ts`, nem `vitest.config.ts`): a
+      medição não sustenta um problema ali para consertar, e mexer seria trocar cobertura real de
+      git por uma economia de ~10s num job já na ordem de grandeza esperada em 6 das 7 execuções.
+      Detalhe completo, tabelas e as três medições (local, por etapa de CI, por arquivo no runner
+      real) em `docs/QUESTOES.md` Q-048.
 
 - [~] **S4-T1 — `adapters/notification`** conforme o Spike B, com a cadeia de fallback e o
       contrato mínimo **sem ações**. Validação manual do `activationType="protocol"` com esquema
