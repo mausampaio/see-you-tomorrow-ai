@@ -1717,7 +1717,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* o job de Windows volta para a ordem de grandeza anterior **sem** perder cobertura
       real de git — e o relatório diz onde estava o tempo, não só que melhorou.
 
-- [ ] **S4-T0h — A saída do `end-day` mostra a prosa e esconde a lista.** Achado pelo mantenedor
+- [~] **S4-T0h — A saída do `end-day` mostra a prosa e esconde a lista.** Achado pelo mantenedor
       em 2026-09-05, com captura de tela de uma execução real. **É a S3-T6 outra vez, no outro
       comando** — aquele conserto nunca atravessou para cá.
 
@@ -1749,6 +1749,32 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
       *Aceite:* uma execução com duas sessões capturadas cabe na tela sem rolagem infinita, e
       **a lista de pendências é visível sem abrir arquivo nenhum**.
+
+      **Implementado em 2026-09-05.** `core/consolidated-plan.ts#renderItemList` virou export
+      (só isso — mesma assinatura, mesmo comportamento) e `cli/format-end-day.ts` passou a
+      chamá-lo para `pendingItems`/`tomorrowPlan` na seção `Captured:`, mesmo formato item-por-
+      linha que o `start-day` já usa (S3-T6): rótulo com 4 espaços, item com 6. Gate em
+      `source === 'model'` para a lista aparecer — um handoff `deterministic`/`noTranscript`
+      nunca teve o modelo confirmando "nada pendente" (D-003), e imprimir uma lista vazia (ou o
+      aviso "nothing pending recorded") ali misturaria "falhou" com "checou e não achou nada",
+      mesma disciplina que `renderSessionPlanLine` já aplica ao `start-day`. `Understanding`
+      passou a ser um resumo de até 200 caracteres (`excerptUnderstanding`, corta em fim de frase
+      quando cabe no orçamento, senão no último espaço, nunca no meio de palavra), com
+      `(…, full text in summary.md)` quando corta — decisão explicada na Q-050: quebra de linha
+      pura não resolve "N sessões encher a tela", só transforma uma parede de 1682 caracteres em
+      várias linhas; um resumo curto com aviso explícito resolve e não descarta nada em silêncio
+      (D-025), porque o texto inteiro continua intacto no `summary.md`
+      (`core/briefing.ts#renderTextBlock`, não tocado por esta tarefa). Nenhuma seção existente
+      foi removida ou reordenada — inelegíveis, falhas, avisos de terminação, limpeza de forks e
+      a nota de escopo continuam todas presentes, testado explicitamente. Teste com o caso real
+      pedido pelo aceite: duas sessões capturadas, uma com `understanding` de exatamente 1682
+      caracteres (o tamanho medido do achado original) e várias pendências, a outra uma sessão
+      curta comum — nenhuma linha do relatório resultante passa de 300 caracteres, e a lista de
+      pendências aparece item por linha sem abrir o `summary.md`
+      (`tests/unit/cli/format-end-day.test.ts`). Três escolhas registradas em Q-050 para
+      confirmação do PO (reuso do `renderItemList`, o corte em 200 caracteres em vez de quebra de
+      linha, e o gate por `source`). `npm run verificar` e `npm run verificar:linux` verdes;
+      `core/` 100% linhas, `cli/` 100% linhas.
 
 - [ ] **S4-T0i — Tornar deliberado o idioma do conteúdo gerado (D-033).**
       Observado na mesma captura de tela: a sessão do projeto saiu **em português** e a

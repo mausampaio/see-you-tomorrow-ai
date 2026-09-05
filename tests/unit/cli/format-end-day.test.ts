@@ -334,6 +334,245 @@ describe('formatEndDayReport — captured sessions', () => {
   });
 });
 
+describe('formatEndDayReport — pending/plan lists (S4-T0h)', () => {
+  it("renders pendingItems and tomorrowPlan one item per line, reusing start-day's list shape", () => {
+    const report = formatEndDayReport(
+      buildResult({
+        captured: [
+          captured({
+            handoff: createHandoff({
+              pendingItems: ['fix the flaky test', 'write the missing docstring'],
+              tomorrowPlan: ['ship the release'],
+            }),
+          }),
+        ],
+      }),
+      buildConfig(),
+    );
+    expect(report).toContain(
+      '    pending:\n      - fix the flaky test\n      - write the missing docstring',
+    );
+    expect(report).toContain('    plan:\n      - ship the release');
+  });
+
+  it('shows only "pending" when there is no plan yet, and vice versa', () => {
+    const onlyPending = formatEndDayReport(
+      buildResult({
+        captured: [
+          captured({ handoff: createHandoff({ pendingItems: ['fix it'], tomorrowPlan: [] }) }),
+        ],
+      }),
+      buildConfig(),
+    );
+    expect(onlyPending).toContain('pending:\n      - fix it');
+    expect(onlyPending).not.toContain('plan:');
+
+    const onlyPlan = formatEndDayReport(
+      buildResult({
+        captured: [
+          captured({ handoff: createHandoff({ pendingItems: [], tomorrowPlan: ['ship it'] }) }),
+        ],
+      }),
+      buildConfig(),
+    );
+    expect(onlyPlan).not.toContain('pending:');
+    expect(onlyPlan).toContain('plan:\n      - ship it');
+  });
+
+  it('D-025: says plainly when a model-confirmed capture has nothing pending', () => {
+    const report = formatEndDayReport(
+      buildResult({
+        captured: [captured({ handoff: createHandoff({ pendingItems: [], tomorrowPlan: [] }) })],
+      }),
+      buildConfig(),
+    );
+    expect(report).toContain('nothing pending recorded');
+  });
+
+  it('D-025: a deterministic capture never shows a pending list nor "nothing pending recorded" — the model never confirmed either', () => {
+    const report = formatEndDayReport(
+      buildResult({
+        captured: [
+          captured({
+            handoff: createHandoff({
+              source: 'deterministic',
+              understanding: '',
+              generationError: 'claude exited with code 1',
+              // Contrived: these would never actually be non-empty on a deterministic handoff
+              // (D-003's fallback always leaves them at `[]`), but the gate is on `source`, not
+              // on emptiness — proven here so nobody "simplifies" the gate away later.
+              pendingItems: ['should never render'],
+              tomorrowPlan: ['should never render either'],
+            }),
+          }),
+        ],
+      }),
+      buildConfig(),
+    );
+    expect(report).not.toContain('nothing pending recorded');
+    expect(report).not.toContain('should never render');
+  });
+});
+
+describe('formatEndDayReport — Understanding excerpt (S4-T0h)', () => {
+  it('a short understanding prints in full, with no truncation note', () => {
+    const report = formatEndDayReport(
+      buildResult({
+        captured: [
+          captured({ handoff: createHandoff({ understanding: 'Refactored the parser.' }) }),
+        ],
+      }),
+      buildConfig(),
+    );
+    expect(report).toContain('Understanding: Refactored the parser.');
+    expect(report).not.toContain('full text in summary.md');
+  });
+
+  // The measured case from the maintainer's screenshot (docs/PLANO-DE-ENTREGA.md S4-T0h): a
+  // sonnet capture produced a 1682-character `understanding` printed as one unbroken paragraph.
+  // Built, not copied verbatim (CLAUDE.md § "Este projeto é de código aberto" — no real session
+  // content in the repo), but the exact same measured length.
+  it('a 1682-character understanding (the measured real case) is excerpted, never printed whole', () => {
+    const sentence = 'Investigated the failing capture pipeline and traced it to a stale cache. ';
+    let longUnderstanding = '';
+    while (longUnderstanding.length < 1682) {
+      longUnderstanding += sentence;
+    }
+    longUnderstanding = longUnderstanding.slice(0, 1682);
+    expect(longUnderstanding).toHaveLength(1682);
+
+    const report = formatEndDayReport(
+      buildResult({
+        captured: [captured({ handoff: createHandoff({ understanding: longUnderstanding }) })],
+      }),
+      buildConfig(),
+    );
+    expect(report).not.toContain(longUnderstanding);
+    expect(report).toContain('full text in summary.md');
+    // The excerpt line itself stays short — nowhere near the 1682-character wall.
+    const understandingLine = report.split('\n').find((line) => line.includes('Understanding:'));
+    expect(understandingLine).toBeDefined();
+    expect(understandingLine!.length).toBeLessThan(260);
+  });
+
+  it('cuts at a sentence boundary when one falls within the excerpt budget', () => {
+    // The first sentence ends at character 145 — past the 40%-of-200 = 80 cutoff, so the excerpt
+    // should end there instead of running the full 200-character budget to a word boundary.
+    const firstSentence =
+      'Implemented the retry logic end to end, wired it into the capture pipeline, and confirmed ' +
+      'the new behavior meets the stated goal for this session.';
+    const text =
+      `${firstSentence} ` +
+      'This second sentence is padding that pushes the whole string well past the excerpt budget ' +
+      'so truncation actually happens, repeated repeated repeated repeated.';
+    const report = formatEndDayReport(
+      buildResult({ captured: [captured({ handoff: createHandoff({ understanding: text }) })] }),
+      buildConfig(),
+    );
+    expect(report).toContain(`Understanding: ${firstSentence} (…, full text in summary.md)`);
+  });
+
+  it('falls back to the last word boundary when no sentence end falls within the budget', () => {
+    const items = Array.from({ length: 40 }, (_, i) => `item${i}`);
+    const text = items.join(', ');
+    const report = formatEndDayReport(
+      buildResult({ captured: [captured({ handoff: createHandoff({ understanding: text }) })] }),
+      buildConfig(),
+    );
+    // Cut right after "item25," (the last full item inside the 200-character budget), never
+    // mid-word (e.g. not "item2" cut out of "item25").
+    expect(report).toContain(
+      'Understanding: item0, item1, item2, item3, item4, item5, item6, item7, item8, item9, ' +
+        'item10, item11, item12, item13, item14, item15, item16, item17, item18, item19, item20, ' +
+        'item21, item22, item23, item24, item25, (…, full text in summary.md)',
+    );
+  });
+
+  it('D-025/D-003: a deterministic capture is unaffected by the excerpt logic — it names the failure, not a truncated understanding', () => {
+    const report = formatEndDayReport(
+      buildResult({
+        captured: [
+          captured({
+            handoff: createHandoff({
+              source: 'deterministic',
+              understanding: '',
+              generationError: 'claude exited with code 1',
+            }),
+          }),
+        ],
+      }),
+      buildConfig(),
+    );
+    expect(report).toContain('Understanding not available: claude exited with code 1');
+    expect(report).not.toContain('full text in summary.md');
+  });
+});
+
+describe('formatEndDayReport — two-session realistic report (S4-T0h aceite)', () => {
+  it('two captured sessions, one with a 1682-character understanding and several pending items, fit a legible report with the pending list visible', () => {
+    const sentence = 'Migrated the storage schema and re-ran the affected integration suite. ';
+    let longUnderstanding = '';
+    while (longUnderstanding.length < 1682) {
+      longUnderstanding += sentence;
+    }
+    longUnderstanding = longUnderstanding.slice(0, 1682);
+
+    const sessionA = createHandoff({
+      sessionId: '11111111-1111-4111-8111-111111111111',
+      name: 'agente-interno',
+      cwd: 'c:\\code\\agente-interno',
+      understanding: longUnderstanding,
+      pendingItems: [
+        'Confirm the migration handles a v1 document with no git facts recorded',
+        'Add the missing regression test for the empty-repositories case',
+        'Re-run the full suite once the fixture is in place',
+      ],
+      tomorrowPlan: ['Open a PR once the suite is green', 'Ask for review from the maintainer'],
+    });
+    const sessionB = createHandoff({
+      sessionId: '22222222-2222-4222-8222-222222222222',
+      name: 'seeya-todo-test',
+      cwd: 'c:\\code\\seeya-todo-test',
+      understanding: 'Added the sample todo list and marked two items done.',
+      pendingItems: ['Verify the third item was left open on purpose'],
+      tomorrowPlan: [],
+    });
+
+    const report = formatEndDayReport(
+      buildResult({
+        discoveredCount: 2,
+        sessionsInScope: 2,
+        captured: [captured({ handoff: sessionA }), captured({ handoff: sessionB })],
+      }),
+      buildConfig(),
+    );
+
+    // The wall is gone: no single line anywhere near the measured 1682-character size.
+    for (const line of report.split('\n')) {
+      expect(line.length).toBeLessThan(300);
+    }
+    // Every existing section survives.
+    expect(report).toContain('seeya end-day — 2026-08-16');
+    expect(report).toContain('Scope: full day.');
+    expect(report).toContain('- agente-interno (c:\\code\\agente-interno)');
+    expect(report).toContain('- seeya-todo-test (c:\\code\\seeya-todo-test)');
+    // The pending list is visible without opening summary.md.
+    expect(report).toContain(
+      '    pending:\n      - Confirm the migration handles a v1 document with no git facts recorded',
+    );
+    expect(report).toContain(
+      '      - Add the missing regression test for the empty-repositories case',
+    );
+    expect(report).toContain('    plan:\n      - Open a PR once the suite is green');
+    expect(report).toContain(
+      '    pending:\n      - Verify the third item was left open on purpose',
+    );
+    // The prose is excerpted, with an explicit pointer rather than a silent cut.
+    expect(report).not.toContain(longUnderstanding);
+    expect(report).toContain('full text in summary.md');
+  });
+});
+
 describe('formatEndDayReport — ineligible, failed captures and termination notices', () => {
   it('lists ineligible sessions with their reasons', () => {
     const report = formatEndDayReport(

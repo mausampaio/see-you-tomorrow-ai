@@ -4043,3 +4043,76 @@ específica (cache do `actions/setup-node`, versão do npm no runner, etc.) — 
 igual nas 6 execuções vizinhas, não há o que reproduzir; monitorar é a única ação disponível.
 
 **Resposta:** _(em aberto)_
+
+---
+
+## Q-050 — S4-T0h: reuso do `renderItemList`, e truncar em vez de quebrar o `understanding`
+
+**Tarefa:** S4-T0h
+**Bloqueia:** não — as duas partes do escopo (lista visível, prosa que para de ser parede) foram
+entregues com a solução mínima em cada ponto; registro no mesmo padrão de Q-041/Q-042/Q-043.
+
+**1) `core/consolidated-plan.ts#renderItemList` virou export, em vez de uma cópia em `cli/`.**
+A tarefa pediu para avaliar reuso "com o cuidado de não arrastar `core/` para uma responsabilidade
+de `cli/`". A função não tinha essa responsabilidade para começar: é formatação pura de texto (uma
+label + itens indentados), sem I/O, sem conhecer `start-day` nem `end-day` — o nome já era
+genérico antes desta tarefa. Adicionei só `export` e um parágrafo no docstring apontando o novo
+consumidor, sem mudar assinatura nem comportamento. `cli/format-end-day.ts` já importava de
+`core/briefing.ts` (`countUnreadableListings`, `formatSessionListingLine`), então importar também
+de `core/consolidated-plan.ts` não abre precedente novo na matriz de camadas — `cli` → `core` já é
+um dos 20 pares permitidos.
+**Opções:** A) exportar e reusar (o que fiz). B) copiar as seis linhas para `cli/format-end-day.ts`
+— seria a duplicação que AGENTS.md § "Estilo de código" proíbe, pelo ganho zero de isolamento (a
+função não tem nada de `start-day` nela). C) mover para um terceiro módulo neutro — pareceu
+indireção sem necessidade para uma função de seis linhas.
+**Minha escolha:** A.
+
+**2) A prosa não foi quebrada em coluna — foi cortada para um resumo curto, com aviso explícito.**
+A tarefa deixou as duas saídas em aberto ("quebra em coluna legível — e considere se ela deve
+aparecer inteira... um resumo curto, ou nada, pode ser melhor"). Descartei a quebra de linha pura
+(reimplementar um `word-wrap` que ainda reproduziria os 1682 caracteres inteiros, só que em ~20
+linhas em vez de uma) porque não resolve o problema para um relatório com várias sessões: a soma
+ainda cresce sem limite por sessão capturada. Implementei `excerptUnderstanding` em
+`cli/format-end-day.ts`: corta em até 200 caracteres, preferindo o fim de frase (`. `, `! `, `? `)
+dentro do orçamento quando ele cai depois de 40% do limite (evita cortar no início de uma frase
+maior que o próprio orçamento), com fallback para o último espaço — nunca no meio de uma palavra.
+Quando corta, acrescenta `(…, full text in summary.md)`: a D-025/D-022 exigem que encurtar não vire
+descarte silencioso, e o texto completo já está no `summary.md` (`core/briefing.ts#renderTextBlock`)
+— apontar para lá é diferente de inventar que não há mais nada.
+**Por que 200, e por que isto é escolha, não medição.** Não existe uma largura "certa" de terminal.
+200 caracteres é perto de 2-3 linhas do soft-wrap que qualquer terminal já faz sozinho — dá para
+dizer algo real sem dominar um relatório com várias sessões. Se o mantenedor achar 200 curto ou
+longo demais depois de ver a saída real, é uma constante nomeada
+(`UNDERSTANDING_EXCERPT_CHARS`) para ajustar, não um redesenho.
+**Opções:** A) resumo curto com aviso explícito (o que implementei). B) quebra de linha completa,
+preservando o texto inteiro em várias linhas — mantém a informação mas não resolve "N sessões
+ainda enchem a tela", só adia o problema de uma linha por sessão para várias. C) omitir
+`understanding` inteiramente do terminal, deixando só `summary.md` — descartei porque uma sessão
+sem `pendingItems`/`tomorrowPlan` (handoff determinístico ou "nada pendente") ficaria sem nenhuma
+narrativa no terminal, e um resumo curto ainda é mais barato que abrir o arquivo para saber do que
+se tratava a sessão.
+**Minha escolha:** A.
+
+**3) A lista de pendências só aparece para `source: "model"`, com "nothing pending recorded"
+quando o modelo confirmou que não há nada — nunca para `deterministic`/`noTranscript`.** Não estava
+no escopo literal da tarefa (que falava só em "a lista pendente aparece no terminal"), mas é a
+mesma disciplina D-025 que `core/consolidated-plan.ts#renderSessionPlanLine` já aplica ao
+`start-day`: um handoff que falhou a geração nunca teve `pendingItems`/`tomorrowPlan` avaliados de
+verdade (ficam `[]` como artefato da falha, D-003), então tratar isso como "confirmado limpo"
+misturaria "falhou" com "checou e não achou nada". `formatUnderstanding` já nomeia a falha
+separadamente ("Understanding not available: ..."); a lista de pendências fica muda nesse caso, em
+vez de imprimir um "nothing pending recorded" que soaria como uma segunda afirmação sobre uma
+sessão cuja geração não rodou de verdade.
+**Opções:** A) gate por `source === 'model'`, com "nothing pending recorded" só nesse caso (o que
+implementei). B) mostrar a lista (vazia) para qualquer `source`, sem distinção — reintroduziria a
+mesma ambiguidade que a D-025 já resolveu para `start-day`. C) não dizer nada quando as listas
+estão vazias, nem para `model` — descartei porque aí ficaria ambíguo se o "nada aqui" é por o
+modelo ter confirmado ou por um bug silencioso na formatação.
+**Minha escolha:** A.
+
+**Achado à parte, não é pergunta:** o `summary.md` (`core/briefing.ts`) nunca teve o problema do
+`understanding` inteiro — ele é markdown escrito para ser lido com calma, e o texto completo
+continua lá sem alteração nenhuma desta tarefa. Só o relatório de terminal (`cli/format-end-day.ts`)
+mudou.
+
+**Resposta:** _(em aberto)_

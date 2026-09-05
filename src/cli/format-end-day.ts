@@ -7,6 +7,7 @@ import type { CapturedSession, EndDayResult } from '../application/types.js';
 import type { Config, Handoff } from '../core/types.js';
 import type { RejectedDiscoveryRecord } from '../core/ports.js';
 import { countUnreadableListings, formatSessionListingLine } from '../core/briefing.js';
+import { renderItemList } from '../core/consolidated-plan.js';
 import { resolveCanTerminate } from './session-view.js';
 
 function pluralize(count: number, singular: string, plural: string): string {
@@ -65,6 +66,38 @@ function formatRejectedDiscoveries(rejected: readonly RejectedDiscoveryRecord[])
   ];
 }
 
+/** S4-T0h: how much of `understanding` the terminal report shows before pointing at `summary.md`
+ * for the rest. Chosen, not measured — there's no "right" screen width, but a captured real run
+ * printed a 1682-character `understanding` as one unbroken paragraph per session (the maintainer's
+ * screenshot that opened this task), and a two-session report at that size scrolls past anything a
+ * terminal shows without paging. ~200 characters is roughly a terminal's own soft-wrap of 2-3
+ * lines — long enough to say something, short enough that N sessions still fit on one screen. The
+ * full text was never lost: it's already in `summary.md` (`core/briefing.ts#renderTextBlock`), and
+ * `docs/PLANO-DE-ENTREGA.md` S4-T0h says plainly that a short excerpt (or nothing) can beat
+ * reproducing the wall verbatim. */
+const UNDERSTANDING_EXCERPT_CHARS = 200;
+
+/** Prefers cutting at the end of a sentence within budget (reads like a summary, not a stump);
+ * falls back to the last word boundary when no sentence end falls late enough in the budget to be
+ * worth preferring over just using the whole budget. Never cuts mid-word — a `dev-…` fragment is
+ * exactly the "correu até a largura do terminal" wall this task exists to stop, just shorter. */
+function excerptUnderstanding(text: string): { excerpt: string; truncated: boolean } {
+  if (text.length <= UNDERSTANDING_EXCERPT_CHARS) {
+    return { excerpt: text, truncated: false };
+  }
+  const budget = text.slice(0, UNDERSTANDING_EXCERPT_CHARS);
+  const sentenceEnd = Math.max(
+    budget.lastIndexOf('. '),
+    budget.lastIndexOf('! '),
+    budget.lastIndexOf('? '),
+  );
+  if (sentenceEnd > UNDERSTANDING_EXCERPT_CHARS * 0.4) {
+    return { excerpt: budget.slice(0, sentenceEnd + 1), truncated: true };
+  }
+  const wordEnd = budget.lastIndexOf(' ');
+  return { excerpt: wordEnd > 0 ? budget.slice(0, wordEnd) : budget, truncated: true };
+}
+
 /** D-025: a failed generation is not silently folded into "worked on the thing" — same distinction
  * `core/briefing.ts#renderDeterministicCallout` already draws for the written briefing. */
 function formatUnderstanding(handoff: Handoff): string {
@@ -73,7 +106,34 @@ function formatUnderstanding(handoff: Handoff): string {
     return `    Understanding not available: ${reason}`;
   }
   const text = handoff.understanding.trim();
-  return `    Understanding: ${text === '' ? '(nothing recorded)' : text}`;
+  if (text === '') {
+    return '    Understanding: (nothing recorded)';
+  }
+  const { excerpt, truncated } = excerptUnderstanding(text);
+  // AGENTS.md § "Dados de fora": shortening is fine, but the reader has to know there's more —
+  // never a silent cut that reads as the whole thing.
+  const suffix = truncated ? ' (…, full text in summary.md)' : '';
+  return `    Understanding: ${excerpt}${suffix}`;
+}
+
+/** D-025, same discipline `core/consolidated-plan.ts#renderSessionPlanLine` already applies to
+ * `start-day`'s plan: a `deterministic`/`noTranscript` handoff never had the model confirm
+ * "nothing pending" (D-003) — `formatUnderstanding` above already says the generation failed, and
+ * printing an empty pending list next to it would blur "failed" with "checked and clean". Only a
+ * `source: "model"` handoff renders a list — or, if it explicitly found nothing, says so plainly
+ * instead of leaving silence that could read as an oversight. */
+function formatPendingSection(handoff: Handoff): string[] {
+  if (handoff.source !== 'model') {
+    return [];
+  }
+  const lines: string[] = [];
+  if (handoff.pendingItems.length > 0) {
+    lines.push(renderItemList('pending', handoff.pendingItems));
+  }
+  if (handoff.tomorrowPlan.length > 0) {
+    lines.push(renderItemList('plan', handoff.tomorrowPlan));
+  }
+  return lines.length > 0 ? lines : ['    nothing pending recorded'];
 }
 
 /**
@@ -111,6 +171,10 @@ function formatCapturedSection(result: EndDayResult, config: Config): string[] {
         formatTerminationLabel(captured, result, config),
     );
     lines.push(formatUnderstanding(handoff));
+    // S4-T0h: the reason this task exists — `pendingItems`/`tomorrowPlan` used to never print
+    // here at all, so the person who just ran `end-day` got the narrative and never the short,
+    // actionable list that is the actual reason to run the command.
+    lines.push(...formatPendingSection(handoff));
   }
   return lines;
 }

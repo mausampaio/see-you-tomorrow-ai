@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { renderConsolidatedPlan, renderRelativeAge } from '../../../src/core/consolidated-plan.js';
+import {
+  renderConsolidatedPlan,
+  renderItemList,
+  renderRelativeAge,
+} from '../../../src/core/consolidated-plan.js';
 import type { Briefing } from '../../../src/core/ports.js';
 import { createHandoff } from './_fixtures.js';
 
@@ -165,6 +169,26 @@ describe('renderConsolidatedPlan — resumedSessionIds (S3-T3)', () => {
   it('defaults to an empty resumed set when omitted (back-compat with existing call sites)', () => {
     const briefing: Briefing = { day: '2026-08-16', handoffs: [createHandoff()], rejected: [] };
     expect(renderConsolidatedPlan(briefing, 1)).not.toContain('already resumed');
+  });
+});
+
+// S4-T0h: `cli/format-end-day.ts` reuses this function as-is for `seeya end-day`'s own
+// pending/plan lines. Tested directly here (not just indirectly through
+// `renderConsolidatedPlan` above) now that it's a public export another module depends on.
+describe('renderItemList (exported for cli/format-end-day.ts reuse, S4-T0h)', () => {
+  it('renders the label and one item per line, indented under it', () => {
+    expect(renderItemList('pending', ['fix the flaky test'])).toBe(
+      '    pending:\n      - fix the flaky test',
+    );
+  });
+
+  it('renders every item, in order, never joined into one line', () => {
+    const list = renderItemList('plan', ['first', 'second', 'third']);
+    expect(list).toBe('    plan:\n      - first\n      - second\n      - third');
+  });
+
+  it('renders just the label line for an empty list, never a placeholder item', () => {
+    expect(renderItemList('pending', [])).toBe('    pending:');
   });
 });
 
