@@ -4547,3 +4547,92 @@ seria a analogia-em-vez-de-medição que a D-011 já corrigiu **duas** vezes.
 
 **Quando reabrir, com o gatilho escrito:** se uma captura estourar orçamento e o `modelUsage`
 apontar o prompt como responsável. Aí a evidência existe e o teto se justifica sozinho.
+
+---
+
+## Q-052 — S4-T3e: o mecanismo do vazamento não era o hipotetizado no plano, e só um caminho vaza
+
+**Tarefa:** S4-T3e. **Bloqueia:** não — a correção mínima já resolve o vazamento medido; registro
+para o mantenedor confirmar que a leitura restrita de escopo (só (a), não (b)) é a certa.
+
+**O que o plano hipotetizava.** Que `readFileSync(0)` bloqueante nunca recebia EOF porque "quem
+spawnou some sem fechar o cano" — o `spawnClaude` abortando por `AbortSignal.timeout`, e havendo
+"testes que spawnam direto". Isso apontava para duas frentes de correção: (a) o fixture ganhar
+limite próprio de vida, e (b) `spawn-claude.ts` garantir o fechamento do stdin do filho, inclusive
+no caminho de abort.
+
+**O que medi.** Contagem de processos `node.exe` cujo `CommandLine` batia com o caminho desta
+worktree (`agent-a8ce1afb246b365c2`), via `Get-CimInstance Win32_Process` (`Get-Process` sozinho
+não expõe `CommandLine`, e é ele que prova QUAL fixture vazou, não só quantos processos existem).
+Baseline: 0. Rodando só o teste com `-t "hangs"` (o único cujo nome bate, em
+`lean-generator.test.ts`): **1 processo `node.exe` sobra**, com o `CommandLine` idêntico ao
+padrão relatado no sintoma (`fake-claude.mjs -p --model sonnet --output-format json --tools ""
+...`). Rodando a suíte `tests/integration/generation` inteira (3 arquivos, 24 testes): **exatamente
+2 processos sobram** — o número bate com as DUAS únicas ocorrências de `FAKE_CLAUDE_MODE = 'hang'`
+em todo o repositório (`lean-generator.test.ts` e `deep-generator.test.ts`; confirmado por grep,
+nenhuma outra). `fork-registration.test.ts` (mesma pasta, não usa `hang`) não deixou nada. Também
+confirmei por grep que **nenhum teste spawna o fixture diretamente** — os três arquivos de
+`tests/integration/generation/` só chegam ao binário via `LeanHandoffGenerator`/
+`DeepHandoffGenerator`, que chamam `spawnClaude`. A frase do plano "há testes que spawnam direto"
+não se sustentou para este fixture.
+
+**O que isso implica sobre o mecanismo.** Lendo `src/adapters/generation/spawn-claude.ts` com
+atenção: `child.stdin.write(stdinContent); child.stdin.end();` roda **incondicionalmente**, de
+forma síncrona, logo após o `spawn()` — antes de qualquer possibilidade de abort, sucesso ou
+timeout. Ou seja, o `stdin` do filho **já fecha corretamente em todo caminho**, inclusive o de
+abort. O `readFileSync(0)` do fixture antigo recebia EOF quase instantaneamente mesmo no modo
+`'hang'` — e só DEPOIS disso entrava no `setInterval` que nunca retorna por design (é a simulação
+do travamento, não um efeito colateral do stdin não fechar).
+
+**A causa real, medida:** o vazamento é específico do Windows e nasce do **próprio arnês de
+teste**, não de `spawn-claude.ts`. `tests/integration/generation/_fixtures.ts` compila um `.exe`
+em C# (`csc.exe`) como *launcher* porque `spawn(path, args, {shell:false})` rejeita `.cmd`/`.bat`
+no Windows (CVE-2024-27980). Esse `.exe` faz `Process.Start` + `WaitForExit` do processo Node real
+que roda `fake-claude.mjs` — dois saltos de processo (`spawnClaude` → `claude.exe` (shim) →
+`node fake-claude.mjs`, o neto). Quando o `AbortSignal.timeout` do `spawnClaude` mata o processo,
+o Node mata só o PID **imediato** (o shim) — no Windows isso é `TerminateProcess`, que não afeta
+descendentes. O neto (`fake-claude.mjs`, já dentro do `setInterval` do modo `'hang'`) fica órfão,
+sem receber sinal nenhum, e nada dentro dele jamais o mataria enquanto ele lia stdin de forma
+síncrona (o `readFileSync` trava o laço de eventos — nem um `setTimeout` interno dispararia).
+No POSIX o launcher é um script com `exec`, que **substitui a imagem do processo mantendo o
+mesmo PID** — matar o PID imediato mata de fato o `node fake-claude.mjs` real, sem órfão. Por
+isso a suspeita é de que o vazamento relatado (31 processos, todos com esta assinatura de
+argumentos) só acontece no Windows — consistente com a máquina do mantenedor ser Windows.
+
+**Por que só consertei (a), não (b).** Medido: `spawn-claude.ts` já fecha o stdin do filho em
+TODO caminho, inclusive abort — não há bug ali para corrigir. O problema real é o arnês de teste
+matar só o processo imediato numa árvore de dois saltos que só existe no Windows por causa do
+shim `.exe`. Duas opções existiam: (i) fazer o shim/arnês matar a árvore inteira (ex.: Job Object
+do Windows, ou `taskkill /T`), atacando a origem específica do teste; (ii) blindar o fixture para
+nunca poder viver para sempre, não importa a causa da orfandade. Escolhi (ii): é a correção mais
+barata, cobre esta causa E qualquer outra forma futura de orfandade (arnês novo, teste novo que
+mate o processo por fora), e não exige ensinar a `_fixtures.ts` sobre árvores de processo do
+Windows — escopo que o `AGENTS.md` pede para não expandir sem necessidade medida.
+
+**A correção.** `tests/fixtures/generation/fake-claude.mjs`: `readFileSync(0)` síncrono virou
+leitura assíncrona por `process.stdin` (eventos `data`/`end`/`error`), preservando o
+`captureFile` com `{argv, stdin, env}` **idêntico** ao anterior — D-015 (integridade do stdin) e
+D-017 (saneamento do ambiente) continuam provados pelo mesmo instrumento, só que sem bloquear o
+laço de eventos para chegar lá. Um `setTimeout` de 5000ms, armado no topo do script, é o cão de
+guarda: se nada tiver chamado `process.exit()` até lá (o que só acontece nos modos que nunca
+saem por conta própria — `'hang'`, ou qualquer futuro modo com o mesmo formato), ele mesmo se
+mata com código 1 e uma mensagem no stderr. 5000ms foi escolhido por ser **17x** o menor timeout
+real usado com `'hang'` neste repositório (300ms, nos dois arquivos citados) — a margem garante
+que o abort real do `spawnClaude` sempre vence a corrida no caminho comum (POSIX, e Windows não
+órfão), e o cão de guarda só importa no caminho órfão. Também é curto o bastante para nunca
+sobreviver ao tempo de rodar a suíte duas vezes (o aceite da tarefa).
+
+**Medido depois da correção:** rodando a suíte `tests/integration/generation` (24 testes, 3
+arquivos) e contando `node.exe` desta worktree no instante em que o `vitest` retorna: ainda **2**
+processos (o cão de guarda ainda não disparou — o teste passa antes dos 5s). Rodando a mesma
+contagem em polling a cada 750ms pelos 6 segundos seguintes: cai para **0** dentro da primeira
+janela medida, e fica em 0 daí em diante. Os 24 testes continuam **todos verdes** — nenhuma
+asserção de D-015/D-017 mudou de comportamento.
+
+**O que não fiz, e por quê:** não toquei `spawn-claude.ts` nem `_fixtures.ts`/o shim C#. A medição
+não sustenta que há algo quebrado ali — mexer seria escopo além do que a medição pede, exatamente
+o erro que a Q-048 já registrou noutro contexto (corrigir uma causa que não reproduziu).
+
+**Resposta:** (aguardando confirmação do mantenedor — registrado para o review, não bloqueia a
+entrega da tarefa: o aceite medido, "rodar a suíte duas vezes e a contagem não crescer", já está
+cumprido com a correção mínima acima.)

@@ -18,21 +18,60 @@
 //                              (stdin arrives intact) and D-017 (the child's env is sanitized):
 //                              the test reads this file back and inspects exactly what the real
 //                              child process received, not what the test THINKS it sent.
+//
+// S4-T3e: stdin is read ASYNCHRONOUSLY (below), never with a blocking `readFileSync(0)`. Measured
+// on this machine: killing the process this script's launcher spawns it from (the AbortSignal
+// that `spawn-claude.ts` fires on timeout, or the two-hop Windows `.exe` shim
+// `tests/integration/generation/_fixtures.ts` compiles to work around Node's `.cmd` EINVAL
+// restriction) terminates only the IMMEDIATE child on Windows — a grandchild this process becomes,
+// through the shim, is never signaled and is orphaned. A synchronous `readFileSync(0)` blocks the
+// event loop, so nothing running in THIS process could ever notice and self-destruct; reading
+// async keeps the loop free for the watchdog below to fire regardless of whether anything upstream
+// ever kills this process. This is deliberately a backstop, not a replacement for whoever spawns
+// this script closing its own end of the pipe — it's what caps the damage when that doesn't
+// happen, or can't reach this process at all (the orphaned-grandchild case measured above).
 
-import { readFileSync } from 'node:fs';
 import { writeFileSync } from 'node:fs';
 
+// Generous relative to the shortest real timeout any test pairs with FAKE_CLAUDE_MODE=hang (300ms,
+// tests/integration/generation/{lean,deep}-generator.test.ts) — the external kill should always
+// win that race — but short enough that an orphaned process (the case this exists for) is gone
+// long before "run the whole suite twice" (docs/PLANO-DE-ENTREGA.md S4-T3e's acceptance check)
+// finishes, instead of living for weeks like the 31 processes that prompted this fix.
+const MAX_LIFETIME_MS = 5_000;
+
+// Fires unconditionally at process start, not after some later branch — an orphaned grandchild
+// (see top comment) never reaches any later code, so the watchdog has to be armed before anything
+// else runs. `process.exit()` below (every mode but 'hang') cancels pending timers as part of
+// tearing the process down, so this never fires on the paths that already exit on their own.
+setTimeout(() => {
+  process.stderr.write(
+    `fake claude: self-destructing after ${MAX_LIFETIME_MS}ms with no external kill (S4-T3e watchdog)\n`,
+  );
+  process.exit(1);
+}, MAX_LIFETIME_MS);
+
 function readAllStdin() {
-  try {
-    return readFileSync(0, 'utf8');
-  } catch {
+  if (process.stdin.isTTY) {
     // No stdin piped in (e.g. a TTY) — normal for a manual run of this script, never for how the
     // real generator invokes it.
-    return '';
+    return Promise.resolve('');
   }
+  return new Promise((resolve) => {
+    let data = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (chunk) => {
+      data += chunk;
+    });
+    // 'error' resolves with whatever was read so far rather than rejecting: this script's job is
+    // to report what it received, never to crash on a broken pipe, and the capture file below is
+    // what makes a truncated read visible to the test instead of hiding it as a clean empty string.
+    process.stdin.on('end', () => resolve(data));
+    process.stdin.on('error', () => resolve(data));
+  });
 }
 
-const stdin = readAllStdin();
+const stdin = await readAllStdin();
 
 const captureFile = process.env['FAKE_CLAUDE_CAPTURE_FILE'];
 if (captureFile !== undefined) {
@@ -66,7 +105,8 @@ switch (mode) {
     // Never exits on its own — the test's own timeout is what's supposed to kill this. Keeps the
     // event loop alive without busy-looping (D-019 doesn't apply here: this file isn't under
     // src/, it's a spawned test fixture, and `setInterval` is exactly what a real hung process
-    // looks like from the parent's point of view).
+    // looks like from the parent's point of view). The S4-T3e watchdog above is what guarantees
+    // this still ends, even if the external kill never arrives (the orphaned-grandchild case).
     setInterval(() => {}, 1_000_000);
     break;
   default:
