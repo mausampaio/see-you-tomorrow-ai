@@ -19,6 +19,7 @@
  */
 import { terminateGracefullyPosix } from './termination-posix.js';
 import { terminateGracefullyWindows } from './termination-windows.js';
+import { errorCode } from './liveness.js';
 
 export function terminateGracefully(
   pid: number,
@@ -29,4 +30,38 @@ export function terminateGracefully(
     return terminateGracefullyWindows(pid, deadlineMs);
   }
   return terminateGracefullyPosix(pid, deadlineMs);
+}
+
+/**
+ * Unconditional, immediate termination (`SIGKILL`) — **never** used on a discovered Claude Code
+ * session (D-002 bans forced kill for those in v1; `terminateGracefully` above is the only verb
+ * that ever touches one). This exists solely for `cli/daemon-command.ts#runDaemonStop` (S4-T5) to
+ * end `seeya`'s OWN background daemon when there is no graceful path left to try:
+ *
+ * - **Windows**: the daemon runs detached with no console at all (D-005), so
+ *   `terminateGracefullyWindows`'s `CTRL_BREAK_EVENT` can never be delivered — `AttachConsole`
+ *   fails with error 6 the instant it's tried (`docs/spikes/G-ctrl-break-no-windows.md`'s own "what
+ *   was not proven": a console-less target). A bare cross-process signal doesn't help either:
+ *   `process.kill(pid, 'SIGTERM')` from a DIFFERENT process on Windows calls `TerminateProcess`
+ *   immediately — the target's own JS handler never runs at all (measured building S4-T3b,
+ *   `tests/integration/process/daemon-launch.test.ts`'s own comment on this exact call). There is
+ *   no graceful mechanism to exhaust first; this function IS the only one available.
+ * - **POSIX**: `runDaemonStop` only reaches this as a last resort, after a real `SIGTERM`
+ *   (`terminateGracefully`) was given a generous window and the process still didn't exit.
+ *
+ * Tolerates the pid already being gone (`ESRCH`) — success, not failure, for a function whose only
+ * job is "make sure it's dead". Anything else rethrows: guessing success on an unrecognized OS
+ * error would be exactly the invented middle ground `liveness.ts#interpretExistenceCheckError`
+ * already refuses to produce for the same class of surprise.
+ */
+export function terminateAbruptly(pid: number): Promise<void> {
+  try {
+    process.kill(pid, 'SIGKILL');
+  } catch (error) {
+    if (errorCode(error) === 'ESRCH') {
+      return Promise.resolve();
+    }
+    return Promise.reject(error instanceof Error ? error : new Error(String(error)));
+  }
+  return Promise.resolve();
 }
