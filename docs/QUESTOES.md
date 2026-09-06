@@ -2725,7 +2725,10 @@ o suficiente para valer a pena medir com mais precisão antes de qualquer desenh
 tamanho exato do prefixo (ex.: estimar custo de captura por sessão), ou é ruído de uma amostra de
 uma sessão sintética pequena?
 
-**Resposta:** em aberto — não bloqueia nada hoje; vale revisitar se um desenho futuro precisar de
+**Resposta:** **FECHADA sem perseguir.** A interação não-aditiva entre `--system-prompt` e
+`--tools ""` é curiosidade sobre mecânica de cache de terceiro, não decisão nossa: a Q-034 já
+engavetou a otimização inteira, então o número exato não muda nada que a gente vá construir.
+Fica registrado para quem reabrir a Q-034 um dia.
 uma estimativa de custo de prefixo mais precisa que "a ordem de grandeza medida aqui".
 
 ---
@@ -3140,6 +3143,15 @@ a menos que fique vermelho sem agente em paralelo ou no CI).
 
 ---
 
+**Resposta:** **FECHADA — as três confirmadas.** `exitCode` sempre presente evita campo
+opcional que o leitor precisa interpretar; truncar em `describe()` mantém o dado estruturado
+íntegro para casamento programático e limita só o que vai para disco, que é a divisão certa;
+e o `stdout` sem corte segue o precedente do `invalidJson`, que já carrega o dele inteiro.
+As três eu revisei ao mesclar e endossei no commit de merge.
+
+**O item 4 — o ramo de `timeout` descarta a mesma evidência — continua valendo** e é conserto
+de verdade, não registro. Entra quando alguém tocar naquele arquivo de novo.
+
 ## Q-040 — S4-T00e: onde a distinção de `source` mora, por que `noTranscript` leva o mesmo tratamento de `deterministic`, e onde o limite de retentativas do daemon vai encaixar
 
 **Tarefa:** S4-T00e
@@ -3214,6 +3226,15 @@ frase, mais fraco como documentação executável da regra completa.
 **Minha escolha:** A, pelos motivos acima.
 
 ---
+
+**Resposta:** **FECHADA — as duas confirmadas, e já endossadas no commit de merge.** A
+distinção morar no núcleo está certa: "quais handoffs contam como captura" é parte da regra de
+anti-duplicidade, no mesmo nível de "qual assinatura comparar", não detalhe de quem resolve
+E/S. E `noTranscript` receber o mesmo tratamento de `deterministic` também: os dois significam
+"o modelo não analisou", e para uma regra de elegibilidade essa diferença não carrega nada.
+
+**A nota sobre onde o limite de retentativa encaixa foi usada** — virou a Q-040 citada na
+S4-T3, e o daemon a implementou no `DayState`.
 
 ## Q-041 — Sete escolhas feitas fazendo S4-T0b (implementar a D-031), registradas para confirmação
 
@@ -3521,6 +3542,12 @@ escopo dos dois `summary.md` difere — exatamente a frase do próprio aceite da
 comparar contagens"). Acho que vale a atenção do revisor: não é um teste fraco por acidente, é
 proposital.
 
+**Resposta:** **FECHADA — as seis confirmadas.** A união discriminada obrigatória onde o valor
+é consumido, o campo opcional só na entrada, o aviso no topo antes da contagem, o escopo não
+persistido (recomputado, igual à listagem), e o `SessionListingInfo` como união que torna
+"título presente mas ilegível" **impossível de construir** — essa última em especial é o tipo
+de escolha que eu quero ver mais: resolver por forma em vez de por bandeira.
+
 ## Q-043 — Quatro escolhas fazendo S4-T0d (o número do descarte), registradas para confirmação
 
 **Tarefa:** S4-T0d
@@ -3588,6 +3615,14 @@ nomear sessões que o usuário filtrou de propósito, que é ruído na maioria d
 **Minha escolha:** não implementei, como o item "Fora de escopo" da tarefa já antecipava.
 ---
 
+**Resposta:** **FECHADA — as quatro confirmadas.** O `ResolvedEndDayScope` como tipo **irmão**
+é a melhor delas: o escopo bruto é montado antes de o `endDay` descobrir qualquer coisa, então
+ali as contagens **genuinamente não existem** — enchê-las de valor de preenchimento seria
+inventar dado para satisfazer uma forma. Manter os dois campos de contagem aceita uma
+duplicação pequena em troca de nenhum consumidor precisar recalcular.
+
+**"Quais sessões foram descartadas" segue fora**, como decidido na Q-041.
+
 ## Q-044 — O corte em 500 caracteres trunca pelo fim, e conclusão costuma morar no fim
 
 **Tarefa:** nenhuma — achado do mantenedor em 2026-09-02, comparando capturas reais.
@@ -3642,7 +3677,14 @@ analogia — que é exatamente o erro que a D-011 já cometeu duas vezes.
 **Um cuidado, para não trocar um problema por outro:** qualquer uma das opções aumenta o texto que
 vai para o modelo, e a Q-036 registra que **o custo não é previsível pelo volume** neste caminho.
 Medir antes de assumir que "um pouco mais" é barato.
-**Resposta:** _(em aberto)_
+**Resposta:** **FECHADA na opção (D), como estava a inclinação registrada.** A S4-T0e entregou
+a instrução que cobre a consequência perigosa — afirmar conclusão sobre evidência parcial —, e
+a Q-045 já registrou um caso real em que o modelo escreveu sozinho *"its explanation was cut
+off mid-sentence, so full details are unknown/partial"*. Ou seja: **o truncamento continua
+cortando informação, e parou de produzir mentira sobre ela.**
+
+Reestruturar o corte (opção B ou C) fica para quando houver caso em que a perda de informação
+doa por si — não por simetria com este, que a instrução já resolveu.
 
 ---
 
@@ -3960,6 +4002,17 @@ o portão**, achado acima); com o seam só em `captureWindows` (versão entregue
 
 ---
 
+**Resposta:** **FECHADA.** A costura se justifica sozinha (o `CommandRunner` já era ideia
+nomeada no `adapters/notification/backend.ts`), e a decisão de **estreitá-la só para o**
+`captureWindows` foi achada medindo: alargar para o `darwin` derrubou a cobertura abaixo do
+piso, porque o spawn real do `ps` era a **única** cobertura do ramo de falha do `runForStdout`.
+Simetria teria apagado cobertura que nada mais fornecia.
+
+**A varredura achou dois testes de unidade com temporizador real** (`concurrency.test.ts` e o
+`ConcurrencyTrackingStorage` do `end-day.test.ts`). **Ficam como estão por ora:** temporizador
+real é I/O barato e determinístico, diferente de spawn de processo, e nenhum dos dois apareceu
+em vermelho nenhum. Se um deles falhar por tempo algum dia, aí vira tarefa com evidência.
+
 ## Q-048 — S4-T0g: a hipótese do `createGitFixture` caiu — os "9min42" eram `npm ci` travado, não teste
 
 **Tarefa:** S4-T0g
@@ -4082,6 +4135,17 @@ específica (cache do `actions/setup-node`, versão do npm no runner, etc.) — 
 igual nas 6 execuções vizinhas, não há o que reproduzir; monitorar é a única ação disponível.
 
 ---
+
+**Resposta:** **FECHADA — e a conclusão dela já foi adotada.** A hipótese do `createGitFixture`
+caiu, os 582s eram `npm ci` travado, e o peso real está no `guards/` (~81%), custo
+pré-existente desde o Sprint 0. **Nenhum código mudou, e essa foi a entrega certa.**
+
+O título da S4-T0g foi corrigido no plano porque afirmava o quadruplicar como fato — erro meu,
+de medir tempo de parede e chamar de regressão de código.
+
+**O custo do `guards/` fica registrado e sem tarefa:** ele é real, é antigo, e otimizá-lo
+trocaria verificação de camadas por segundos. Se um dia o portão incomodar de verdade, a
+medição já está aqui.
 
 ## Q-049 — S4-T3 (o daemon): dez escolhas registradas, um limite justificado, e uma verificação manual que não cabe em teste automatizado
 
@@ -4377,7 +4441,17 @@ modelo ter confirmado ou por um bug silencioso na formatação.
 continua lá sem alteração nenhuma desta tarefa. Só o relatório de terminal (`cli/format-end-day.ts`)
 mudou.
 
-**Resposta:** _(em aberto)_
+**Resposta:** **FECHADA — as três confirmadas.** Reusar o `renderItemList` estava certo: a
+função já era formatação pura sem conhecimento do `start-day`. Truncar em vez de quebrar
+também, e o argumento decisivo é o que você escreveu — quebrar reproduz os 1682 caracteres em
+vinte linhas, **e esse custo se repete por sessão**.
+
+E a decisão extra que você sinalizou em vez de embutir — pendências só para `source: "model"`
+— é a certa: captura determinística ao lado de lista vazia se leria como "conferido, nada
+sobrou".
+
+**Os 200 caracteres ficam**, rotulados como escolha e não medição. Nenhuma largura de terminal
+os torna corretos, e a constante nomeada resolve se alguém quiser outro número.
 
 ---
 
