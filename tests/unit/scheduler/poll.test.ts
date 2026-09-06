@@ -126,6 +126,25 @@ describe('pollOnce — leadTimeWarning', () => {
     await harness.poll(at1900);
     expect(harness.notifier.notices).toHaveLength(1); // still just the one — no repeat
   });
+
+  // S4-T6, D-025: measured in the first real rehearsal — a daemon that starts polling late (or
+  // wakes from suspension) can cross the 30-minute threshold when LESS than 30 real minutes are
+  // left. The notice must say the real number, not the configured rule's own name.
+  it('reports the ACTUAL remaining time, not the configured lead time that fired, when the daemon is checking late', async () => {
+    const harness = buildHarness(
+      createConfig({ endOfDayTime: '19:30', leadTimesInMinutes: [30, 15] }),
+    );
+    const checkedLate = new Date(2026, 8, 5, 19, 10, 0); // 20 real minutes left, not 30
+
+    await harness.poll(checkedLate);
+
+    expect(harness.notifier.notices).toHaveLength(1);
+    expect(harness.notifier.notices[0]?.title).toContain('20 min');
+    expect(harness.notifier.notices[0]?.title).not.toContain('30 min');
+    // The bookkeeping still records the CONFIGURED rule that fired — only the notice text changed.
+    const state = await harness.storage.readState();
+    expect(state?.firedLeadTimesInMinutes).toStrictEqual([30]);
+  });
 });
 
 describe('pollOnce — endOfDay, on time, nothing captured', () => {

@@ -21,6 +21,7 @@ import {
   computeEffectiveEndOfDay,
   decideSchedule,
   emptyDayState,
+  minutesRemaining,
   resolveEndOfDayInstant,
 } from '../../../src/core/schedule.js';
 import { createConfig } from './_fixtures.js';
@@ -117,6 +118,37 @@ describe('computeEffectiveEndOfDay', () => {
     const now = new Date(2026, 5, 15, 12, 0, 0);
     const effective = computeEffectiveEndOfDay('19:30', 0, now);
     expect(effective?.getTime()).toBe(resolveEndOfDayInstant('19:30', now).getTime());
+  });
+});
+
+// S4-T6, D-025: `scheduler/notices.ts#buildLeadTimeNotice` used to print the CONFIGURED lead time
+// back verbatim (the rule's own name, e.g. "30") instead of how much time is actually left — this
+// is the pure calculation that replaced it.
+describe('minutesRemaining', () => {
+  it('rounds down when the remainder is under 30 seconds', () => {
+    const now = new Date(2026, 5, 15, 14, 8, 50);
+    const target = new Date(2026, 5, 15, 14, 30, 0); // 21 min 10 s away
+    expect(minutesRemaining(target, now)).toBe(21);
+  });
+
+  it('the exact real-rehearsal case: 22 real minutes left when a 30-minute rule fires late', () => {
+    // Measured 2026-09-06 (docs/PLANO-DE-ENTREGA.md S4-T6): daemon up late, end-of-day at 14:30,
+    // checked at 14:08 — the 30-minute threshold had already been crossed, but only 22 minutes
+    // were actually left. The old code printed "closing in 30 min" here.
+    const now = new Date(2026, 5, 15, 14, 8, 0);
+    const target = new Date(2026, 5, 15, 14, 30, 0);
+    expect(minutesRemaining(target, now)).toBe(22);
+  });
+
+  it('zero when target and now coincide exactly', () => {
+    const instant = new Date(2026, 5, 15, 14, 30, 0);
+    expect(minutesRemaining(instant, instant)).toBe(0);
+  });
+
+  it('rounds up when the remainder is 30 seconds or more', () => {
+    const now = new Date(2026, 5, 15, 14, 0, 0);
+    const target = new Date(2026, 5, 15, 14, 0, 30); // exactly 30s away
+    expect(minutesRemaining(target, now)).toBe(1);
   });
 });
 

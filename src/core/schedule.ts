@@ -100,6 +100,27 @@ export function computeEffectiveEndOfDay(
   return addSnoozeOffset(resolveEndOfDayInstant(endOfDayTime, now), snoozeMinutesTotal);
 }
 
+/**
+ * Whole minutes from `now` until `target`, rounded to the nearest minute — same rounding
+ * `scheduler/notices.ts#buildDaemonEndOfDayNotice`/`buildDaemonUnhealthyNotice` already use for a
+ * duration in the other direction (elapsed rather than remaining). Pure, and deliberately living
+ * here rather than in `scheduler/notices.ts`: "how long until this instant" is a plain calculation
+ * over two already-known `Date`s, not a rendering decision, so it belongs where `core/`'s 95%
+ * coverage floor (AGENTS.md § "Testes") makes a boundary case (exactly on the minute, one second
+ * short of it) cheap to pin down.
+ *
+ * **S4-T6: this is what `buildLeadTimeNotice`'s wording was missing.** `ScheduleDecision`'s
+ * `leadTimeWarning` case names the CONFIGURED rule that just fired (`leadTimeMinutes` — "the
+ * 30-minute warning"), not how much time is actually left when the daemon gets around to checking.
+ * The two only coincide when the poll lands inside the same 30s window the threshold was crossed
+ * in. Measured in the first real rehearsal (2026-09-06): the daemon started late, crossed the
+ * 30-minute threshold and had only 22 real minutes left in the SAME poll, and the notice still said
+ * "closing in 30 min" — the rule's own name, not a fact about the world (D-025).
+ */
+export function minutesRemaining(target: Date, now: Date): number {
+  return Math.round((target.getTime() - now.getTime()) / 60_000);
+}
+
 /** The bookkeeping a local day starts from — no skip, no snooze, no notification fired yet
  * (D-025: a day nobody has touched yet is not an error, and isn't half-way through anything).
  * `captureAttemptsToday` (S4-T3) starts empty the same way — nothing has been retried yet. */
