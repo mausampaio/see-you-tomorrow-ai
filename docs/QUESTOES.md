@@ -4913,3 +4913,117 @@ o mesmo que os outros dois contextos já fazem.
 **A redação honesta do aviso de dia perdido:** confirmada, e é o tipo de contenção que eu quero.
 O `seeya end-day` não tem `--day`, então prometer "rode para ontem" seria mandar a pessoa fazer
 algo que o produto não oferece.
+
+---
+
+## Q-056 — S4-T4 (`seeya snooze`/`skip-today`/`config`): o desenho do `config`, e uma corrida real medida em `estado.json`/`config.json`
+
+**Tarefa:** S4-T4 (`seeya snooze`, `seeya skip-today`, `seeya config`)
+**Bloqueia:** não — `npm run verificar` está verde. Registro no mesmo espírito de
+Q-037/Q-049/Q-053/Q-054: escolhas sem resposta literal na spec, e uma corrida real **medida**, não
+suposta, exatamente o que o AGENTS.md pede em vez de "inventar travamento".
+
+**1) `snooze`/`skip-today` não construíram lógica nova — só ligaram o que já existia.** Toda a
+regra (acumular adiamento, `resetIfNewDay` na virada de dia, `daemonHealth` não resetando) já
+estava em `core/schedule.ts` desde a S4-T2. `src/cli/snooze-command.ts` só resolve `today` pelo
+`Clock` injetado (D-019), lê/grava `Storage`, e re-chama `decideSchedule` **de leitura apenas**
+(o `nextState` dessa segunda chamada nunca é persistido) só para renderizar a confirmação com o
+mesmo vocabulário que o daemon usaria no próximo poll — nunca uma segunda interpretação do estado.
+Verificado por teste: adiar antes do horário, adiar depois do horário (a mensagem reflete
+corretamente se o novo horário efetivo já passou ou não), adiar duas vezes (acumula), pular depois
+de já ter adiado (o adiamento continua gravado, só passa a não valer), e virada de meia-noite
+zerando tudo **menos** `daemonHealth` — os cinco casos que `docs/TESTES.md`/o despacho da tarefa
+exigiam, com asserção no arquivo em disco (não só em memória).
+
+**2) O desenho do `seeya config` não é literal na spec.** `docs/ESPECIFICACAO.md` diz "Lê e
+escreve `config.json`. Subcomandos para horário, antecedências de notificação, política por `cwd`,
+modelo usado na captura, e limites" — isso nomeia **categorias**, não verbos de subcomando.
+Implementei três: `get [key]` / `set <key> <value>` (cobre horário, antecedências, modelo e todos
+os limites — toda chave escalar de `Config`) e `policy <cwd> [--can-terminate] [--deep-capture]`
+(a única categoria que não é escalar, por ser indexada por `cwd`). **Opções que via:** A) o que
+implementei — genérico por chave, validado contra o mesmo `configFileSchema` que já existia, sem
+reinventar validação por categoria. B) um subcomando dedicado por categoria (`seeya config
+end-of-day-time 19:30`, `seeya config lead-times 30,15`, etc.) — mais descritivo por comando, mas
+5+ subcomandos escalares para manter em sincronia com `Config` toda vez que um campo novo
+aparecer (e já aparecem — D-035 acrescentou quatro este mês). **Minha escolha:** A — `get`/`set`
+genéricos escalam com o tipo `Config` sem crescer o número de comandos, e cada valor ainda passa
+pela constraint exata do schema (regex de `endOfDayTime`, positividade de `captureConcurrency`
+etc.) via `configFileSchema.shape[key]` reaproveitado, não uma cópia da regra.
+
+**3) `seeya config set` não normaliza o `cwd` em `policy`, e a lista/valor de `endOfDayTime: null`
+usa convenções escolhidas, não especificadas.** Três pontos sem resposta literal:
+- O `cwd` recebido por `seeya config policy <cwd>` é gravado **exatamente como digitado**, sem
+  `path.resolve`. Coerente com o exemplo de `docs/ARQUITETURA.md` (chave crua, `"c:\\code\\projeto"`)
+  e com `config-schema.ts`'s própria observação de que a comparação de `ignore`/`projectPolicy` é
+  por igualdade de string exata, normalizada por quem monta o critério fora do `core/` — mas um
+  `cwd` relativo digitado por engano nunca vai bater com o `cwd` absoluto que a descoberta produz,
+  e nada avisa disso na hora do `set`.
+- `seeya config set endOfDayTime null` (a palavra, sem aspas de JSON) é o jeito de desligar o
+  agendamento. Não há como digitar `null` de outra forma numa CLI que só recebe strings; escolhi o
+  literal case-insensitive em vez de, por exemplo, um flag separado (`--disable`) por ser mais
+  direto de descobrir sozinho.
+- Campos de lista (`leadTimesInMinutes`, `ignore`) são vírgula-separados na entrada
+  (`"30,15"`/`"c:\\a,c:\\b"`) — não há como um `cwd` com vírgula literal no caminho ser
+  configurado por `ignore` desta forma. Não medi se isso ocorre na prática (caminhos com vírgula
+  são raros, mas legais nos três SOs).
+**Minha escolha, nas três:** aceitar como estão — nenhuma tem uma alternativa obviamente melhor
+sem inventar uma sintaxe nova (JSON inline? um segundo separador?) que a spec também não pede.
+
+**4) `seeya status` continua sem mostrar `skipped`/`snoozeMinutesTotal`/daemon rodando, mesmo
+`Storage.readState()` já existindo.** A Q-015 (S1-T6) já tinha marcado esse gap como dependente de
+S4-T3/S4-T4 — ambas concluídas agora. Não toquei em `cli/status-command.ts`/`format-status.ts`:
+não estava no escopo desta tarefa ("três comandos: `snooze`, `skip-today`, `config`"), e mexer
+teria efeito fora do que foi pedido. **Registro para o mantenedor decidir se vira tarefa própria**
+(provavelmente pequena: `runStatusCommand` já recebe `Config`, só precisa ganhar `Storage`/`Clock`
+para chamar `decideSchedule` e mostrar o mesmo texto que `snooze` já sabe renderizar).
+
+**5) A corrida de escrita concorrente — medida, não suposta, como o despacho da tarefa pediu.**
+`adapters/storage/atomic-write.ts` já tinha um comentário datado dizendo que não havia, até esta
+tarefa, um segundo escritor/leitor concorrente de `config.json` para justificar medir a corrida —
+e que `estado.json` ganharia o mesmo problema quando `seeya snooze` chegasse. Escrevi dois testes
+de integração (`tests/integration/storage/state-concurrent-write.test.ts` e
+`config-concurrent-write.test.ts`) que martelam **300 iterações** de leitura e escrita concorrentes
+via `StorageAdapter` real (não mock) contra o mesmo arquivo, duas instâncias separadas simulando
+"terminal rodando `seeya snooze`/`config`" de um lado e "daemon fazendo poll" do outro.
+
+**O que foi medido nesta máquina (Windows), três execuções por arquivo:**
+
+| arquivo | escritas com erro | leituras com erro |
+|---|---|---|
+| `estado.json` | 57/300, 59/300, 55/300 (~18-20%) | 0/300, sempre |
+| `config.json` | 59/300 (~20%) | 0/300 |
+
+Todo erro de escrita observado foi **exatamente** o `EPERM` de `rename` que `atomic-write.ts` já
+documentava como risco conhecido no Windows (destino aberto para leitura no instante do rename).
+**Nenhuma leitura, em nenhuma das seis execuções, viu documento corrompido ou lançou erro de
+schema** — a garantia de "nunca parcial" do `writeFileAtomic` se sustentou integralmente sob
+carga real. O que **não** se sustenta é a suposição implícita de que a corrida seria rara: **quase
+1 em cada 5 escritas falhou** sob este nível de contenção (loop apertado, sem esperar entre
+chamadas — bem mais agressivo que o poll real de 30s do daemon, então a taxa real em uso normal é
+bem menor, mas não zero).
+
+**Consequência prática, e é o motivo de eu não ter corrigido isto:** hoje, `saveState`/`saveConfig`
+que rejeita com `EPERM` propaga sem captura até o `.catch` de `cli/index.ts`, imprimindo o erro cru
+do Node e saindo com código 1 — o arquivo em disco fica **intacto no valor anterior** (nunca
+corrompido, só não atualizado), mas a pessoa que rodou `seeya snooze +30m` no instante azarado vê
+um stack trace feio e precisa rodar de novo. **Não implementei retry nem lock** — o despacho da
+tarefa foi explícito ("não invente travamento") e o `atomic-write.ts` já registrava por que um
+retry exigiria `setTimeout` (proibido fora de `adapters/clock/` por D-019) para um caso que, até
+agora, não tinha medição nenhuma sustentando o esforço.
+
+**Opções que vejo para o mantenedor:**
+A) aceitar como está — o dado nunca corrompe, só o comando falha ocasionalmente e pode ser
+   re-executado; documentar isso na ajuda do comando ou no README.
+B) um retry curto e limitado (2-3 tentativas, delay via `Clock.sleep` já injetável) especificamente
+   em `writeFileAtomic` ou só nos dois chamadores novos (`saveState`/`saveConfig`) — mudaria
+   `atomic-write.ts`'s contrato hoje documentado como "sem retry", então é decisão de arquitetura,
+   não ajuste local.
+C) nada agora, e reavaliar se um usuário real reportar o erro — o daemon poll real (30s) tem
+   contenção muito menor que o teste (loop apertado), então o problema pode ser raro o bastante na
+   prática para não valer a complexidade agora.
+**Minha escolha:** C, com B documentado como o caminho mais barato se a taxa real incomodar
+alguém — não decidi isso sozinho porque architecture de retry/lock é o tipo de coisa que o
+AGENTS.md pede para não improvisar.
+
+**Cobertura e portão, medidos nesta máquina:** ver relatório da tarefa em
+`docs/PLANO-DE-ENTREGA.md` S4-T4.

@@ -12,7 +12,9 @@ import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
   buildCliContext,
+  buildConfigContext,
   buildEndDayContext,
+  buildSnoozeContext,
   buildStartDayContext,
   resolveCliHome,
 } from '../../../src/cli/composition.js';
@@ -220,5 +222,57 @@ describe('buildStartDayContext', () => {
 
     const context = await buildStartDayContext(fixture.root);
     expect(context.config.maxBriefingScanDays).toBe(90);
+  });
+});
+
+/**
+ * `buildSnoozeContext` (S4-T4): `seeya snooze`/`seeya skip-today`'s own composition — just
+ * `Storage` and `Clock`, plus `config` read once up front for rendering. Proves the wiring, not
+ * the command logic (`tests/unit/cli/snooze-command.test.ts` and
+ * `tests/integration/cli/snooze-command.test.ts` already cover that).
+ */
+describe('buildSnoozeContext', () => {
+  it('reads config.json and wires a real Storage/Clock', async () => {
+    fixture = await createDiscoveryFixture();
+    await writeFile(
+      path.join(fixture.seeyaHome, 'config.json'),
+      JSON.stringify({ schemaVersion: 1, endOfDayTime: '19:30' }),
+      'utf8',
+    );
+
+    const context = await buildSnoozeContext(fixture.root);
+    expect(context.config.endOfDayTime).toBe('19:30');
+    expect(context.clock).toBeDefined();
+
+    // Real StorageAdapter: a write really lands under fixture.root.
+    await context.storage.saveState({
+      day: '2026-08-16',
+      skipped: true,
+      snoozeMinutesTotal: 0,
+      firedLeadTimesInMinutes: [],
+      endOfDayFired: false,
+      captureAttemptsToday: {},
+      daemonHealth: { lastCycleError: null, consecutiveCycleFailures: 0 },
+    });
+    expect((await context.storage.readState())?.skipped).toBe(true);
+  });
+});
+
+/**
+ * `buildConfigContext` (S4-T4): `seeya config`'s own composition — just `Storage`, since every
+ * sub-action reads `config.json` fresh itself rather than trusting a value read at composition
+ * time (this function's own docstring).
+ */
+describe('buildConfigContext', () => {
+  it('wires a real Storage that reads/writes config.json under the injected root', async () => {
+    fixture = await createDiscoveryFixture();
+    const context = buildConfigContext(fixture.root);
+
+    expect((await context.storage.readConfig()).relevanceHours).toBe(12);
+    await context.storage.saveConfig({
+      ...(await context.storage.readConfig()),
+      relevanceHours: 6,
+    });
+    expect((await context.storage.readConfig()).relevanceHours).toBe(6);
   });
 });

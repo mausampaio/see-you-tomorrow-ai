@@ -2288,7 +2288,64 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       `npm run verificar:linux` verdes, códigos de saída lidos separadamente do comando, nunca
       encadeados com commit.
 
-- [ ] **S4-T4 — `seeya snooze`, `seeya skip-today`, `seeya config`.**
+- [~] **S4-T4 — `seeya snooze`, `seeya skip-today`, `seeya config`.**
+      `docs/ESPECIFICACAO.md` § "seeya snooze..."/"seeya config" (D-006, D-027, D-035).
+
+      **`snooze`/`skip-today` construíram zero regra nova** — tudo já existia em `core/schedule.ts`
+      desde a S4-T2 (`applySnooze`/`applySkipToday`/`resetIfNewDay`). `src/cli/snooze-command.ts`
+      só resolve `today` pelo `Clock` injetado (D-019), lê/grava `Storage.readState`/`saveState`, e
+      renderiza a confirmação re-chamando `decideSchedule` **só de leitura** (o `nextState` dessa
+      segunda chamada nunca é persistido) — a mensagem nunca inventa uma segunda interpretação do
+      estado, ela pergunta à mesma função que o daemon vai perguntar no próximo poll.
+      `+15m`/`+30m`/`+1h` é o único enum aceito, igual ao texto que
+      `scheduler/notices.ts#buildLeadTimeNotice` já sugeria.
+
+      **`seeya config`** tem três sub-ações: `get [key]` / `set <key> <value>` (toda chave escalar
+      de `Config` — horário, antecedências, modelo, todos os limites incluindo os quatro da D-035)
+      e `policy <cwd> [--can-terminate <bool>] [--deep-capture <bool>]` (a única categoria indexada
+      por `cwd`, não escalar). A spec nomeia categorias, não subcomandos literais — desenho
+      registrado em `docs/QUESTOES.md` Q-056. Validação em `adapters/storage/config-schema.ts`
+      reaproveita o `configFileSchema` já existente campo a campo
+      (`configFileSchema.shape[key].safeParse(...)`), nunca uma cópia da regra: mudar o regex de
+      `endOfDayTime` num lugar já muda o outro. `Storage` ganhou `saveConfig` (D-027: `config.json`
+      era só-leitura em produção desde a S1-T5 — esta é a primeira escrita real).
+
+      **A chave e o valor são validados ANTES de escrever (D-027).** Chave inexistente ou valor que
+      o schema recusaria nunca chega a `writeFileAtomic` — provado por teste: um `set` inválido
+      nunca cria `config.json` do zero nem sobrescreve um já existente.
+
+      **Adiar acumula, pular depois de adiar mantém o adiamento gravado, e a virada de meia-noite
+      zera tudo menos `daemonHealth`** — os cinco casos obrigatórios de `docs/TESTES.md`, cada um
+      com teste próprio em `tests/unit/cli/snooze-command.test.ts`, mais o espelho em
+      `tests/integration/cli/snooze-command.test.ts` contra um `StorageAdapter` real: uma escrita
+      por uma instância e uma leitura por uma instância **completamente nova**, sem estado
+      compartilhado nenhum — a prova de "funciona com ou sem o daemon rodando" que a spec pede.
+
+      **A corrida de escrita concorrente foi medida, não suposta.** `adapters/storage/atomic-write.ts`
+      já registrava que não havia, até esta tarefa, um segundo escritor/leitor concorrente de
+      `config.json` para justificar medir — e que `estado.json` ganharia o mesmo problema quando
+      `seeya snooze` chegasse. Dois testes de integração
+      (`tests/integration/storage/state-concurrent-write.test.ts`,
+      `config-concurrent-write.test.ts`) martelam 300 iterações de leitura/escrita concorrentes via
+      `StorageAdapter` real. **Medido nesta máquina (Windows): ~18-20% das escritas colidem com
+      `EPERM`** (o risco que `atomic-write.ts` já documentava, nunca um modo de falha novo);
+      **0/300 leituras, em seis execuções, viram documento corrompido** — a garantia "nunca
+      parcial" do `writeFileAtomic` se sustentou sob carga real. Não implementei retry nem lock —
+      o despacho da tarefa pediu explicitamente para não inventar travamento; a escolha e as
+      opções ficam registradas em Q-056 para o mantenedor decidir.
+
+      **Não tocado, fora do escopo dos três comandos:** `seeya status` continua sem mostrar
+      `skipped`/`snoozeMinutesTotal`/daemon rodando (a Q-015 já esperava isso até S4-T3/S4-T4
+      existirem — ambas prontas agora, mas mexer em `status-command.ts` não foi pedido por esta
+      tarefa; registrado em Q-056 para o mantenedor abrir como tarefa própria se quiser).
+
+      **Cobertura, medida nesta máquina:** agregado 97,53%/93,13%/98,58%/97,67%
+      (statements/branches/functions/lines) — acima dos mínimos do `AGENTS.md`. `core/` 100%
+      statements/functions/lines, 99,06% branches (não tocado por esta tarefa).
+      `adapters/storage/` 94,93%/88,55%/98,38%/95,31%; `cli/` 97,39%/96,03%/97,43%/97,33% — os dois
+      arquivos novos (`snooze-command.ts`, `config-command.ts`) e o `config-schema.ts` estendido
+      todos acima de 80%. `npm run verificar` e `npm run verificar:linux` verdes, códigos de saída
+      lidos separadamente do comando, nunca encadeados com commit.
 - [ ] **S4-T5 — `seeya daemon --stop/--status`.**
       *Aceite do sprint:* e2e 6, 7 e 8 passam. Um dia inteiro de uso real sem intervenção.
 

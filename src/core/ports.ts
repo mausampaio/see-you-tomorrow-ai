@@ -138,6 +138,23 @@ export interface Storage {
   readConfig(): Promise<Config>;
 
   /**
+   * Persists `config` at `~/.seeya/config.json`, atomically, overwriting the whole document —
+   * same "write what's asked, whole" contract `saveState` already has below, not a partial patch.
+   * Added in S4-T4 for `seeya config` (docs/ESPECIFICACAO.md § `seeya config`: "Lê e escreve
+   * `config.json`") — the FIRST production caller that ever writes this file; every path above
+   * only ever reads it (`readConfig` has existed since S1-T5).
+   *
+   * **This is also the first real reader+writer pair for `config.json`.** `scheduler/poll.ts`
+   * calls `readConfig()` at the top of every 30s cycle while the daemon runs, so a `seeya config
+   * set` from a terminal can now race a live daemon's read the same way `seeya snooze`/
+   * `skip-today` already race its `estado.json` read/write. `adapters/storage/atomic-write.ts`'s
+   * own module comment flagged this exact gap before it existed ("não há chamador que leia e
+   * escreva `config.json` concorrentemente... até S4-T4... remedir antes de assumir que continua
+   * sem problema") — see docs/QUESTOES.md Q-056 for what was actually measured here, not assumed.
+   */
+  saveConfig(config: Config): Promise<void>;
+
+  /**
    * Reads the "already warned" bookkeeping S1-T7's early-warning detection needs to keep a
    * warning from firing more than once (docs/DECISOES.md D-018, D-029;
    * `core/early-warnings.ts#detectEarlyWarnings`). A file that doesn't exist yet (nothing warned

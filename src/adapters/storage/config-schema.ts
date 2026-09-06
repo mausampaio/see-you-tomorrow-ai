@@ -147,6 +147,231 @@ function resolveProjectPolicy(
  * already carries the offending value and the expected shape via `z.prettifyError`) — that's the
  * "corrupted, not absent" branch the caller (`index.ts`) surfaces as a visible failure.
  */
+/**
+ * Every `Config` field `seeya config set`/`get` (S4-T4) can address directly by name —
+ * everything except `projectPolicy`, which is keyed by `cwd` rather than a flat scalar and gets
+ * its own sub-action (`seeya config policy <cwd>`) instead of a `key=value` pair. Order matches
+ * `Config`'s own field order (`core/types.ts`), so `formatWholeConfig` below and this list read
+ * the same way top to bottom.
+ *
+ * **D-027: this list, not a generic "any key in the JSON" acceptance, is what makes an unknown
+ * key a refused write instead of a silently-created new document field** — `parseConfigFieldUpdate`
+ * checks against this before ever touching `configFileSchema`.
+ */
+export const EDITABLE_CONFIG_KEYS = [
+  'endOfDayTime',
+  'leadTimesInMinutes',
+  'relevanceHours',
+  'idleMinutes',
+  'captureModel',
+  'budgetPerSessionUsd',
+  'captureConcurrency',
+  'ignore',
+  'forkCleanupDays',
+  'maxGitRootsToVisit',
+  'maxCaptureAttemptsPerSessionPerDay',
+  'maxBriefingScanDays',
+  'overdueFireThresholdMinutes',
+] as const;
+
+export type EditableConfigKey = (typeof EDITABLE_CONFIG_KEYS)[number];
+
+/** Exported so `cli/config-command.ts#runConfigGetCommand` can narrow a raw CLI string the same
+ * way `parseConfigFieldUpdate` does below, instead of re-deriving the same `includes` check with
+ * its own cast (AGENTS.md § "Nada de duplicação" and § "Tipos": one real type guard, not two
+ * differently-typed checks of the same list). */
+export function isEditableConfigKey(key: string): key is EditableConfigKey {
+  return (EDITABLE_CONFIG_KEYS as readonly string[]).includes(key);
+}
+
+/** AGENTS.md § "Mensagens de erro": names the received key AND the expected set, every time this
+ * fires — `cli/config-command.ts` reuses this exact text for both `get <key>` and `set <key> ...`
+ * instead of writing the message twice. */
+export function unknownConfigKeyMessage(key: string): string {
+  return (
+    `unknown config key "${key}". Expected one of: ${EDITABLE_CONFIG_KEYS.join(', ')} ` +
+    '(for "projectPolicy", use "seeya config policy <cwd>" instead).'
+  );
+}
+
+/**
+ * Splits a comma-separated CLI argument into trimmed, non-empty parts — shared by every
+ * list-shaped field (`leadTimesInMinutes`, `ignore`). An empty/whitespace-only `raw` (e.g. `""`)
+ * resolves to `[]`, which is how a person clears a list back to empty, not a parse error.
+ */
+function splitCommaList(raw: string): string[] {
+  return raw
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+}
+
+/**
+ * Turns the CLI's raw string argument into the shape `configFileSchema`'s per-field validator
+ * expects — coercion only, no validation of its own (an out-of-range or non-numeric value is
+ * still let through here and caught by the zod schema right after, so there is exactly one place
+ * that decides "valid or not"). `endOfDayTime`'s literal `"null"` (case-insensitive) is the one
+ * way to type "disable the scheduled trigger" from a CLI that otherwise only ever hands this
+ * function non-empty strings — `configFileSchema.endOfDayTime` already accepts a real `null`,
+ * this just gives a person a way to type it.
+ */
+function coerceRawConfigValue(key: EditableConfigKey, raw: string): unknown {
+  switch (key) {
+    case 'endOfDayTime':
+      return raw.trim().toLowerCase() === 'null' ? null : raw;
+    case 'leadTimesInMinutes':
+      return splitCommaList(raw).map(Number);
+    case 'ignore':
+      return splitCommaList(raw);
+    case 'captureModel':
+      return raw;
+    // Every remaining editable key is a bare number (int or float, `configFileSchema`'s own
+    // per-field constraint decides which) — relevanceHours, idleMinutes, budgetPerSessionUsd,
+    // captureConcurrency, forkCleanupDays, and D-035's four (maxGitRootsToVisit,
+    // maxCaptureAttemptsPerSessionPerDay, maxBriefingScanDays, overdueFireThresholdMinutes).
+    default:
+      return Number(raw);
+  }
+}
+
+/**
+ * Validates `rawValue` for `key` against `configFileSchema`'s OWN per-field constraint —
+ * `configFileSchema.shape[key]` reused directly rather than re-declared here, so a range/regex
+ * change to that schema (e.g. `endOfDayTime`'s `"HH:MM"` regex) never drifts out of sync with what
+ * `seeya config set` accepts (AGENTS.md § "Nada de duplicação"). Returns the key back narrowed to
+ * `EditableConfigKey` on success so `cli/config-command.ts` never has to re-check
+ * `isEditableConfigKey` itself before calling `applyConfigFieldUpdate`.
+ */
+export function parseConfigFieldUpdate(
+  key: string,
+  rawValue: string,
+):
+  | { readonly ok: true; readonly key: EditableConfigKey; readonly value: unknown }
+  | { readonly ok: false; readonly error: string } {
+  if (!isEditableConfigKey(key)) {
+    return { ok: false, error: unknownConfigKeyMessage(key) };
+  }
+  const coerced = coerceRawConfigValue(key, rawValue);
+  const fieldSchema = configFileSchema.shape[key];
+  const result = fieldSchema.safeParse(coerced);
+  if (!result.success) {
+    return {
+      ok: false,
+      error: `invalid value "${rawValue}" for "${key}": ${z.prettifyError(result.error)}`,
+    };
+  }
+  return { ok: true, key, value: result.data };
+}
+
+/**
+ * Applies one already-validated field update onto `current`, producing the next `Config` to
+ * persist. `value: unknown` plus a per-case cast (not one blanket cast at the end) is deliberate:
+ * each branch's cast is only ever reached with the value `parseConfigFieldUpdate` just validated
+ * against THAT SAME key's schema, one line up — the cast documents "this was proven safe by the
+ * zod parse right before this call", not "trust me" (AGENTS.md § "Tipos": `as` in production is a
+ * last resort, and this is the narrowest form it can take for a CLI's inherently dynamic key).
+ */
+export function applyConfigFieldUpdate(
+  current: Config,
+  key: EditableConfigKey,
+  value: unknown,
+): Config {
+  switch (key) {
+    case 'endOfDayTime':
+      return { ...current, endOfDayTime: value as string | null };
+    case 'leadTimesInMinutes':
+      return { ...current, leadTimesInMinutes: value as readonly number[] };
+    case 'relevanceHours':
+      return { ...current, relevanceHours: value as number };
+    case 'idleMinutes':
+      return { ...current, idleMinutes: value as number };
+    case 'captureModel':
+      return { ...current, captureModel: value as string };
+    case 'budgetPerSessionUsd':
+      return { ...current, budgetPerSessionUsd: value as number };
+    case 'captureConcurrency':
+      return { ...current, captureConcurrency: value as number };
+    case 'ignore':
+      return { ...current, ignore: value as readonly string[] };
+    case 'forkCleanupDays':
+      return { ...current, forkCleanupDays: value as number };
+    case 'maxGitRootsToVisit':
+      return { ...current, maxGitRootsToVisit: value as number };
+    case 'maxCaptureAttemptsPerSessionPerDay':
+      return { ...current, maxCaptureAttemptsPerSessionPerDay: value as number };
+    case 'maxBriefingScanDays':
+      return { ...current, maxBriefingScanDays: value as number };
+    case 'overdueFireThresholdMinutes':
+      return { ...current, overdueFireThresholdMinutes: value as number };
+  }
+}
+
+/**
+ * `seeya config policy <cwd>` (D-002, D-011): sets `canTerminate`/`deepCapture` independently for
+ * one `cwd`, defaulting whichever flag WASN'T passed to its previous value — or to the safe opt-in
+ * default (`false`) when `cwd` has no entry yet at all — never to `undefined`. Same
+ * per-field-independent defaulting `resolveProjectPolicy` above already applies on READ; this is
+ * the WRITE side of the identical rule.
+ *
+ * Returns the resolved `policy` alongside the updated `Config` — not just the `Config` — so a
+ * caller (`cli/config-command.ts`) can report exactly what was written without reading it back out
+ * of `updated.projectPolicy[cwd]` with a non-null assertion (AGENTS.md § "Tipos": `!` is a sign the
+ * type is wrong, not that the reader knows better; here the type system genuinely can't know a
+ * `Record<string, ProjectPolicy>` has `cwd` as a key without this function saying so directly).
+ */
+export function applyProjectPolicyUpdate(
+  current: Config,
+  cwd: string,
+  updates: { readonly canTerminate?: boolean; readonly deepCapture?: boolean },
+): { readonly config: Config; readonly policy: ProjectPolicy } {
+  const existing = current.projectPolicy[cwd] ?? { canTerminate: false, deepCapture: false };
+  const policy: ProjectPolicy = {
+    canTerminate: updates.canTerminate ?? existing.canTerminate,
+    deepCapture: updates.deepCapture ?? existing.deepCapture,
+  };
+  const config: Config = { ...current, projectPolicy: { ...current.projectPolicy, [cwd]: policy } };
+  return { config, policy };
+}
+
+/** Plain-text rendering of one config value (AGENTS.md § "Registro e saída": user-facing output
+ * is plain text, never raw JSON) — shared by `seeya config get`'s whole-config and single-key
+ * forms so the two never format the same value two different ways. */
+export function formatConfigValue(
+  value: string | number | boolean | null | readonly string[] | readonly number[],
+): string {
+  if (value === null) {
+    return 'null';
+  }
+  if (Array.isArray(value)) {
+    return value.length === 0 ? '(empty)' : value.join(', ');
+  }
+  return String(value);
+}
+
+/** The inverse of `parseConfigDocument` — what `StorageAdapter#saveConfig` writes. Always writes
+ * every field (never a partial patch, same "whole document" contract `serializeState` already
+ * has for `estado.json`), including `projectPolicy` untouched when this particular write didn't
+ * target it. */
+export function serializeConfigDocument(config: Config): Record<string, unknown> {
+  return {
+    schemaVersion: CONFIG_SCHEMA_VERSION,
+    endOfDayTime: config.endOfDayTime,
+    leadTimesInMinutes: config.leadTimesInMinutes,
+    relevanceHours: config.relevanceHours,
+    idleMinutes: config.idleMinutes,
+    captureModel: config.captureModel,
+    budgetPerSessionUsd: config.budgetPerSessionUsd,
+    captureConcurrency: config.captureConcurrency,
+    ignore: config.ignore,
+    projectPolicy: config.projectPolicy,
+    forkCleanupDays: config.forkCleanupDays,
+    maxGitRootsToVisit: config.maxGitRootsToVisit,
+    maxCaptureAttemptsPerSessionPerDay: config.maxCaptureAttemptsPerSessionPerDay,
+    maxBriefingScanDays: config.maxBriefingScanDays,
+    overdueFireThresholdMinutes: config.overdueFireThresholdMinutes,
+  };
+}
+
 export function parseConfigDocument(raw: unknown): Config {
   const result = configFileSchema.safeParse(raw);
   if (!result.success) {

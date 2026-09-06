@@ -206,6 +206,13 @@ export class FakeStorage implements Storage {
     return Promise.resolve(this.config);
   }
 
+  // S4-T4: `seeya config` is the only caller (`cli/config-command.ts`), never `endDay` — same
+  // "reject loudly" convention this fake already uses below for `readState`/`saveState` etc.
+  saveConfig(config: Config): ReturnType<Storage['saveConfig']> {
+    void config;
+    return Promise.reject(new Error('FakeStorage.saveConfig is not exercised by endDay'));
+  }
+
   readEarlyWarningState(): Promise<EarlyWarningState> {
     return Promise.reject(
       new Error('FakeStorage.readEarlyWarningState is not exercised by endDay'),
