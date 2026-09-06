@@ -4547,3 +4547,149 @@ seria a analogia-em-vez-de-medição que a D-011 já corrigiu **duas** vezes.
 
 **Quando reabrir, com o gatilho escrito:** se uma captura estourar orçamento e o `modelUsage`
 apontar o prompt como responsável. Aí a evidência existe e o teto se justifica sozinho.
+
+---
+
+## Q-053 — S4-T3b: onde o `daemonHealth` mora, o limite de 120 ciclos, e uma premissa da Q-049 que caiu ao encostar no código
+
+**Tarefa:** S4-T3b
+**Bloqueia:** não — `npm run verificar` e `npm run verificar:linux` estão verdes (medido nesta
+máquina, o segundo via Docker Desktop, container Linux real). Registro no mesmo espírito de
+Q-037/Q-040/Q-049: cada escolha abaixo tem leitura alternativa razoável, e a tarefa pediu
+explicitamente para registrar em vez de decidir calado.
+
+**Uma premissa do texto que despachou a tarefa não se sustentou, e é importante dizer isso
+primeiro.** A Q-049 item 6 (S4-T3) tinha concluído que dar `procStart` ao lock exigiria "este
+projeto conseguir descrever o PRÓPRIO horário de início no momento do spawn, uma capacidade que
+`adapters/process/proc-start.ts` hoje só oferece para RE-observar um PID já conhecido, não para
+autodescrição" — e por isso não construiu o desempate. **Isso não é verdade.**
+`captureObservedProcStart(pid, recheck, platform, run)` não se importa de quem é o `pid`: ele só
+consulta o SO por número. Bastou chamá-lo com `process.pid` do próprio worker, em
+`cli/index.ts`, logo depois de o worker subir — a "autodescrição" que a Q-049 achava que faltava
+já estava pronta, só não tinha sido chamada nesse ponto. **Medido, não suposto**: os testes de
+integração novos (`tests/integration/scheduler/lock.test.ts`) chamam exatamente essa função sobre
+o próprio `process.pid` do runner de teste e o valor volta real, comparável, estável.
+
+**1) `daemonHealth` mora dentro de `DayState`, mas é o ÚNICO campo que o `resetIfNewDay` da
+virada de meia-noite NÃO zera.** A tarefa pedia para gravar "no `estado.json` que já existe" —
+li isso como "o mesmo arquivo", não necessariamente "o mesmo tipo com o mesmo ciclo de vida".
+Cheguei a considerar um documento/porta `Storage` separados (paralelo a `early-warnings.json`,
+que também é "para sempre", nunca "por dia"), mas isso duplicaria toda a leitura/escrita
+atômica que `estado.json` já tem, por dois campos. Em vez disso, `core/schedule.ts#resetIfNewDay`
+ganhou uma exceção explícita e comentada: tudo o mais volta a `emptyDayState(hoje)`,
+`daemonHealth` é copiado do estado anterior sem alteração. **Por que isso importa de verdade:**
+o próprio motivo da tarefa existir é "a pessoa descobre no dia seguinte" — se eu deixasse
+`daemonHealth` zerar à meia-noite, um daemon quebrado desde as 23h50 apareceria "saudável" no
+`--status` (S4-T5) assim que o relógio virasse o dia, exatamente o oposto do que a tarefa pede.
+**Opções:** A) campo dentro de `DayState`, com exceção documentada no reset (o que implementei).
+B) documento/porta `Storage` novos e paralelos, nunca resetados por natureza. **Minha escolha:**
+A — o custo de B (nova chave de disco, D-027, novo par leitura/escrita atômica) pareceu maior que
+uma exceção de quatro linhas, comentada, num arquivo que já tem esse padrão de reset centralizado.
+
+**2) O limite de aviso é 120 ciclos consecutivos (1 hora a 30s/poll), e é escolha de engenharia,
+não medição — a tarefa já esperava isso ("diga isso e escolha o mais conservador").** Não há
+número na spec. Escolhi reaproveitar a ordem de grandeza que o próprio Spike J já converteu em
+decisão de produto (o "1 hora" citado na atualização da S4-T3, item 4) em vez de inventar um
+terceiro número solto. Um blip transitório (uma queda de rede de alguns minutos) nunca cruza 120
+falhas seguidas; uma máquina ligada o dia inteiro ainda descobre o problema bem antes do dia
+seguinte. **Opções:** A) 120 ciclos / 1h (o que implementei). B) um limiar menor (ex.: 10 min),
+mais sensível, com risco maior de soar por um blip real. C) um limiar maior (ex.: 4h), menos
+propenso a falso alarme, mas mais perto de "só descobre à noite" — o problema que a tarefa existe
+para evitar. **Minha escolha:** A.
+
+**3) A contagem de minutos no aviso é `consecutiveCycleFailures × 30_000ms`, uma ESTIMATIVA, não
+uma medição de tempo real decorrido.** `core/` não tem `Clock` disponível dentro de
+`core/daemon-health.ts` (D-019 — só o `scheduler/health.ts`, que já é I/O, tem `Clock`), e a
+contagem de ciclos falhados já é a única memória durável que esta funcionalidade guarda. Se um
+ciclo específico demorar mais que 30s de verdade (uma chamada ao modelo lenta antes de falhar,
+por exemplo), a estimativa fica levemente otimista. Não guardei o timestamp do INÍCIO da
+sequência de falhas (só o do ÚLTIMO erro, em `lastCycleError.at`) porque isso exigiria um campo
+a mais só para uma precisão que a spec nunca pediu. **Opções:** A) estimativa por contagem de
+ciclos (o que implementei). B) guardar também o timestamp de início da sequência, para reportar
+tempo real decorrido. **Minha escolha:** A — a imprecisão é de segundos num número reportado em
+minutos, e nunca chega a mudar a ordem de grandeza que a pessoa precisa saber.
+
+**4) Sem constante compartilhada entre `scheduler/loop.ts` (que já exporta `POLL_INTERVAL_MS`) e
+`scheduler/notices.ts` (que precisa do mesmo número para calcular minutos) — o valor é
+re-hardcoded localmente em `notices.ts`, com comentário apontando para o original.** Importar
+`POLL_INTERVAL_MS` de `loop.ts` para dentro de `notices.ts` fecharia um ciclo de import dentro de
+`scheduler/` (`loop.ts` → `health.ts` → `notices.ts` → `loop.ts`), porque `loop.ts` já importa
+`health.ts`, que importa `notices.ts`. O próprio `scheduler/poll.ts` já tem o mesmo padrão
+(`ACTIVE_TURN_RETRY_BUDGET_MS` hardcoded ali, `DELAY_WARNING_THRESHOLD_MS` hardcodado em
+`notices.ts`, nenhum dos dois importado de `loop.ts`) — segui a convenção já existente em vez de
+inventar uma quebra de ciclo nova (um quinto arquivo neutro, por exemplo) para um valor que já se
+repete assim em dois lugares. **Opções:** A) repetir a constante com comentário cruzado (o que
+implementei, seguindo o padrão já presente). B) quebrar o ciclo criando `scheduler/constants.ts`
+só para este número. **Minha escolha:** A.
+
+**5) Nenhuma migração de `schemaVersion` para os dois documentos — `daemonHealth` em
+`estado.json` e `procStart` em `daemon.lock` são campos `.optional()` dentro da versão 1 já
+existente, não uma versão 2.** Segui o precedente que o próprio `state-schema.ts` já tinha
+aberto para `captureAttemptsToday` (adicionado sem bump de versão, com `.optional()` e default no
+`parseStateDocument`). **Como testei a retrocompatibilidade:** escrevi documentos JSON à mão
+(nunca via `serializeState`/`serializeDaemonLock`, que só gravam a forma atual) sem as chaves
+novas e confirmei que `StorageAdapter#readState`/`readDaemonLock` devolvem
+`EMPTY_DAEMON_HEALTH`/`procStart: undefined` em vez de rejeitar o arquivo —
+`tests/integration/storage/state.test.ts` ("defaults daemonHealth to EMPTY_DAEMON_HEALTH...") e
+`tests/integration/storage/daemon-lock.test.ts` ("defaults procStart to undefined..."). **Opções:**
+A) campo opcional aditivo, sem bump (o que implementei, mesmo padrão de `captureAttemptsToday`).
+B) `schemaVersion` 2 com migração explícita, como o handoff fez em D-032. **Minha escolha:** A —
+D-032 migrou porque a FORMA de um campo existente mudou (`git` de objeto para lista); aqui são
+campos inteiramente novos, opcionais, que um documento antigo nunca teve como prever — a mesma
+distinção que já justificou não versionar `captureAttemptsToday`.
+
+**6) Onde o `procStart` do próprio worker é capturado: `cli/index.ts`, não
+`cli/daemon-command.ts`.** Cheguei a escrever a captura dentro de `runDaemonWorker` primeiro, com
+a função de captura injetável por parâmetro (mesmo padrão de `CommandRunner` em
+`adapters/process/proc-start.ts`) — mas isso obrigaria os dois testes UNITÁRIOS existentes de
+`tests/unit/cli/daemon-command.test.ts` (que chamam `runDaemonWorker(deps, 555)`, um PID que não
+existe de verdade nesta máquina) a receber uma função fake explícita só para não disparar uma
+chamada real ao SO (e, no Windows, um `powershell.exe` de verdade — 500-880ms medidos em
+`adapters/process/proc-start.ts`, por captura). Mover a captura para `cli/index.ts` — o ponto de
+entrada real, chamado apenas pelo binário compilado, nunca pelos testes unitários — deixou
+`runDaemonWorker` recebendo `procStart` como VALOR pronto (igual a `pid`), sem I/O nenhum embutido
+e sem exigir nenhuma injeção nova. **Opções:** A) captura em `cli/index.ts`, valor plano até
+`runDaemonWorker`/`runDaemon` (o que implementei). B) função de captura injetável dentro de
+`runDaemonWorker`, com default real e fake nos testes. **Minha escolha:** A — mais simples, e o
+único arquivo tocado por isso (`cli/index.ts`) já não tem teste unitário próprio (é exercitado
+pelo e2e, conforme o comentário que já existia no topo do arquivo).
+
+**7) O caso "`procStart` indisponível" tem duas leituras diferentes, e testei só uma delas de
+forma nova.** (a) o LOCK gravado não tem `procStart` nenhum (formato antigo, ou falha na captura
+no momento da escrita) — testado de ponta a ponta com processo real em
+`tests/integration/scheduler/lock.test.ts` ("a live pid with NO recorded procStart..."). (b) a
+LEITURA atual do `procStart` falha no meio da checagem (`ProcStartCapture.kind === 'unavailable'`)
+— essa é uma condição mais profunda, dentro de `adapters/process/liveness.ts#resolveIsAlive`, e
+**já tinha cobertura de unidade própria antes desta tarefa** (`tests/unit/adapters/process/
+liveness.test.ts`), sem nada que esta tarefa mudasse ali. Não escrevi um teste NOVO forçando (b)
+de propósito: forçar isso de forma determinística exigiria simular uma falha de plataforma (por
+exemplo, um `process.platform` desconhecido) por fora do fluxo real do lock, e o comportamento em
+si não muda com esta tarefa — só o CHAMADOR (`scheduler/lock.ts`) passou a alimentar o
+`procStart` que antes nunca chegava lá. **Opções:** A) confiar na cobertura pré-existente de (b) e
+testar (a) de ponta a ponta, que é o caso realmente novo (o que fiz). B) duplicar um teste de (b)
+no nível do lock também, por completude. **Minha escolha:** A — B testaria de novo uma lógica que
+não mudou, só para dizer que "o lock também" a exercita, sem acrescentar confiança nova.
+
+**Como testei o PID reciclado, especificamente — é o caso que não acontece sozinho.** Forçar o
+SO a reciclar de verdade um PID num teste não é possível de forma portátil (não há como pedir ao
+Windows/Linux/macOS "reuse este número agora"). Reproduzi a mesma técnica que
+`tests/integration/process/liveness.test.ts` já usa para o registro de sessões: um processo FILHO
+real é spawnado (`tests/fixtures/process/graceful-child.mjs`), está genuinamente vivo, e o lock é
+escrito com o `pid` real dele mas um `procStart` **deliberadamente errado**
+(`'this-will-never-equal-a-real-capture'`). Do ponto de vista do `resolveIsAlive`, isso é
+EXATAMENTE a mesma evidência que um PID reciclado produz: o número existe e responde, mas o
+`procStart` atual não bate com o que foi gravado — a função não tem como (e não precisa) saber SE
+foi reciclagem de verdade ou um valor forjado no teste; ela só compara os dois valores. O teste
+("a live pid whose recorded procStart no longer matches is treated as a DEAD lock") passa —
+`checkDaemonLock` devolve `'acquire'` mesmo com o PID genuinamente vivo. Um segundo teste, com o
+`procStart` REAL capturado do mesmo processo (`captureObservedProcStart`), confirma o lado
+oposto: `'refuse'`, nomeando o dono. Os dois lados do desempate, nunca só o proibido.
+
+**Documento desatualizado, não alterado por mim:** `docs/TESTES.md` linha ~115-117 ainda diz "Sem
+desempate por `procStart` (limitação aceita e documentada...)" sobre `core/daemon-lock.ts` — essa
+frase descreve o estado ANTES desta tarefa. Não editei `docs/TESTES.md` (não é documento que o
+dev altera, por convenção de `docs/FLUXO-DE-AGENTES.md`); sinalizo aqui para o PO atualizar.
+
+**Opções que enxergo para o review, além das sete acima:** confirmar as sete como estão, ou pedir
+ajuste em qualquer uma antes de marcar a tarefa `[x]`.
+**Resposta:** _(aguardando)_

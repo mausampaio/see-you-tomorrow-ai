@@ -20,3 +20,4 @@ export * from './fork-cleanup.js';
 export * from './schedule.js';
 export * from './capture-retry.js';
 export * from './daemon-lock.js';
+export * from './daemon-health.js';

@@ -5,18 +5,28 @@
  * (`core/ports.ts`) can answer, resolved by the caller before this runs — decide whether a new
  * daemon may start.
  *
- * **Known, accepted limitation: no `procStart` tie-break here**, unlike the Claude Code session
- * registry this project reads elsewhere (`core/classification.ts#pidRepresentsSameProcess`). If a
- * daemon dies uncleanly and the OS recycles its PID for an unrelated process before the next
- * `seeya daemon` runs, this decides `'refuse'` on a false positive — a real daemon instance fails
- * to start because an unrelated process happens to be alive at the old PID. Accepted because the
- * consequence is small and recoverable (the person deletes `daemon.lock`, or S4-T5's
- * `--status`/`--stop` gives a real diagnostic path once it exists) — nothing here silently runs two
- * daemons, which is the actual failure D-005 exists to prevent. Adding the same tie-break the
- * session registry uses would need this project's own process to record its OWN start time at
- * spawn, a capability `adapters/process/proc-start.ts` today only offers for re-observing an
- * ALREADY-KNOWN pid, not for a fresh self-description — a real feature, not a two-line addition,
- * for a risk this narrow.
+ * **S4-T3b added the `procStart` tie-break this file's own text used to say wasn't worth
+ * building.** The original reasoning (S4-T3, `docs/QUESTOES.md` Q-049 item 6) was that this
+ * project's own process had no way to describe its OWN start time at spawn — `adapters/process/
+ * proc-start.ts#captureObservedProcStart` seemed to only make sense for RE-observing an
+ * ALREADY-KNOWN pid. That assumption didn't hold up: nothing in that function cares whose pid it's
+ * given, it queries the OS by number either way, so `cli/index.ts` calls it on its own
+ * `process.pid` right after the worker starts and threads the result down as a plain value
+ * (`scheduler/loop.ts#runDaemon`'s own `procStart` parameter) — the same self-description the
+ * original text assumed was a real feature to build, when it was already sitting in the existing
+ * capture function.
+ *
+ * **Why this mattered, and which direction of failure it fixes.** Without the tie-break, a PID the
+ * OS recycled onto an unrelated process reads as "the daemon is still alive" — a real daemon
+ * instance then refuses to start, and NO daemon ends up running while the person believes one is.
+ * Compare with the opposite failure (a live daemon read as dead): that spawns a second instance —
+ * doubled capture, doubled notification, doubled spend, loud enough that someone notices. The
+ * recycled-PID failure is silent, and D-025 exists precisely against absence reading as presence.
+ *
+ * **The `resolveIsAlive` discipline this reuses, unchanged.** `procStart` that can't be captured or
+ * compared (`'unavailable'`) is never read as "dead" — it falls back to plain PID liveness, same as
+ * a lock with no recorded `procStart` at all (an older lock file, or a capture that failed at write
+ * time). Absence of evidence never becomes license to start a second daemon.
  */
 
 /** What `daemon.lock` records (`adapters/storage/daemon-lock-schema.ts`'s on-disk shape). */
@@ -25,6 +35,16 @@ export interface DaemonLockInfo {
   /** When this lock was written — diagnostic only today (no reader compares it), kept because
    * S4-T5's `seeya daemon --status` will want to say "running since" without a second write. */
   readonly startedAt: Date;
+  /**
+   * The daemon's own `procStart` at the moment this lock was written (S4-T3b) — the recycled-PID
+   * tie-break, same mechanism the Claude Code session registry already uses
+   * (`core/classification.ts#pidRepresentsSameProcess`). `undefined` when the platform's capture
+   * failed for some reason OTHER than "no daemon" (`ProcStartCapture`'s `unavailable`/`processGone`
+   * outcomes) or when the lock was written by an older `seeya` build that never recorded one — in
+   * both cases treated as "no tie-break value available", never as "dead" (D-025, same discipline
+   * `resolveIsAlive` already applies to a live registry PID whose `procStart` couldn't be read).
+   */
+  readonly procStart: string | undefined;
 }
 
 export type LockAcquisitionDecision =

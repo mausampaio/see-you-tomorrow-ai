@@ -14,6 +14,7 @@
  */
 import type { EndDayResult } from '../application/types.js';
 import type { EarlyWarning } from '../core/early-warnings.js';
+import type { DaemonHealth } from '../core/types.js';
 import type { Notice } from '../core/ports.js';
 
 function pluralize(count: number, singular: string, plural: string): string {
@@ -95,4 +96,29 @@ export function buildEarlyWarningNotice(warning: EarlyWarning): Notice {
       ? 'seeya: session has no transcript'
       : 'seeya: found an uninspectable session';
   return { title, body: warning.message };
+}
+
+/**
+ * S4-T3b's ONE notification for a daemon that has failed every poll for
+ * `NOTIFY_AFTER_CONSECUTIVE_CYCLE_FAILURES` cycles in a row (`core/daemon-health.ts` decides WHEN
+ * to call this — never on every failing poll, only the one that crosses the threshold).
+ *
+ * Reports elapsed time computed from the failure count and the known 30s cadence
+ * (`scheduler/loop.ts#POLL_INTERVAL_MS`, hardcoded here rather than imported — same "each file
+ * re-pins the same documented number" convention `poll.ts#ACTIVE_TURN_RETRY_BUDGET_MS` and this
+ * file's own `DELAY_WARNING_THRESHOLD_MS` already use, to avoid a `scheduler/`-internal import
+ * cycle between `loop.ts` → `health.ts` → `notices.ts` → `loop.ts`), never a hardcoded "three
+ * hours" — the failure count is the only durable memory this feature keeps (D-019: `core/` has no
+ * `Clock` of its own to measure real elapsed time any other way).
+ */
+export function buildDaemonUnhealthyNotice(health: DaemonHealth): Notice {
+  const POLL_INTERVAL_MS = 30_000;
+  const minutes = Math.round((health.consecutiveCycleFailures * POLL_INTERVAL_MS) / 60_000);
+  const lastMessage = health.lastCycleError?.message ?? 'unknown error';
+  return {
+    title: 'seeya: daemon is stuck',
+    body:
+      `The daemon has failed every poll for about ${minutes} minute${minutes === 1 ? '' : 's'} ` +
+      `and hasn't completed a cycle since. Last error: ${lastMessage}`,
+  };
 }

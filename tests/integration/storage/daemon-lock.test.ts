@@ -35,7 +35,48 @@ describe('StorageAdapter#readDaemonLock', () => {
       expect(await storage.readDaemonLock()).toStrictEqual({
         pid: 4242,
         startedAt: new Date('2026-09-05T10:00:00.000Z'),
+        procStart: undefined,
       });
+    } finally {
+      await rm(seeyaHome, { recursive: true, force: true });
+    }
+  });
+
+  it('reads procStart when the document has one (S4-T3b)', async () => {
+    const seeyaHome = await makeTmpDir();
+    try {
+      await writeFile(
+        path.join(seeyaHome, 'daemon.lock'),
+        JSON.stringify({
+          schemaVersion: 1,
+          pid: 4242,
+          startedAt: '2026-09-05T10:00:00.000Z',
+          procStart: '123456',
+        }),
+        'utf8',
+      );
+      const storage = new StorageAdapter(seeyaHome);
+      expect(await storage.readDaemonLock()).toStrictEqual({
+        pid: 4242,
+        startedAt: new Date('2026-09-05T10:00:00.000Z'),
+        procStart: '123456',
+      });
+    } finally {
+      await rm(seeyaHome, { recursive: true, force: true });
+    }
+  });
+
+  it('defaults procStart to undefined when an older-build document omits it (D-025)', async () => {
+    const seeyaHome = await makeTmpDir();
+    try {
+      await writeFile(
+        path.join(seeyaHome, 'daemon.lock'),
+        JSON.stringify({ schemaVersion: 1, pid: 4242, startedAt: '2026-09-05T10:00:00.000Z' }),
+        'utf8',
+      );
+      const storage = new StorageAdapter(seeyaHome);
+      const lock = await storage.readDaemonLock();
+      expect(lock?.procStart).toBeUndefined();
     } finally {
       await rm(seeyaHome, { recursive: true, force: true });
     }
@@ -73,7 +114,27 @@ describe('StorageAdapter#writeDaemonLock / clearDaemonLock', () => {
     const seeyaHome = await makeTmpDir();
     try {
       const storage = new StorageAdapter(seeyaHome);
-      const lock = { pid: 555, startedAt: new Date('2026-09-05T10:00:00.000Z') };
+      const lock = {
+        pid: 555,
+        startedAt: new Date('2026-09-05T10:00:00.000Z'),
+        procStart: undefined,
+      };
+      await storage.writeDaemonLock(lock);
+      expect(await storage.readDaemonLock()).toStrictEqual(lock);
+    } finally {
+      await rm(seeyaHome, { recursive: true, force: true });
+    }
+  });
+
+  it('writes and reads back a real procStart value (round trip, S4-T3b)', async () => {
+    const seeyaHome = await makeTmpDir();
+    try {
+      const storage = new StorageAdapter(seeyaHome);
+      const lock = {
+        pid: 555,
+        startedAt: new Date('2026-09-05T10:00:00.000Z'),
+        procStart: '987654321',
+      };
       await storage.writeDaemonLock(lock);
       expect(await storage.readDaemonLock()).toStrictEqual(lock);
     } finally {
@@ -85,8 +146,16 @@ describe('StorageAdapter#writeDaemonLock / clearDaemonLock', () => {
     const seeyaHome = await makeTmpDir();
     try {
       const storage = new StorageAdapter(seeyaHome);
-      await storage.writeDaemonLock({ pid: 111, startedAt: new Date('2026-09-01T00:00:00.000Z') });
-      const secondLock = { pid: 222, startedAt: new Date('2026-09-05T10:00:00.000Z') };
+      await storage.writeDaemonLock({
+        pid: 111,
+        startedAt: new Date('2026-09-01T00:00:00.000Z'),
+        procStart: 'old-value',
+      });
+      const secondLock = {
+        pid: 222,
+        startedAt: new Date('2026-09-05T10:00:00.000Z'),
+        procStart: undefined,
+      };
       await storage.writeDaemonLock(secondLock);
       expect(await storage.readDaemonLock()).toStrictEqual(secondLock);
     } finally {
@@ -98,7 +167,11 @@ describe('StorageAdapter#writeDaemonLock / clearDaemonLock', () => {
     const seeyaHome = await makeTmpDir();
     try {
       const storage = new StorageAdapter(seeyaHome);
-      await storage.writeDaemonLock({ pid: 555, startedAt: new Date('2026-09-05T10:00:00.000Z') });
+      await storage.writeDaemonLock({
+        pid: 555,
+        startedAt: new Date('2026-09-05T10:00:00.000Z'),
+        procStart: undefined,
+      });
       await storage.clearDaemonLock();
       expect(await storage.readDaemonLock()).toBeNull();
     } finally {

@@ -55,14 +55,25 @@ export class RecordingNotifier implements Notifier {
 
 /** `isAlive`/`terminateGracefully` both controllable per test, unlike
  * `tests/unit/application/_fakes.ts#FakeProcessControl` (whose `isAlive` always rejects — accurate
- * for `endDay`, which never calls it, but `scheduler/lock.ts` calls it on every lock check). */
+ * for `endDay`, which never calls it, but `scheduler/lock.ts` calls it on every lock check).
+ *
+ * **Does not replicate the real recycled-PID tie-break** — `aliveByPid` answers purely by `pid`,
+ * ignoring whatever `procStart` it was called with (the REAL tie-break logic,
+ * `adapters/process/liveness.ts#resolveIsAlive`, is already covered on its own, and against a real
+ * process, by `tests/integration/scheduler/lock.test.ts`, S4-T3b). What THIS fake proves is
+ * narrower and just as necessary: that `scheduler/lock.ts#checkDaemonLock` actually PASSES
+ * `existing.procStart` through instead of silently dropping it — `isAliveCalls` records every
+ * `(pid, procStart)` pair it was asked about, in order, for exactly that assertion. */
 export class ControllableProcessControl implements ProcessControl {
+  readonly isAliveCalls: Array<{ pid: number; procStart: string | undefined }> = [];
+
   constructor(
     private readonly aliveByPid: ReadonlyMap<number, boolean> = new Map(),
     private readonly terminateResult: (pid: number) => Promise<boolean> | boolean = () => true,
   ) {}
 
-  isAlive(pid: number): Promise<boolean> {
+  isAlive(pid: number, procStart?: string): Promise<boolean> {
+    this.isAliveCalls.push({ pid, procStart });
     return Promise.resolve(this.aliveByPid.get(pid) ?? false);
   }
 

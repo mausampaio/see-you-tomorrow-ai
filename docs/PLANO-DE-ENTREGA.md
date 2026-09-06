@@ -2001,7 +2001,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       runner do GitHub nasce limpo e o problema era só local. Ver `docs/TESTES.md` § "Suíte lenta
       ou instável".
 
-- [ ] **S4-T3b — O daemon precisa deixar rastro quando falha, e o lock precisa desempatar PID.**
+- [~] **S4-T3b — O daemon precisa deixar rastro quando falha, e o lock precisa desempatar PID.**
       Saída da **Q-049**, respondida em 2026-09-05. **Antes da S4-T5**, que vai querer ler as duas
       coisas.
 
@@ -2040,6 +2040,64 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       **uma** vez; lock apontando para PID reciclado é reconhecido como morto; lock cujo
       `procStart` é indisponível **continua sendo respeitado**. **Os três com teste** — o terceiro
       é o que impede o conserto de virar o defeito oposto.
+
+      **Implementado em 2026-09-05.** `core/daemon-health.ts` (novo) é a decisão pura: dado o
+      `DaemonHealth` atual (`{ lastCycleError: { message, at } | null, consecutiveCycleFailures
+      }`, campo novo em `DayState`), a mensagem de erro e o instante, devolve o próximo estado e se
+      esta é a ÚNICA passagem que deve notificar — `consecutiveCycleFailures ===
+      NOTIFY_AFTER_CONSECUTIVE_CYCLE_FAILURES` (120 ciclos = 1h a 30s/poll, reaproveitando a ordem
+      de grandeza que o Spike J já tinha fixado, em vez de um terceiro número solto — justificado
+      no comentário e na Q-053 item 2). `scheduler/health.ts` (novo) é a casca de I/O chamada do
+      `catch` de `scheduler/loop.ts#runDaemon` — lê `estado.json`, grava o resultado, notifica só
+      quando `shouldNotify`; um sucesso limpa a sequência só quando havia algo para limpar (sem
+      escrita em `estado.json` no caminho saudável comum). `scheduler/notices.ts` ganhou
+      `buildDaemonUnhealthyNotice`, reportando minutos estimados pela contagem de ciclos (sem
+      `Clock` dentro de `core/`, D-019) e o último erro.
+
+      **`daemonHealth` é o único campo de `DayState` que sobrevive à virada de meia-noite** —
+      `core/schedule.ts#resetIfNewDay` ganhou uma exceção explícita e comentada: sem isso, um
+      daemon quebrado desde antes da meia-noite pareceria "saudável" no dia seguinte, exatamente o
+      oposto do que esta tarefa existe para resolver (Q-053 item 1, com teste dedicado provando os
+      dois lados: campos por dia resetam, `daemonHealth` não).
+
+      **Lock:** `core/daemon-lock.ts#DaemonLockInfo` ganhou `procStart: string | undefined`; o
+      comentário de topo do arquivo (que afirmava a limitação como aceita) foi reescrito, não
+      deixado desatualizado. `scheduler/lock.ts#checkDaemonLock` passa `existing.procStart` para
+      `ProcessControl.isAlive`, reaproveitando o desempate que a S1-T13 já construiu — nenhuma
+      lógica de comparação nova. `acquireDaemonLock` ganhou parâmetro `procStart`, gravado junto
+      com o lock. **A premissa da Q-049 item 6 (de que a autodescrição do próprio `procStart` não
+      era possível) não se sustentou ao encostar no código** — `captureObservedProcStart` não se
+      importa de quem é o `pid`, então `cli/index.ts` chama a mesma função já existente sobre o
+      próprio `process.pid` do worker, logo após ele subir, e passa o valor adiante como dado
+      pronto (nunca I/O dentro de `scheduler/`) — ver Q-053 para o relato completo.
+
+      **PID reciclado, testado com processo real** (`tests/integration/scheduler/lock.test.ts`,
+      novo): reaproveita a técnica de `tests/integration/process/liveness.test.ts` — um filho real
+      genuinamente vivo, lock gravado com `procStart` deliberadamente errado, produz exatamente a
+      mesma evidência que uma reciclagem de PID produziria; `checkDaemonLock` devolve `'acquire'`
+      mesmo com o PID vivo. Caso irmão com o `procStart` real confirma `'refuse'`. `procStart`
+      ausente no lock (formato antigo) também testado de ponta a ponta: `'refuse'`, nunca tratado
+      como morto (D-025).
+
+      **Migração:** os dois documentos (`estado.json`, `daemon.lock`) ganharam campos `.optional()`
+      dentro da MESMA versão de schema, sem bump — mesmo precedente que `captureAttemptsToday` já
+      tinha aberto em `state-schema.ts`. Testado escrevendo documentos à mão (nunca via
+      `serializeState`/`serializeDaemonLock`) sem as chaves novas e confirmando que a leitura
+      devolve os defaults (`EMPTY_DAEMON_HEALTH`/`procStart: undefined`) em vez de rejeitar o
+      arquivo (`tests/integration/storage/state.test.ts` e `daemon-lock.test.ts`).
+
+      **Sete escolhas sem resposta literal no despacho da tarefa, registradas em Q-053** (onde
+      `daemonHealth` mora, o limite de 120 ciclos, a estimativa de minutos por contagem em vez de
+      tempo real, a constante `POLL_INTERVAL_MS` repetida em vez de importada — evita ciclo de
+      import dentro de `scheduler/` —, ausência de bump de `schemaVersion`, onde o `procStart`
+      próprio é capturado, e o alcance do teste de "procStart indisponível"). `docs/TESTES.md`
+      ainda descreve o lock sem desempate — não editado por mim (não é documento que o dev altera),
+      sinalizado na Q-053 para o PO atualizar.
+
+      Cobertura: `core/` 100% (`daemon-health.ts`/`daemon-lock.ts` inclusos); `scheduler/` 98,14%
+      statements/98,27% branches/92,59% funções/100% linhas. `npm run verificar` e `npm run
+      verificar:linux` verdes (medido nesta máquina, o segundo via Docker Desktop, container Linux
+      real).
 
 - [ ] **S4-T3c — Persistir o `assistantMessages` no handoff.** Decisão do mantenedor ao fechar a
       **Q-036**, em 2026-09-05.

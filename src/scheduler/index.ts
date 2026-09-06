@@ -15,5 +15,6 @@ export {
   buildLeadTimeNotice,
   buildDaemonEndOfDayNotice,
   buildEarlyWarningNotice,
+  buildDaemonUnhealthyNotice,
 } from './notices.js';
 export { buildRetryFilter, nonModelSessionIds } from './capture-filter.js';

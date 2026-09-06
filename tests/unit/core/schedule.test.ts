@@ -24,6 +24,7 @@ import {
   resolveEndOfDayInstant,
 } from '../../../src/core/schedule.js';
 import { createConfig } from './_fixtures.js';
+import { EMPTY_DAEMON_HEALTH } from '../../../src/core/daemon-health.js';
 
 describe('resolveEndOfDayInstant — ordinary day', () => {
   it('resolves "HH:MM" against the reference day, in local time', () => {
@@ -153,6 +154,7 @@ describe('applySnooze', () => {
       firedLeadTimesInMinutes: [],
       endOfDayFired: false,
       captureAttemptsToday: {},
+      daemonHealth: EMPTY_DAEMON_HEALTH,
     });
   });
 });
@@ -180,6 +182,7 @@ describe('applySkipToday', () => {
       firedLeadTimesInMinutes: [],
       endOfDayFired: false,
       captureAttemptsToday: {},
+      daemonHealth: EMPTY_DAEMON_HEALTH,
     });
   });
 });
@@ -323,6 +326,7 @@ describe('decideSchedule — midnight rollover (docs/TESTES.md)', () => {
       firedLeadTimesInMinutes: [30, 15],
       endOfDayFired: true,
       captureAttemptsToday: { 'some-session-id': 2 },
+      daemonHealth: { lastCycleError: null, consecutiveCycleFailures: 0 },
     };
     const { decision, nextState } = decideSchedule(
       config,
@@ -331,5 +335,25 @@ describe('decideSchedule — midnight rollover (docs/TESTES.md)', () => {
     );
     expect(decision.kind).toBe('waiting');
     expect(nextState).toStrictEqual(emptyDayState('2026-08-16'));
+  });
+
+  it('S4-T3b: daemonHealth survives the midnight reset — everything else resets, this does not', () => {
+    const config = createConfig({ endOfDayTime: '19:30', leadTimesInMinutes: [30, 15] });
+    const ongoingOutage = {
+      message: 'ECONNREFUSED',
+      at: new Date('2026-08-15T23:58:00.000Z'),
+    };
+    const yesterday = {
+      ...emptyDayState('2026-08-15'),
+      skipped: true,
+      daemonHealth: { lastCycleError: ongoingOutage, consecutiveCycleFailures: 47 },
+    };
+    const { nextState } = decideSchedule(config, yesterday, new Date(2026, 7, 16, 18, 0, 0));
+    expect(nextState.day).toBe('2026-08-16');
+    expect(nextState.skipped).toBe(false); // day-scoped fields DO reset
+    expect(nextState.daemonHealth).toStrictEqual({
+      lastCycleError: ongoingOutage,
+      consecutiveCycleFailures: 47,
+    }); // daemonHealth does NOT — a failure streak spanning midnight is still visible today
   });
 });
