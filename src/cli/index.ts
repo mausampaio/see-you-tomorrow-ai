@@ -18,8 +18,10 @@ import { z } from 'zod';
 import packageJson from '../../package.json' with { type: 'json' };
 import {
   buildCliContext,
+  buildConfigContext,
   buildDaemonContext,
   buildEndDayContext,
+  buildSnoozeContext,
   buildStartDayContext,
 } from './composition.js';
 import { runSessionsCommand } from './sessions-command.js';
@@ -27,6 +29,12 @@ import { runStatusCommand } from './status-command.js';
 import { runEndDayCommand } from './end-day-command.js';
 import { runStartDayCommand } from './start-day-command.js';
 import { runDaemonLauncher, runDaemonWorker } from './daemon-command.js';
+import { runSnoozeCommand, runSkipTodayCommand } from './snooze-command.js';
+import {
+  runConfigGetCommand,
+  runConfigPolicyCommand,
+  runConfigSetCommand,
+} from './config-command.js';
 import { DAEMON_CHILD_ENV_VAR } from '../adapters/process/daemon-launch.js';
 import { captureObservedProcStart } from '../adapters/process/proc-start.js';
 import { processExists } from '../adapters/process/existence.js';
@@ -147,6 +155,85 @@ program
     const { storage, processControl } = await buildDaemonContext();
     const scriptPath = fileURLToPath(import.meta.url);
     console.log(await runDaemonLauncher(storage, processControl, { scriptPath, args: ['daemon'] }));
+  });
+
+program
+  .command('snooze')
+  .description(
+    "Push back today's scheduled end-of-day closure by a fixed increment (D-006). Works with " +
+      'or without the daemon running — the change is persisted to disk and picked up on its next poll.',
+  )
+  .argument('<increment>', 'One of +15m, +30m, +1h.')
+  .action(async (increment: string) => {
+    const context = await buildSnoozeContext();
+    console.log(await runSnoozeCommand(context, increment));
+  });
+
+program
+  .command('skip-today')
+  .description(
+    "Skip today's automatic end-of-day closure entirely (D-006); it resumes tomorrow. Works " +
+      'with or without the daemon running.',
+  )
+  .action(async () => {
+    const context = await buildSnoozeContext();
+    console.log(await runSkipTodayCommand(context));
+  });
+
+const configCommand = program
+  .command('config')
+  .description(
+    'Read and write ~/.seeya/config.json: end-of-day time, lead times, project policy, capture ' +
+      'model and limits.',
+  );
+
+configCommand
+  .command('get')
+  .description('Print the current config, or a single key.')
+  .argument('[key]', 'A single config key to print, e.g. endOfDayTime.')
+  .action(async (key: string | undefined) => {
+    const context = buildConfigContext();
+    console.log(await runConfigGetCommand(context, key));
+  });
+
+configCommand
+  .command('set')
+  .description(
+    'Set one config key. Validated before writing — an unknown key or an invalid value is refused.',
+  )
+  .argument('<key>', 'A config key, e.g. endOfDayTime, leadTimesInMinutes, captureModel.')
+  .argument(
+    '<value>',
+    'The new value. Comma-separate list values (e.g. "30,15" for leadTimesInMinutes).',
+  )
+  .action(async (key: string, value: string) => {
+    const context = buildConfigContext();
+    console.log(await runConfigSetCommand(context, key, value));
+  });
+
+configCommand
+  .command('policy')
+  .description(
+    "Show or update one project's termination/deep-capture policy, keyed by cwd (D-002, D-011).",
+  )
+  .argument('<cwd>', 'The project working directory this policy applies to.')
+  .option(
+    '--can-terminate <bool>',
+    "true or false — allow seeya to terminate this project's live session after a successful handoff.",
+  )
+  .option(
+    '--deep-capture <bool>',
+    'true or false — use the deep --resume capture for this project instead of the lean default.',
+  )
+  .action(async (cwd: string, options: { canTerminate?: string; deepCapture?: string }) => {
+    const context = buildConfigContext();
+    console.log(
+      await runConfigPolicyCommand(context, cwd, {
+        // `exactOptionalPropertyTypes`: only set a key when commander actually parsed that flag.
+        ...(options.canTerminate !== undefined ? { canTerminate: options.canTerminate } : {}),
+        ...(options.deepCapture !== undefined ? { deepCapture: options.deepCapture } : {}),
+      }),
+    );
   });
 
 program.parseAsync(process.argv).catch((error: unknown) => {

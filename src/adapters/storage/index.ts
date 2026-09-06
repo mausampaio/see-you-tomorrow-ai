@@ -12,7 +12,12 @@ import type { Config, Day, DayState, EarlyWarningState, Handoff } from '../../co
 import type { DaemonLockInfo } from '../../core/daemon-lock.js';
 import { EMPTY_EARLY_WARNING_STATE } from '../../core/early-warnings.js';
 import { isEnoent } from './fs-errors.js';
-import { CONFIG_SCHEMA_VERSION, DEFAULT_CONFIG, parseConfigDocument } from './config-schema.js';
+import {
+  CONFIG_SCHEMA_VERSION,
+  DEFAULT_CONFIG,
+  parseConfigDocument,
+  serializeConfigDocument,
+} from './config-schema.js';
 import {
   EARLY_WARNING_SCHEMA_VERSION,
   parseEarlyWarningDocument,
@@ -175,6 +180,13 @@ export class StorageAdapter implements Storage {
       return DEFAULT_CONFIG;
     }
     return parseConfigDocument(resolved);
+  }
+
+  /** S4-T4: the first production writer of `config.json` — see `core/ports.ts#Storage.saveConfig`
+   * and docs/QUESTOES.md Q-056 for the concurrency question this introduces. */
+  async saveConfig(config: Config): Promise<void> {
+    const configPath = path.join(this.seeyaHome, 'config.json');
+    await writeFileAtomic(configPath, JSON.stringify(serializeConfigDocument(config)));
   }
 
   async readEarlyWarningState(): Promise<EarlyWarningState> {

@@ -338,6 +338,29 @@ forma. A cobertura de integração (`tests/integration/process/daemon-launch.tes
 peça isoladamente contra processo/lock reais; o que falta é só a jornada ponta a ponta pelo
 binário compilado.
 
+**S4-T4 (2026-09-06): a dependência do item 7 foi resolvida — `seeya snooze`/`seeya skip-today`
+existem agora — mas o item continua sem e2e por escolha, não por bloqueio novo.** O motivo que já
+valia para o item 8 continua valendo para o 7: a S4-T3 deixou os três agrupados de propósito, para
+o e2e nascer como uma jornada única "dia inteiro" quando o 6 (relógio injetado no binário) também
+existir, em vez de uma peça isolada que a S4-T5 revisitaria de qualquer forma. Em compensação, os
+cinco casos obrigatórios desta tarefa — adiar antes do horário, adiar depois, adiar duas vezes,
+pular depois de já ter adiado, e virada de meia-noite zerando o estado (menos `daemonHealth`, D-035/
+S4-T3b) — têm teste próprio nas duas faixas mais baratas: `tests/unit/cli/snooze-command.test.ts`
+(estado em memória) e `tests/integration/cli/snooze-command.test.ts` (um `StorageAdapter` real
+escrevendo, e uma instância **completamente nova** lendo depois — a prova de "funciona com ou sem o
+daemon rodando" que docs/ESPECIFICACAO.md pede, sem precisar do binário compilado nem de relógio
+real). `seeya config` ganhou a mesma cobertura em `tests/unit/cli/config-command.test.ts` e
+`tests/integration/cli/config-command.test.ts`.
+
+**Achado novo, fora do escopo original desta seção: a corrida de escrita concorrente em
+`estado.json`/`config.json` foi medida pela primeira vez** (`tests/integration/storage/
+state-concurrent-write.test.ts`, `config-concurrent-write.test.ts`) — `adapters/storage/
+atomic-write.ts` já registrava a lacuna ("não há chamador que leia e escreva `config.json`
+concorrentemente... até esta tarefa"). 300 iterações de leitura/escrita concorrentes via
+`StorageAdapter` real: ~18-20% das escritas colidem com `EPERM` no Windows (o risco que
+`atomic-write.ts` já documentava), e nenhuma leitura, em seis execuções, viu documento corrompido.
+Sem retry/lock implementado — ver docs/QUESTOES.md Q-056 para as opções registradas ao mantenedor.
+
 ## Contrato — a faixa que protege contra o mundo mudar
 
 O app depende de estruturas internas e não documentadas do Claude Code

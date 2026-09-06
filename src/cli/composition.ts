@@ -191,6 +191,50 @@ export async function buildStartDayContext(
   return { storage, clock, sessionResumer, config };
 }
 
+export interface SnoozeContext {
+  readonly storage: Storage;
+  readonly clock: Clock;
+  /** Read once, at invocation time — `seeya snooze`/`skip-today` is a one-shot CLI process, so
+   * there is no "later" for this value to go stale against, unlike the daemon's long-running poll
+   * loop (`buildDaemonContext`'s own docstring on `leanGenerator`/`deepGenerator`). */
+  readonly config: Config;
+}
+
+/**
+ * `seeya snooze`/`seeya skip-today`'s own composition (S4-T4): just `Storage` and `Clock` — both
+ * commands only ever mutate `~/.seeya/estado.json` (docs/ESPECIFICACAO.md § "seeya snooze...":
+ * "o estado é persistido, não guardado em memória"), never re-discovering sessions or touching
+ * `adapters/process`/`adapters/discovery` at all. `config` is read here so
+ * `cli/snooze-command.ts#renderSnoozeConfirmation` can show the resulting schedule decision
+ * without a second `Storage` round trip inside the command itself.
+ */
+export async function buildSnoozeContext(homeDir: string = os.homedir()): Promise<SnoozeContext> {
+  const home = resolveCliHome(homeDir);
+  const clock = systemClock;
+  const storage = buildStorage(home);
+  const config = await storage.readConfig();
+  return { storage, clock, config };
+}
+
+export interface ConfigContext {
+  readonly storage: Storage;
+}
+
+/**
+ * `seeya config`'s own composition (S4-T4): just `Storage` — `cli/config-command.ts` reads
+ * `config.json` itself, fresh, inside every sub-action (`get`/`set`/`policy`), rather than this
+ * function pre-reading it the way `buildSnoozeContext` does for `SnoozeContext.config` above.
+ * `seeya config` is the one command whose whole job is writing that same document, so caching a
+ * read of it here would risk a `set` overwriting a value this function saw stale before the write
+ * even started, if the read here happened to matter — it doesn't (the command re-reads before
+ * every write anyway), but not caching it here also means never *tempting* a future reader of this
+ * file to skip that re-read.
+ */
+export function buildConfigContext(homeDir: string = os.homedir()): ConfigContext {
+  const home = resolveCliHome(homeDir);
+  return { storage: buildStorage(home) };
+}
+
 /**
  * `seeya daemon`'s own composition (S4-T3): every port `scheduler/` orchestrates, wired to its
  * real adapter — same generators/`ForkCleanup`/`GitReader`/`TranscriptReader` `buildEndDayContext`
