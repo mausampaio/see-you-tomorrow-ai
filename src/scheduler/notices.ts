@@ -35,21 +35,6 @@ export function buildLeadTimeNotice(leadTimeMinutes: number, day: string): Notic
   };
 }
 
-/**
- * How long past the effective deadline still reads as "on time" — `core/schedule.ts#ScheduleDecision`'s
- * own docstring frames the real gap this sits inside: "a normal on-time trigger has `delayMs` on
- * the order of one poll interval (≤30s); a machine waking from suspension hours later has `delayMs`
- * in the hours." Any threshold between those two extremes draws the same line; **5 minutes** is
- * chosen to match the daemon's own active-turn retry window (`scheduler/poll.ts`, docs/ESPECIFICACAO.md:
- * "adia a captura... por até 5 minutos") rather than adding a third, unrelated number to the
- * codebase — a run that needed the full retry window to let every mid-turn session finish also
- * crosses this threshold, and that overlap is accepted on purpose: taking the full grace period to
- * close is itself worth a heads-up, even when the cause was an active turn rather than a suspended
- * machine. Neither `core/schedule.ts` nor `application/endDay` picks this number — S4-T3's own brief
- * is explicit that `delayMs` is raw specifically so the caller decides, and this is that decision.
- */
-const DELAY_WARNING_THRESHOLD_MS = 5 * 60_000;
-
 function failedCaptureSummary(result: EndDayResult): string | null {
   if (result.failedCaptures.length === 0) {
     return null;
@@ -58,24 +43,27 @@ function failedCaptureSummary(result: EndDayResult): string | null {
 }
 
 /**
- * The daemon's own end-of-day notice — distinguishable from an on-time close whenever `delayMs`
- * crosses `DELAY_WARNING_THRESHOLD_MS` (docs/ESPECIFICACAO.md: "aviso de que houve atraso" after the
- * machine was suspended through the scheduled time). `null` is never returned here the way
- * `cli/end-day-notice.ts#buildEndDayNotice` can for a dry run — the daemon never runs `--dry-run`.
+ * The daemon's own end-of-day notice. `overdue` (D-036, `Config.overdueFireThresholdMinutes` —
+ * `scheduler/poll.ts` is what compares `delayMs` against it; this function only renders the
+ * already-made decision, never the threshold itself) distinguishes an on-time close from one that
+ * ran late enough that termination was skipped for every session this run, `canTerminate: true`
+ * included. `null` is never returned here the way `cli/end-day-notice.ts#buildEndDayNotice` can for
+ * a dry run — the daemon never runs `--dry-run`.
  */
 export function buildDaemonEndOfDayNotice(
   result: EndDayResult,
   delayMs: number,
   day: string,
+  overdue: boolean,
 ): Notice {
-  const delayed = delayMs >= DELAY_WARNING_THRESHOLD_MS;
-  const title = delayed ? `seeya end-day: ${day} (delayed)` : `seeya end-day: ${day}`;
+  const title = overdue ? `seeya end-day: ${day} (delayed)` : `seeya end-day: ${day}`;
   const lines = [`${pluralize(result.captured.length, 'session', 'sessions')} captured.`];
-  if (delayed) {
+  if (overdue) {
     const delayMinutes = Math.round(delayMs / 60_000);
     lines.push(
-      `The machine was likely asleep past the scheduled time — this ran about ` +
-        `${delayMinutes} minute${delayMinutes === 1 ? '' : 's'} late, on waking.`,
+      `This ran about ${delayMinutes} minute${delayMinutes === 1 ? '' : 's'} late (D-036) — no ` +
+        'session was terminated this run, even one opted into canTerminate. Run "seeya end-day" ' +
+        'by hand if any of them should close now.',
     );
   }
   const failedSummary = failedCaptureSummary(result);
@@ -83,6 +71,27 @@ export function buildDaemonEndOfDayNotice(
     lines.push(failedSummary);
   }
   return { title, body: lines.join(' ') };
+}
+
+/**
+ * D-036's "dia local diferente" case: the local calendar day rolled over before the daemon ever
+ * got a chance to fire yesterday's `endOfDayTime` (the machine was asleep through both the deadline
+ * AND midnight). The daemon refuses to fire it now — doing so would write yesterday's closure into
+ * TODAY's folder, capturing this morning's fresh sessions as if they were last night's leftovers
+ * (D-036: "não é atraso, é dado errado") — so this is the only trace that day's closure ever gets;
+ * without it, the day would simply look like it never had one, with no record anyone could act on.
+ * `scheduler/poll.ts` calls this at most once per missed day (the "avisa uma vez" pattern
+ * `core/daemon-health.ts` already established for a different trigger), not on every 30s poll.
+ */
+export function buildMissedEndOfDayNotice(missedDay: string): Notice {
+  return {
+    title: `seeya: ${missedDay} never closed`,
+    body:
+      `The local day changed before the scheduled close for ${missedDay} could run — probably ` +
+      `the machine was asleep past midnight. Nothing was captured or terminated for that day, ` +
+      'and there is no way to redo it after the fact. Run "seeya sessions" to see what is still ' +
+      'open, or "seeya end-day" now for an up-to-date handoff of whatever is still running.',
+  };
 }
 
 /** D-018/Q-024: the daemon is the only thing that sees sessions continuously, so it's where an

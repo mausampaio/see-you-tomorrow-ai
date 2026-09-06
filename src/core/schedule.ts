@@ -126,8 +126,15 @@ export function emptyDayState(day: Day): DayState {
  * `DayState` holds is "por dia" by design (D-006); `daemonHealth` exists specifically so a failure
  * streak spanning midnight is still visible the next day (`DaemonHealth`'s own docstring in
  * `core/types.ts`) — resetting it at exactly the moment described there would defeat the feature.
+ *
+ * **Exported for `scheduler/poll.ts` (D-036).** The daemon needs to tell "the local day just
+ * rolled over" apart from "still the same local day" BEFORE it can decide whether yesterday's
+ * closure was missed — that's a comparison of `state.day` against `today`, the exact fact this
+ * function already computes, so `scheduler/` reuses it instead of re-deriving the same comparison
+ * (AGENTS.md: "nada de duplicação"). This does NOT hand the daemon a threshold to pick — D-036's
+ * "dia local diferente" cutoff is this factual comparison, not a number.
  */
-function resetIfNewDay(state: DayState, today: Day): DayState {
+export function resetIfNewDay(state: DayState, today: Day): DayState {
   if (state.day === today) {
     return state;
   }

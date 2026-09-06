@@ -26,16 +26,23 @@ import { briefingStillPending } from '../core/pending-briefing.js';
 import type { Briefing, Clock, Storage } from '../core/ports.js';
 
 /**
- * How many days back `findPendingBriefing` will call `Storage.readBriefing` looking for a pending
- * day, before giving up. **This is purely a limit on how much disk this function is willing to
- * touch in one call — it carries no claim about how old a briefing may be to still count as
- * pending.** Raising this number doesn't change what "pending" means (`core/pending-briefing.ts`
- * decides that on its own, by content); it only changes how far back this function is willing to
- * search for one. Picked generously (30 days, a bit over a typical vacation plus slack) precisely
- * because it is NOT the thing doing the judging — the content check is. If a real pending briefing
- * sits further back than this, `findPendingBriefing` won't find it and reports `found: false`;
- * that's this function's own honest limit (D-025: it doesn't claim "no pending briefing exists",
- * only "none was found within the days scanned" — see `daysSearched` on the `found: false` case).
+ * The **default** for `Config.maxBriefingScanDays` (`core/types.ts`) — how many days back
+ * `findPendingBriefing` will call `Storage.readBriefing` looking for a pending day, before giving
+ * up. **This was never a claim about how old a briefing may be to still count as pending, only a
+ * limit on how much disk this function is willing to touch in one call.** Raising this number
+ * doesn't change what "pending" means (`core/pending-briefing.ts` decides that on its own, by
+ * content); it only changes how far back this function is willing to search for one. Picked
+ * generously (30 days, a bit over a typical vacation plus slack) precisely because it was never the
+ * thing doing the judging — the content check is. If a real pending briefing sits further back than
+ * this, `findPendingBriefing` won't find it and reports `found: false`; that's this function's own
+ * honest limit (D-025: it doesn't claim "no pending briefing exists", only "none was found within
+ * the days scanned" — see `daysSearched` on the `found: false` case).
+ *
+ * **D-035 moved this from a hardcoded constant to a config field** — docs/QUESTOES.md Q-025 had
+ * labeled it an I/O bound, and D-035 corrected that: how far back someone wants "where was I" to
+ * reach depends on how long THEY were away, which is preference, not a disk-cost fact. Still
+ * exported and still the fallback `findPendingBriefing` uses below when a caller doesn't pass
+ * `maxScanDays` explicitly.
  */
 export const MAX_BRIEFING_SCAN_DAYS = 30;
 

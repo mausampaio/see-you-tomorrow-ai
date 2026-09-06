@@ -52,6 +52,19 @@ const configFileSchema = z.object({
   // >0: D-012 always deletes eventually; 0 or negative would mean "delete on sight", which is
   // not what "days to keep" can mean, and isn't a value forkCleanupDays's own definition allows.
   forkCleanupDays: z.number().int().positive().optional(),
+  // D-035's four numbers, moved here from hardcoded constants with the constant's own value as
+  // default (see CONFIG_DEFAULTS below) — "com o valor atual como default, então nada muda de
+  // comportamento". Each keeps the >=1 constraint its origin already enforced implicitly (a
+  // ceiling/budget of 0 could only ever be a mistake, same reasoning as captureConcurrency above),
+  // except maxBriefingScanDays, whose own docstring already treats 0 ("only look at today") as
+  // meaningful, not a mistake.
+  maxGitRootsToVisit: z.number().int().positive().optional(),
+  maxCaptureAttemptsPerSessionPerDay: z.number().int().positive().optional(),
+  maxBriefingScanDays: z.number().int().nonnegative().optional(),
+  // D-036: this now governs ACTION (skip termination), not just notice wording — still a duration
+  // in minutes like idleMinutes above, so it keeps that field's shape (nonnegative, fractional
+  // allowed) rather than forcing an integer nobody asked for.
+  overdueFireThresholdMinutes: z.number().nonnegative().optional(),
 });
 
 /**
@@ -84,6 +97,19 @@ const CONFIG_DEFAULTS: Config = {
   ignore: [],
   projectPolicy: {},
   forkCleanupDays: 7,
+  // D-035's four numbers, each the exact value its prior hardcoded constant already used
+  // (`adapters/git/git-adapter.ts#MAX_GIT_ROOTS_TO_VISIT`,
+  // `core/capture-retry.ts#MAX_CAPTURE_ATTEMPTS_PER_SESSION_PER_DAY`,
+  // `application/find-pending-briefing.ts#MAX_BRIEFING_SCAN_DAYS`, and the 5 minutes
+  // `scheduler/notices.ts` used to hardcode as `DELAY_WARNING_THRESHOLD_MS`) — kept as separate
+  // literals here rather than imported, the same "each layer re-pins the same documented number"
+  // convention `scheduler/`'s own `POLL_INTERVAL_MS` already uses, since `core/` (where
+  // `capture-retry.ts` lives) cannot import this `adapters/` module (docs/ARQUITETURA.md's layer
+  // matrix) to share a single source of truth.
+  maxGitRootsToVisit: 8,
+  maxCaptureAttemptsPerSessionPerDay: 3,
+  maxBriefingScanDays: 30,
+  overdueFireThresholdMinutes: 5,
 };
 
 /** `parseConfigDocument({})` — every field at its default. Exported so callers (the adapter, on a
@@ -138,5 +164,12 @@ export function parseConfigDocument(raw: unknown): Config {
     ignore: fields.ignore ?? CONFIG_DEFAULTS.ignore,
     projectPolicy: resolveProjectPolicy(fields.projectPolicy),
     forkCleanupDays: fields.forkCleanupDays ?? CONFIG_DEFAULTS.forkCleanupDays,
+    maxGitRootsToVisit: fields.maxGitRootsToVisit ?? CONFIG_DEFAULTS.maxGitRootsToVisit,
+    maxCaptureAttemptsPerSessionPerDay:
+      fields.maxCaptureAttemptsPerSessionPerDay ??
+      CONFIG_DEFAULTS.maxCaptureAttemptsPerSessionPerDay,
+    maxBriefingScanDays: fields.maxBriefingScanDays ?? CONFIG_DEFAULTS.maxBriefingScanDays,
+    overdueFireThresholdMinutes:
+      fields.overdueFireThresholdMinutes ?? CONFIG_DEFAULTS.overdueFireThresholdMinutes,
   };
 }

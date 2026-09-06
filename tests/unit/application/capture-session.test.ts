@@ -447,6 +447,63 @@ describe('captureSession — D-002 ordering and Q-007', () => {
   );
 });
 
+describe('captureSession — D-036 skipTermination', () => {
+  function eligibleSession() {
+    return createSessionWithPid({ hasTranscript: true, lastActivity: NOW });
+  }
+
+  function canTerminateConfig(cwd: string) {
+    return {
+      ...DEFAULT_TEST_CONFIG,
+      projectPolicy: { [cwd]: { canTerminate: true, deepCapture: false } },
+    };
+  }
+
+  it('skipTermination: true overrides canTerminate: true — the handoff is still written, but nothing is terminated', async () => {
+    const session = eligibleSession();
+    let terminateCalled = false;
+    const processControl = new FakeProcessControl(() => {
+      terminateCalled = true;
+      return true;
+    });
+    const deps = buildDeps({ processControl });
+    const outcome = await captureSession({
+      deps,
+      session,
+      config: canTerminateConfig(session.cwd),
+      now: NOW,
+      day: DAY,
+      skipTermination: true,
+    });
+    if (outcome.kind !== 'captured') throw new Error('expected captured');
+    expect(outcome.handoff.sessionId).toBe(session.sessionId); // the write still happened
+    expect(outcome.terminated).toBe(false);
+    expect(outcome.terminationNotice).toBeNull();
+    expect(terminateCalled).toBe(false);
+  });
+
+  it('skipTermination: false (the default) keeps terminating a canTerminate: true session, unchanged', async () => {
+    const session = eligibleSession();
+    let terminateCalled = false;
+    const processControl = new FakeProcessControl(() => {
+      terminateCalled = true;
+      return true;
+    });
+    const deps = buildDeps({ processControl });
+    const outcome = await captureSession({
+      deps,
+      session,
+      config: canTerminateConfig(session.cwd),
+      now: NOW,
+      day: DAY,
+      skipTermination: false,
+    });
+    if (outcome.kind !== 'captured') throw new Error('expected captured');
+    expect(outcome.terminated).toBe(true);
+    expect(terminateCalled).toBe(true);
+  });
+});
+
 describe('captureSession — dry-run (S2-T5)', () => {
   it('never calls saveHandoff/readHandoff/terminateGracefully when dryRun is true', async () => {
     const session = createSessionWithPid({ hasTranscript: true, lastActivity: NOW });

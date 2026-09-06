@@ -417,4 +417,8 @@ export const DEFAULT_TEST_CONFIG: Config = {
   ignore: [],
   projectPolicy: {},
   forkCleanupDays: 7,
+  maxGitRootsToVisit: 8,
+  maxCaptureAttemptsPerSessionPerDay: 3,
+  maxBriefingScanDays: 30,
+  overdueFireThresholdMinutes: 5,
 };

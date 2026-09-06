@@ -18,6 +18,10 @@
  * skip) — everything upstream of a write (discovery, eligibility, evidence gathering, generation)
  * runs for real either way, so a dry-run preview can never describe a different code path than the
  * one a real run actually takes.
+ *
+ * **`skipTermination` (D-036, `EndDayOptions`) is a third, independent switch: writes happen
+ * normally, only the termination step is forced off** — unlike `dryRun`, which skips every write.
+ * `seeya end-day` never sets it; only `scheduler/poll.ts`'s overdue-but-same-day case does.
  */
 import { previewDailyBriefing, writeDailyBriefing } from './briefing.js';
 import { localDayString } from '../core/day.js';
@@ -72,13 +76,22 @@ async function runSession(
   now: Date,
   day: Day,
   dryRun: boolean,
+  skipTermination: boolean,
 ): Promise<SessionOutcome> {
   const cheap = evaluateCheapEligibility(session, now, config);
   if (!cheap.eligible) {
     return { kind: 'ineligible', session, reasons: cheap.reasons };
   }
   try {
-    const outcome = await captureSession({ deps, session, config, now, day, dryRun });
+    const outcome = await captureSession({
+      deps,
+      session,
+      config,
+      now,
+      day,
+      dryRun,
+      skipTermination,
+    });
     if (outcome.kind === 'ineligible') {
       return { kind: 'ineligible', session, reasons: outcome.reasons };
     }
@@ -264,9 +277,10 @@ export async function endDay(deps: EndDayDeps, options: EndDayOptions = {}): Pro
     sessionsInScope.length,
   );
 
+  const skipTermination = options.skipTermination ?? false;
   const [outcomes, listedSessions] = await Promise.all([
     mapWithConcurrencyLimit(sessionsInScope, config.captureConcurrency, (session) =>
-      runSession(deps, session, config, now, day, dryRun),
+      runSession(deps, session, config, now, day, dryRun, skipTermination),
     ),
     buildSessionListings(deps.transcriptReader, outOfScopeSessions),
   ]);

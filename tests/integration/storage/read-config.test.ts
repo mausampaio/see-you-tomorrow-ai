@@ -63,6 +63,65 @@ describe('StorageAdapter#readConfig', () => {
     }
   });
 
+  it('D-035: an old config.json written before the four new keys existed still reads fine, with their defaults', async () => {
+    const seeyaHome = await makeTmpDir();
+    try {
+      // Exactly the pre-D-035 shape — none of maxGitRootsToVisit/
+      // maxCaptureAttemptsPerSessionPerDay/maxBriefingScanDays/overdueFireThresholdMinutes present.
+      const document = {
+        schemaVersion: 1,
+        endOfDayTime: '19:30',
+        leadTimesInMinutes: [30, 15],
+        relevanceHours: 12,
+        idleMinutes: 45,
+        captureModel: 'sonnet',
+        budgetPerSessionUsd: 0.25,
+        captureConcurrency: 3,
+        ignore: [],
+        projectPolicy: {},
+        forkCleanupDays: 7,
+      };
+      await writeFile(path.join(seeyaHome, 'config.json'), JSON.stringify(document), 'utf8');
+      const storage = new StorageAdapter(seeyaHome);
+      const config = await storage.readConfig();
+      expect(config.maxGitRootsToVisit).toBe(DEFAULT_CONFIG.maxGitRootsToVisit);
+      expect(config.maxCaptureAttemptsPerSessionPerDay).toBe(
+        DEFAULT_CONFIG.maxCaptureAttemptsPerSessionPerDay,
+      );
+      expect(config.maxBriefingScanDays).toBe(DEFAULT_CONFIG.maxBriefingScanDays);
+      expect(config.overdueFireThresholdMinutes).toBe(DEFAULT_CONFIG.overdueFireThresholdMinutes);
+      // Everything else from the old document is still honored, untouched by the migration.
+      expect(config.endOfDayTime).toBe('19:30');
+    } finally {
+      await rm(seeyaHome, { recursive: true, force: true });
+    }
+  });
+
+  it('D-035: a config.json setting all four new keys honors every one', async () => {
+    const seeyaHome = await makeTmpDir();
+    try {
+      await writeFile(
+        path.join(seeyaHome, 'config.json'),
+        JSON.stringify({
+          schemaVersion: 1,
+          maxGitRootsToVisit: 12,
+          maxCaptureAttemptsPerSessionPerDay: 5,
+          maxBriefingScanDays: 60,
+          overdueFireThresholdMinutes: 10,
+        }),
+        'utf8',
+      );
+      const storage = new StorageAdapter(seeyaHome);
+      const config = await storage.readConfig();
+      expect(config.maxGitRootsToVisit).toBe(12);
+      expect(config.maxCaptureAttemptsPerSessionPerDay).toBe(5);
+      expect(config.maxBriefingScanDays).toBe(60);
+      expect(config.overdueFireThresholdMinutes).toBe(10);
+    } finally {
+      await rm(seeyaHome, { recursive: true, force: true });
+    }
+  });
+
   it('fills in defaults for a partial config.json that only sets a couple of fields', async () => {
     const seeyaHome = await makeTmpDir();
     try {

@@ -59,7 +59,40 @@ describe('parseConfigDocument', () => {
     ['relevanceHours as zero', { relevanceHours: 0 }],
     ['projectPolicy value not an object', { projectPolicy: { 'c:\\x': 'not-an-object' } }],
     ['captureModel as an empty string', { captureModel: '' }],
+    ['maxGitRootsToVisit as zero', { maxGitRootsToVisit: 0 }],
+    ['maxGitRootsToVisit as a non-integer', { maxGitRootsToVisit: 1.5 }],
+    ['maxCaptureAttemptsPerSessionPerDay as zero', { maxCaptureAttemptsPerSessionPerDay: 0 }],
+    ['maxBriefingScanDays as negative', { maxBriefingScanDays: -1 }],
+    ['overdueFireThresholdMinutes as negative', { overdueFireThresholdMinutes: -1 }],
+    ['overdueFireThresholdMinutes as a string', { overdueFireThresholdMinutes: '5' }],
   ])('throws a visible error on %s, never silently falling back to defaults', (_label, raw) => {
     expect(() => parseConfigDocument(raw)).toThrow();
+  });
+});
+
+describe('parseConfigDocument — D-035 four config numbers (each defaults to the prior constant)', () => {
+  it('defaults every one when the document says nothing about them', () => {
+    const result = parseConfigDocument({});
+    expect(result.maxGitRootsToVisit).toBe(8);
+    expect(result.maxCaptureAttemptsPerSessionPerDay).toBe(3);
+    expect(result.maxBriefingScanDays).toBe(30);
+    expect(result.overdueFireThresholdMinutes).toBe(5);
+  });
+
+  it('honors each one explicitly, independent of the others', () => {
+    const result = parseConfigDocument({
+      maxGitRootsToVisit: 20,
+      maxCaptureAttemptsPerSessionPerDay: 1,
+      maxBriefingScanDays: 0,
+      overdueFireThresholdMinutes: 2.5,
+    });
+    expect(result.maxGitRootsToVisit).toBe(20);
+    expect(result.maxCaptureAttemptsPerSessionPerDay).toBe(1);
+    expect(result.maxBriefingScanDays).toBe(0);
+    expect(result.overdueFireThresholdMinutes).toBe(2.5);
+  });
+
+  it('maxBriefingScanDays: 0 ("only look at today") is accepted, not rejected as degenerate', () => {
+    expect(() => parseConfigDocument({ maxBriefingScanDays: 0 })).not.toThrow();
   });
 });

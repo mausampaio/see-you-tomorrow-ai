@@ -83,9 +83,10 @@ async function gatherGit(
   gitReader: GitReader,
   cwd: string,
   touchedFiles: readonly string[],
+  maxGitRootsToVisit: number | undefined,
 ): Promise<GitGatherResult> {
   try {
-    const evidence = await gitReader.readEvidenceAcrossRepos(cwd, touchedFiles);
+    const evidence = await gitReader.readEvidenceAcrossRepos(cwd, touchedFiles, maxGitRootsToVisit);
     return { evidence, responded: evidence.repositories.length > 0 };
   } catch {
     return { evidence: EMPTY_GIT_EVIDENCE, responded: false };
@@ -109,14 +110,25 @@ export interface GatheredEvidence {
  * `touchedFiles` only exists once the transcript read (or its "no transcript" empty default) has
  * resolved — there is no set of repositories to visit before that. The transcript read stays the
  * one this waits on; it never waits on git in return.
+ *
+ * `maxGitRootsToVisit` is `Config.maxGitRootsToVisit` (D-035) — `application/capture-session.ts`
+ * is the one production caller and always passes it; left optional here (rather than required)
+ * purely so the many existing unit tests that don't care about the ceiling don't all need updating
+ * to pass one, same convenience `GitReader.readEvidenceAcrossRepos` itself already offers.
  */
 export async function gatherEvidence(
   transcriptReader: TranscriptReader,
   gitReader: GitReader,
   session: DiscoveredSession,
+  maxGitRootsToVisit?: number,
 ): Promise<GatheredEvidence> {
   const transcript = await gatherTranscript(transcriptReader, session);
-  const git = await gatherGit(gitReader, session.cwd, transcript.facts.touchedFiles);
+  const git = await gatherGit(
+    gitReader,
+    session.cwd,
+    transcript.facts.touchedFiles,
+    maxGitRootsToVisit,
+  );
 
   const sources: EvidenceSource[] = [];
   if (git.responded) {

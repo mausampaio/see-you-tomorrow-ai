@@ -16,9 +16,17 @@ import type { DayState } from '../core/types.js';
  * very next poll. `undefined` (no filter at all) when nothing is exhausted yet — `endDay` already
  * treats a missing `sessionFilter` as "every discovered session", so there's no reason to hand it
  * an always-true predicate instead.
+ *
+ * `maxAttempts` is `Config.maxCaptureAttemptsPerSessionPerDay` (D-035) — `scheduler/poll.ts` is
+ * the one real caller, always passing the freshly-read config value; omitting it falls back to
+ * `core/capture-retry.ts`'s own default, same convenience every other test-facing optional ceiling
+ * in this project offers.
  */
-export function buildRetryFilter(state: DayState): EndDayOptions['sessionFilter'] {
-  const exhausted = sessionsExhaustedToday(state);
+export function buildRetryFilter(
+  state: DayState,
+  maxAttempts?: number,
+): EndDayOptions['sessionFilter'] {
+  const exhausted = sessionsExhaustedToday(state, maxAttempts);
   if (exhausted.size === 0) {
     return undefined;
   }

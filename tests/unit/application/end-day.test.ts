@@ -553,6 +553,45 @@ describe('endDay — Q-007 termination notices', () => {
   });
 });
 
+describe('endDay — D-036 EndDayOptions.skipTermination', () => {
+  it('skipTermination: true captures normally but never terminates, even canTerminate: true', async () => {
+    const session = createSessionWithPid({ hasTranscript: true, lastActivity: NOW });
+    const config = {
+      ...DEFAULT_TEST_CONFIG,
+      projectPolicy: { [session.cwd]: { canTerminate: true, deepCapture: false } },
+    };
+    let terminateCalled = false;
+    const deps = buildDeps({
+      sessionProvider: new FakeSessionProvider({ sessions: [session], rejected: [] }),
+      storage: new FakeStorage(config),
+      processControl: new FakeProcessControl(() => {
+        terminateCalled = true;
+        return true;
+      }),
+    });
+    const result = await endDay(deps, { skipTermination: true });
+    expect(result.captured).toHaveLength(1);
+    expect(result.captured[0]?.terminated).toBe(false);
+    expect(result.terminationNotices).toHaveLength(0); // never attempted, so Q-007 never applies
+    expect(terminateCalled).toBe(false);
+  });
+
+  it('omitting skipTermination (the default) keeps terminating a canTerminate: true session', async () => {
+    const session = createSessionWithPid({ hasTranscript: true, lastActivity: NOW });
+    const config = {
+      ...DEFAULT_TEST_CONFIG,
+      projectPolicy: { [session.cwd]: { canTerminate: true, deepCapture: false } },
+    };
+    const deps = buildDeps({
+      sessionProvider: new FakeSessionProvider({ sessions: [session], rejected: [] }),
+      storage: new FakeStorage(config),
+      processControl: new FakeProcessControl(() => true),
+    });
+    const result = await endDay(deps);
+    expect(result.captured[0]?.terminated).toBe(true);
+  });
+});
+
 describe('endDay — briefing (S2-T4)', () => {
   it('writes a consolidated summary.md for the day, reflecting a captured session', async () => {
     const session = createSessionWithPid({ hasTranscript: false, lastActivity: NOW });

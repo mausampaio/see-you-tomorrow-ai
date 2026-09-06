@@ -510,10 +510,17 @@ export interface GitReader {
    * Never throws for the ordinary "nothing found" cases, same discipline as `readFacts`: a `cwd`
    * and every `touchedFiles` entry outside any repository resolves to `{ repositories: [],
    * filesOutsideRepository: N, reposNotVisited: 0 }`, never a thrown error.
+   *
+   * `maxRootsToVisit` is `Config.maxGitRootsToVisit` (D-035) — optional here so a caller that
+   * doesn't have (or doesn't care about) the configured value still compiles, falling back to
+   * whatever the concrete adapter (`adapters/git/git-adapter.ts#GitAdapter`) treats as its own
+   * default. `application/evidence-gathering.ts` is the one production caller, and always passes
+   * the real config value through.
    */
   readEvidenceAcrossRepos(
     cwd: string,
     touchedFiles: readonly string[],
+    maxRootsToVisit?: number,
   ): Promise<GitEvidenceAcrossRepos>;
 }
 

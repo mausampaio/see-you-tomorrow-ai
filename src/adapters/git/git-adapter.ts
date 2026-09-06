@@ -119,15 +119,19 @@ async function readWorktrees(
 const PLATFORM_HINT: PathPlatformHint = process.platform === 'win32' ? 'win32' : 'posix';
 
 /**
- * E/S ceiling, not product judgment (D-032's own text: "rotulado no código como E/S e não
- * julgamento de produto" — the same distinction docs/QUESTOES.md Q-025 already drew for
- * `MAX_BRIEFING_SCAN_DAYS`, and exported the same way that constant is, for the same reason: a
- * test proving the ceiling is respected shouldn't need to build 9 real repositories on disk when
- * it can pass a smaller limit instead). Each visited root costs several `git` subprocess calls
- * (`readFacts` below spawns branch/status/commits/worktree-list, plus a status+commits pair per
- * worktree it finds) — a session touching two or three repositories (frontend + backend, the
- * common case D-032 exists for) stays well inside this; the excess beyond it is counted in
- * `reposNotVisited`, never silently dropped (D-025).
+ * The **default** for `Config.maxGitRootsToVisit` (`core/types.ts`). Each visited root costs
+ * several `git` subprocess calls (`readFacts` below spawns branch/status/commits/worktree-list,
+ * plus a status+commits pair per worktree it finds) — a session touching two or three repositories
+ * (frontend + backend, the common case D-032 exists for) stays well inside this; the excess beyond
+ * it is counted in `reposNotVisited`, never silently dropped (D-025).
+ *
+ * **D-035 moved this from a hardcoded constant to a config field** — how many repositories a
+ * session's work spans depends on how THIS person lays out their projects, not on any fact about
+ * git or the disk (unlike the older label this constant carried, "rotulado no código como E/S e
+ * não julgamento de produto" — docs/QUESTOES.md Q-025 drew the same, now-corrected, distinction for
+ * `MAX_BRIEFING_SCAN_DAYS`). Still exported and still the fallback `readEvidenceAcrossRepos` below
+ * uses when a caller doesn't pass `maxRootsToVisit` explicitly — every existing unit test, and any
+ * future caller that doesn't care about the exact ceiling.
  */
 export const MAX_GIT_ROOTS_TO_VISIT = 8;
 

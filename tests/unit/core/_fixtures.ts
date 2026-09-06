@@ -112,6 +112,10 @@ export function createConfig(overrides: Partial<Config> = {}): Config {
     ignore: [],
     projectPolicy: {},
     forkCleanupDays: 7,
+    maxGitRootsToVisit: 8,
+    maxCaptureAttemptsPerSessionPerDay: 3,
+    maxBriefingScanDays: 30,
+    overdueFireThresholdMinutes: 5,
     ...overrides,
   };
 }

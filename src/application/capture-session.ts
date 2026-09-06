@@ -194,6 +194,15 @@ export interface CaptureSessionParams {
   /** `--dry-run` (S2-T5): defaults to `false` so every call site written before this flag existed
    * keeps compiling and keeps its original, real-write behavior unchanged. */
   readonly dryRun?: boolean;
+  /**
+   * D-036's overdue-but-same-day case: forces `terminateEligibleSession` to be skipped for THIS
+   * capture, regardless of `policy.canTerminate` — the handoff is still written and verified on
+   * disk exactly as usual (D-036: "captura, mas NÃO encerra"). Defaults to `false` so every call
+   * site written before this flag existed keeps its original, real-terminate-if-opted-in behavior
+   * unchanged. Set by `scheduler/poll.ts` (via `EndDayOptions.skipTermination`,
+   * `application/end-day.ts`), never decided here — this function only obeys it.
+   */
+  readonly skipTermination?: boolean;
 }
 
 /**
@@ -203,8 +212,13 @@ export interface CaptureSessionParams {
  * handoff is written for a duplicate.
  */
 export async function captureSession(params: CaptureSessionParams): Promise<CaptureSessionOutcome> {
-  const { deps, session, config, now, day, dryRun = false } = params;
-  const evidence = await gatherEvidence(deps.transcriptReader, deps.gitReader, session);
+  const { deps, session, config, now, day, dryRun = false, skipTermination = false } = params;
+  const evidence = await gatherEvidence(
+    deps.transcriptReader,
+    deps.gitReader,
+    session,
+    config.maxGitRootsToVisit,
+  );
   const eligibility = await evaluateFullEligibility(
     session,
     now,
@@ -228,7 +242,7 @@ export async function captureSession(params: CaptureSessionParams): Promise<Capt
     day,
     handoff,
     session,
-    policy.canTerminate,
+    policy.canTerminate && !skipTermination,
     dryRun,
   );
   return { kind: 'captured', handoff, terminated, terminationNotice: notice };
