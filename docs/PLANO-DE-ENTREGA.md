@@ -2393,7 +2393,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       arquivos novos (`snooze-command.ts`, `config-command.ts`) e o `config-schema.ts` estendido
       todos acima de 80%. `npm run verificar` e `npm run verificar:linux` verdes, códigos de saída
       lidos separadamente do comando, nunca encadeados com commit.
-- [ ] **S4-T4b — Escrita concorrente não pode virar stack trace no `snooze`.** Saída da medição
+- [~] **S4-T4b — Escrita concorrente não pode virar stack trace no `snooze`.** Saída da medição
       da S4-T4, em 2026-09-06.
 
       **Medido**, 300 iterações concorrentes de leitura/escrita, 3 execuções cada:
@@ -2431,6 +2431,44 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* a taxa de escrita rejeitada **cai de forma medida**, e o que restar sai como
       mensagem, não como stack trace. **A garantia de leitura não pode regredir**: 0 documento
       corrompido continua sendo 0.
+
+      **Implementado:** retentativa limitada dentro de `writeFileAtomic`
+      (`adapters/storage/atomic-write.ts`), só no passo de `rename` e só para `EPERM` (o único
+      código já observado nas duas medições). Entre tentativas, um turno do event loop
+      (`setImmediate`) — não `Clock`/`setTimeout` — porque a corrida é de ordenação do event loop
+      (o leitor concorrente precisa terminar `open`+`read`+`close`), não de tempo relógio; ver
+      Q-058 para a análise completa de por que `Clock` injetado teria custo desproporcional aqui
+      (~100 call sites de `StorageAdapter` em teste). `MAX_RENAME_ATTEMPTS = 8`, escolhido testando
+      1/5/8/10 tentativas com o mesmo instrumento até o ponto de retorno decrescente. Ao esgotar as
+      tentativas, a mensagem nomeia o arquivo e diz que ele continua travado, com o erro original
+      em `.cause` — nunca mais o texto cru do Node. Como o fix mora dentro de `writeFileAtomic`,
+      conserta os dois escritores (`seeya snooze`/`config` e o daemon) sem tocar
+      `snooze-command.ts`, `config-command.ts` nem `scheduler/`.
+
+      **Medido nesta máquina (Windows), 300 iterações/3 execuções, mesmo instrumento antes e
+      depois:**
+
+      ```
+      estado.json  antes: 60/300, 64/300, 56/300 (~19-21%)   depois: 3/300, 5/300, 1/300 (~0.3-1.7%)
+      config.json  antes: 63/300, 63/300, 55/300 (~18-21%)   depois: 7/300, 1/300, 1/300 (~0.3-2.3%)
+      leituras     antes: 0/300 corrompidas (todas as execuções)   depois: 0/300 (todas as execuções)
+      ```
+
+      A garantia de leitura não regrediu (0 continua 0), e a taxa de escrita rejeitada caiu cerca
+      de 10-60× dependendo da execução — sem eliminá-la por completo, o que é esperado: um leitor
+      ainda pode, em tese, vencer as 8 tentativas seguidas.
+
+      **Cobertura, medida nesta máquina:** agregado 97,5%/93,02%/98,58%/97,64%
+      (statements/branches/functions/lines). `core/` 100% statements/functions/lines, 99,06%
+      branches (não tocado por esta tarefa). `adapters/storage/` 94,86%/88,06%/98,48%/95,2%,
+      `atomic-write.ts` 92,59%/83,33%/80%/96% — acima do mínimo de 80% do `AGENTS.md` para fora de
+      `core/`. `npm run verificar` e `npm run verificar:linux` verdes, códigos de saída lidos
+      separadamente, nunca encadeados com commit.
+
+      Q-058 registra a tensão entre o despacho ("dormir ali é permitido... se precisar de `Clock`,
+      diga") e o guard de lint (`no-restricted-globals` bane `setTimeout`/`setInterval` em todo
+      `src/**` fora de `adapters/clock/`, sem exceção por intenção), e por que a solução escolhida
+      foi `setImmediate` sem `Clock` em vez de expandir a assinatura de `StorageAdapter`.
 
 - [ ] **S4-T5 — `seeya daemon --stop/--status`.**
       *Aceite do sprint:* e2e 6, 7 e 8 passam. Um dia inteiro de uso real sem intervenção.

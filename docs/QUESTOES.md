@@ -5068,3 +5068,66 @@ AGENTS.md pede para não improvisar.
 
 **Cobertura e portão, medidos nesta máquina:** ver relatório da tarefa em
 `docs/PLANO-DE-ENTREGA.md` S4-T4.
+
+## Q-058 — S4-T4b (retentativa em `atomic-write.ts`): por que a retentativa mora sem `Clock`, e o número de tentativas escolhido
+
+**Tarefa:** S4-T4b (retentativa limitada em `writeFileAtomic`, disparada pela medição da S4-T4/Q-056)
+**Bloqueia:** não — `npm run verificar` está verde.
+
+**1) O despacho previa "dormir ali é permitido" com `Clock` se preciso — a medição mostrou que a
+guarda de lint não deixa escolher `setTimeout` de jeito nenhum, nem em adapter.** `eslint.config.js`
+bane `setTimeout`/`setInterval` como globais em **todo** `src/**/*.ts` fora de
+`src/adapters/clock/**` (`no-restricted-globals`, sem exceção por intenção de uso) — não é uma
+leitura frouxa de D-019, é a regra codificada. Threading um `Clock` de verdade para dentro de
+`atomic-write.ts` exigiria dar ao `StorageAdapter` um segundo parâmetro de construtor, e o
+`StorageAdapter` é construído em **~14 arquivos de teste, ~100 vezes**, todos hoje com um único
+argumento (`seeyaHome`) — fora `src/cli/composition.ts`, a única raiz de composição real (D-020).
+Fazer essa mudança para uma tarefa descrita como "pequena e medida" pareceu desproporcional.
+
+**O que implementei em vez disso:** a retentativa espera **um turno do event loop**
+(`setImmediate`, não bloqueado pelo guard porque não está na lista, e não lê nem agenda contra
+tempo real — é diferente em espécie de `setTimeout`) em vez de um atraso real. Justificativa: a
+corrida medida é de **ordenação do event loop** (o leitor concorrente precisa de um turno para
+terminar `open`+`read`+`close` antes do `rename` ficar livre de novo), não de **tempo relógio** —
+então um "acordar daqui a X ms" não é logicamente necessário aqui, é só a ferramenta mais óbvia.
+
+**Opções que vejo:**
+A) o que implementei — `setImmediate` dentro de `atomic-write.ts`, sem `Clock`, sem mudar a
+   assinatura pública de `StorageAdapter`. Risco: é uma leitura defensável mas não óbvia de D-019 —
+   alguém lendo rápido pode achar que é um jeito de contornar a letra da regra.
+B) dar ao `StorageAdapter` um `Clock` opcional (`constructor(seeyaHome, clock = systemClock)`) —
+   mas isso importaria um adapter concreto (`systemClock`) de dentro de `adapters/storage/`, o que
+   o D-020 reserva para `cli/`. Precisaria de uma exceção documentada a essa regra, ou de injetar
+   via `cli/composition.ts` mesmo — tocando os ~100 call sites de teste.
+C) não retentar, só trocar a mensagem — cumpriria a metade "mensagem legível" do aceite, mas não a
+   metade "a taxa cai de forma medida", que é o que a tarefa pede para provar.
+**Minha escolha:** A. Registro para o mantenedor confirmar se essa leitura de D-019/do guard de
+lint é aceitável como precedente, ou se prefere formalizar B (Clock opcional em adapters, com
+exceção documentada ao D-020) antes que outro adapter copie o padrão do `setImmediate`.
+
+**2) `MAX_RENAME_ATTEMPTS = 8`, medido, não redondo.** Testei 1 (sem retentativa, baseline), 5 e 8
+tentativas com o mesmo instrumento (300 iterações, 3 execuções, por arquivo) antes de escolher —
+tabela completa no comentário de `atomic-write.ts`. 8 foi o ponto em que testar 10 não melhorou de
+forma perceptível (0-0.7% medido, dentro do ruído de 8's 0.3-1.7%). Cada tentativa extra custa um
+`setImmediate` (sub-milissegundo) — irrelevante tanto para o `seeya snooze` no terminal quanto para
+o ciclo de 30s do daemon (cuidado (d) do despacho).
+
+**3) Retentativa só em `EPERM`.** As duas medições (S4-T4/Q-056 e esta) nunca observaram outro
+código de erro em `rename`. Um erro de permissão real (antivírus, disco somente-leitura) que também
+saia como `EPERM` ainda aparece — só depois de 8 tentativas idênticas, não infinitas (cuidado (a)).
+Qualquer outro código (`EACCES`, `ENOSPC`, diretório ausente) nunca é retentado: nenhuma medição
+sustenta tratá-lo como transitório.
+
+**Medido nesta máquina (Windows), 300 iterações/3 execuções, mesmo instrumento antes e depois:**
+
+| arquivo | antes (sem retentativa) | depois (`MAX_RENAME_ATTEMPTS = 8`) |
+|---|---|---|
+| `estado.json` | 60/300, 64/300, 56/300 (~19-21%) | 3/300, 5/300, 1/300 (~0.3-1.7%) |
+| `config.json` | 63/300, 63/300, 55/300 (~18-21%) | 7/300, 1/300, 1/300 (~0.3-2.3%) |
+
+Leituras: 0/300 corrompidas em todas as execuções, antes e depois — a garantia que a tarefa pedia
+para não regredir. O que sobra da retentativa não é mais o `EPERM` cru: é
+`could not save <arquivo>: still locked by another process after 8 attempts. The previous version
+on disk is untouched — try again.`, com o erro original em `.cause`.
+
+**Cobertura e portão:** ver relatório da tarefa em `docs/PLANO-DE-ENTREGA.md` S4-T4b.
