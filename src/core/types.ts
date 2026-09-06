@@ -632,6 +632,44 @@ export interface DayState {
    * waste is bounded instead of repeating for the rest of the active-turn window.
    */
   readonly captureAttemptsToday: Readonly<Record<string, number>>;
+  /**
+   * S4-T3b's own field: does the daemon's cycle loop currently look broken, and what was the last
+   * thing that went wrong (`core/daemon-health.ts` has the pure decision logic; `scheduler/health.ts`
+   * wires it to `Storage`/`Notifier` around `scheduler/loop.ts`'s own `catch`). Closes
+   * docs/QUESTOES.md Q-049's item 9: before this field existed, a poll that threw vanished into a
+   * deliberate `catch {}` with nowhere to record it (D-005: `stdio: 'ignore'`; AGENTS.md § "Registro
+   * e saída": no inventing a logger mid-task) — a daemon could fail every cycle for hours, stay
+   * "alive" the whole time, and leave nothing to investigate the next day.
+   *
+   * **Deliberately carried FORWARD across the local-day reset, unlike every other field above**
+   * (`core/schedule.ts#resetIfNewDay` special-cases exactly this one field). Everything else here is
+   * "por dia" by design (D-006); this one exists specifically so a failure streak spanning midnight
+   * is still visible the next day — resetting it at the exact moment described above (docs/PLANO-DE-ENTREGA.md
+   * S4-T3b: "a pessoa descobre no dia seguinte... e não há o que investigar") would defeat the
+   * entire feature.
+   */
+  readonly daemonHealth: DaemonHealth;
+}
+
+/**
+ * `DayState.daemonHealth`'s own shape (S4-T3b). A discriminated `null | { message; at }` for
+ * `lastCycleError` (D-024), not two independently-nullable fields: an error string with no
+ * timestamp, or a timestamp with no error, would both describe something that never really
+ * happened, so there is exactly one place a caller could get "is there a recorded error?" wrong.
+ */
+export interface DaemonHealth {
+  /** The most recent poll failure's message (`AGENTS.md` § "Mensagens de erro": the caller's own
+   * rendering of whatever the poll threw, never just "it failed") and when it happened. `null`
+   * exactly when `consecutiveCycleFailures` is `0` — no failure since the last success, or ever. */
+  readonly lastCycleError: { readonly message: string; readonly at: Date } | null;
+  /**
+   * How many polls in a row have failed, counting from the most recent success (or from the very
+   * first poll this machine ever ran). Reset to `0` by any successful poll
+   * (`core/daemon-health.ts#recordCycleSuccess`) — a single transient blip that later recovers
+   * never leaves a trace here, on purpose: this field exists to answer "is something ACTUALLY
+   * broken right now", not "did anything ever fail once".
+   */
+  readonly consecutiveCycleFailures: number;
 }
 
 // Own block at the end of the file on purpose (S4-T0b), same reasoning as every addition above

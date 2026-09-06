@@ -28,6 +28,8 @@ import { runEndDayCommand } from './end-day-command.js';
 import { runStartDayCommand } from './start-day-command.js';
 import { runDaemonLauncher, runDaemonWorker } from './daemon-command.js';
 import { DAEMON_CHILD_ENV_VAR } from '../adapters/process/daemon-launch.js';
+import { captureObservedProcStart } from '../adapters/process/proc-start.js';
+import { processExists } from '../adapters/process/existence.js';
 
 const PackageJsonSchema = z.object({
   version: z.string(),
@@ -129,7 +131,14 @@ program
   .action(async () => {
     if (process.env[DAEMON_CHILD_ENV_VAR] === '1') {
       const deps = await buildDaemonContext();
-      const exitCode = await runDaemonWorker(deps, process.pid);
+      // S4-T3b: the lock's own recycled-PID tie-break needs the WORKER's own procStart at the
+      // moment it starts (core/daemon-lock.ts's own docstring) — captured here, the one real
+      // composition root allowed to call adapters/process directly (D-020), then threaded down as
+      // a plain value so scheduler/ never has to know how it was obtained (same discipline `pid`
+      // itself already gets).
+      const procStartCapture = await captureObservedProcStart(process.pid, processExists);
+      const procStart = procStartCapture.kind === 'value' ? procStartCapture.value : undefined;
+      const exitCode = await runDaemonWorker(deps, process.pid, procStart);
       if (exitCode !== 0) {
         process.exitCode = exitCode;
       }

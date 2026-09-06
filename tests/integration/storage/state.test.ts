@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { StorageAdapter } from '../../../src/adapters/storage/index.js';
 import { emptyDayState } from '../../../src/core/schedule.js';
+import { EMPTY_DAEMON_HEALTH } from '../../../src/core/daemon-health.js';
 
 async function makeTmpDir(): Promise<string> {
   return mkdtemp(path.join(tmpdir(), 'seeya-storage-state-'));
@@ -55,7 +56,57 @@ describe('StorageAdapter#readState', () => {
         firedLeadTimesInMinutes: [30],
         endOfDayFired: false,
         captureAttemptsToday: { 'session-a': 2 },
+        daemonHealth: EMPTY_DAEMON_HEALTH,
       });
+    } finally {
+      await rm(seeyaHome, { recursive: true, force: true });
+    }
+  });
+
+  it('reads a real daemonHealth block correctly (S4-T3b)', async () => {
+    const seeyaHome = await makeTmpDir();
+    try {
+      const document = {
+        schemaVersion: 1,
+        day: '2026-09-05',
+        skipped: false,
+        snoozeMinutesTotal: 0,
+        firedLeadTimesInMinutes: [],
+        endOfDayFired: false,
+        captureAttemptsToday: {},
+        daemonHealth: {
+          lastCycleError: { message: 'ECONNREFUSED', at: '2026-09-05T10:00:00.000Z' },
+          consecutiveCycleFailures: 7,
+        },
+      };
+      await writeFile(path.join(seeyaHome, 'estado.json'), JSON.stringify(document), 'utf8');
+      const storage = new StorageAdapter(seeyaHome);
+      const state = await storage.readState();
+      expect(state?.daemonHealth).toStrictEqual({
+        lastCycleError: { message: 'ECONNREFUSED', at: new Date('2026-09-05T10:00:00.000Z') },
+        consecutiveCycleFailures: 7,
+      });
+    } finally {
+      await rm(seeyaHome, { recursive: true, force: true });
+    }
+  });
+
+  it('defaults daemonHealth to EMPTY_DAEMON_HEALTH when an older document omits it (D-025)', async () => {
+    const seeyaHome = await makeTmpDir();
+    try {
+      const document = {
+        schemaVersion: 1,
+        day: '2026-09-05',
+        skipped: false,
+        snoozeMinutesTotal: 0,
+        firedLeadTimesInMinutes: [],
+        endOfDayFired: false,
+        captureAttemptsToday: {},
+      };
+      await writeFile(path.join(seeyaHome, 'estado.json'), JSON.stringify(document), 'utf8');
+      const storage = new StorageAdapter(seeyaHome);
+      const state = await storage.readState();
+      expect(state?.daemonHealth).toStrictEqual(EMPTY_DAEMON_HEALTH);
     } finally {
       await rm(seeyaHome, { recursive: true, force: true });
     }

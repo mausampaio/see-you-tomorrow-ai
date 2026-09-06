@@ -22,6 +22,7 @@
  */
 import type { Config, Day, DayState } from './types.js';
 import { localDayString } from './day.js';
+import { EMPTY_DAEMON_HEALTH } from './daemon-health.js';
 
 /**
  * Resolves `"HH:MM"` (already validated 24h local time by
@@ -110,6 +111,7 @@ export function emptyDayState(day: Day): DayState {
     firedLeadTimesInMinutes: [],
     endOfDayFired: false,
     captureAttemptsToday: {},
+    daemonHealth: EMPTY_DAEMON_HEALTH,
   };
 }
 
@@ -119,9 +121,17 @@ export function emptyDayState(day: Day): DayState {
  * below that touches a `DayState`, so the reset rule lives in exactly one place: a state object
  * left over from yesterday (whatever a real `Storage` implementation ends up handing back, S4-T3)
  * never leaks a stale `skipped`/`snoozeMinutesTotal`/`endOfDayFired` into a new local day.
+ *
+ * **`daemonHealth` is the one field carried FORWARD, never reset here (S4-T3b).** Everything else
+ * `DayState` holds is "por dia" by design (D-006); `daemonHealth` exists specifically so a failure
+ * streak spanning midnight is still visible the next day (`DaemonHealth`'s own docstring in
+ * `core/types.ts`) — resetting it at exactly the moment described there would defeat the feature.
  */
 function resetIfNewDay(state: DayState, today: Day): DayState {
-  return state.day === today ? state : emptyDayState(today);
+  if (state.day === today) {
+    return state;
+  }
+  return { ...emptyDayState(today), daemonHealth: state.daemonHealth };
 }
 
 /**

@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildDaemonEndOfDayNotice,
+  buildDaemonUnhealthyNotice,
   buildEarlyWarningNotice,
   buildLeadTimeNotice,
 } from '../../../src/scheduler/notices.js';
@@ -101,5 +102,34 @@ describe('buildEarlyWarningNotice', () => {
     });
     expect(notice.title).toContain('uninspectable');
     expect(notice.body).toContain('4242.abc.key');
+  });
+});
+
+describe('buildDaemonUnhealthyNotice', () => {
+  it('reports elapsed minutes computed from the failure count, and the last error message', () => {
+    const notice = buildDaemonUnhealthyNotice({
+      lastCycleError: { message: 'ECONNREFUSED', at: new Date('2026-09-05T10:00:00.000Z') },
+      consecutiveCycleFailures: 120, // 120 * 30s = 3600s = 60 minutes
+    });
+    expect(notice.title).toBe('seeya: daemon is stuck');
+    expect(notice.body).toContain('60 minutes');
+    expect(notice.body).toContain('ECONNREFUSED');
+  });
+
+  it('singular "minute" at exactly 2 consecutive failures (60s, boundary)', () => {
+    const notice = buildDaemonUnhealthyNotice({
+      lastCycleError: { message: 'x', at: new Date('2026-09-05T10:00:00.000Z') },
+      consecutiveCycleFailures: 2, // 2 * 30s = 60s = 1 minute
+    });
+    expect(notice.body).toContain('1 minute ');
+    expect(notice.body).not.toContain('1 minutes');
+  });
+
+  it('falls back to "unknown error" when there is no recorded lastCycleError (defensive — not reachable via recordCycleFailure today)', () => {
+    const notice = buildDaemonUnhealthyNotice({
+      lastCycleError: null,
+      consecutiveCycleFailures: 120,
+    });
+    expect(notice.body).toContain('unknown error');
   });
 });

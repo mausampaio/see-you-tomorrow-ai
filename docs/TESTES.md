@@ -113,9 +113,11 @@ O que precisa estar coberto com rigor, porque é onde os bugs vão doer:
   limite, um generator que lança se for chamado prova que a próxima chamada nem tenta — sem
   depender de contar invocações, depender de que a chamada erra o teste inteiro se acontecer.
 - **Decisão de lock de instância única (D-005)**: `core/daemon-lock.ts#decideLockAcquisition`
-  isolada — ausente ou PID morto adquire, PID vivo recusa nomeando o dono. Sem desempate por
-  `procStart` (limitação aceita e documentada no próprio arquivo — ver docs/PLANO-DE-ENTREGA.md
-  S4-T3). `scheduler/lock.ts` testado por cima disso com `Storage`/`ProcessControl` em memória:
+  isolada — ausente ou PID morto adquire, PID vivo recusa nomeando o dono. **Com desempate por
+  `procStart` (S4-T3b):** PID reciclado é reconhecido como morto, e `procStart` **indisponível
+  mantém o lock respeitado** — ausência de evidência não vira licença para um segundo daemon
+  (D-025). O caso reciclado é construído no teste escrevendo um lock com PID vivo de verdade e
+  `procStart` deliberadamente errado, que é indistinguível de reciclagem para o `resolveIsAlive`. `scheduler/lock.ts` testado por cima disso com `Storage`/`ProcessControl` em memória:
   `checkDaemonLock` nunca escreve; `acquireDaemonLock` só escreve no caso `'acquire'`.
 - **O laço do daemon nunca redecide a agenda, só consome (S4-T3)**: `scheduler/poll.ts` exercitado
   com o pipeline REAL de `application/endDay` (não substituído por fake) — aviso de antecedência

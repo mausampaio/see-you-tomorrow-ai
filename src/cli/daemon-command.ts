@@ -50,8 +50,18 @@ export async function runDaemonLauncher(
  * `node:process` directly (D-020: `cli/` is the only composition root allowed to name a concrete
  * environment API) — this function registers the handlers and hands `runDaemon` a plain
  * `shouldStop` closure instead.
+ *
+ * **`procStart` is a plain value, not captured here (S4-T3b).** `cli/index.ts` — the actual entry
+ * point, one level up — captures it once via `adapters/process/proc-start.ts` and passes it down,
+ * the same discipline `pid` itself already gets from `runDaemon`'s own docstring: this function has
+ * no real-I/O concern of its own to keep pure for its unit tests (`tests/unit/cli/daemon-command.test.ts`
+ * passes `undefined` and never touches a real process for it).
  */
-export async function runDaemonWorker(deps: DaemonDeps, pid: number): Promise<number> {
+export async function runDaemonWorker(
+  deps: DaemonDeps,
+  pid: number,
+  procStart: string | undefined,
+): Promise<number> {
   let stopRequested = false;
   const requestStop = (): void => {
     stopRequested = true;
@@ -59,7 +69,7 @@ export async function runDaemonWorker(deps: DaemonDeps, pid: number): Promise<nu
   process.once('SIGINT', requestStop);
   process.once('SIGTERM', requestStop);
   try {
-    const outcome = await runDaemon(deps, pid, { shouldStop: () => stopRequested });
+    const outcome = await runDaemon(deps, pid, procStart, { shouldStop: () => stopRequested });
     return outcome.kind === 'alreadyRunning' ? 1 : 0;
   } finally {
     process.off('SIGINT', requestStop);

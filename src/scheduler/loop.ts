@@ -12,6 +12,7 @@
  */
 import { acquireDaemonLock } from './lock.js';
 import { pollOnce } from './poll.js';
+import { recordPollFailure, recordPollSuccess } from './health.js';
 import type { DaemonDeps } from './types.js';
 
 /** docs/ESPECIFICACAO.md's own number — never derived from anything else, and never overridable
@@ -41,12 +42,13 @@ export type DaemonRunOutcome =
  * A single poll throwing NEVER stops the loop (docs/PLANO-DE-ENTREGA.md S4-T3: "o perigo que só
  * existe em laço" — everything tolerable once in a hand-run `seeya end-day` becomes N occurrences
  * in a long-running daemon, and a daemon that dies on the first transient failure is worse than one
- * that logs nothing about it — see docs/QUESTOES.md Q-049 for why this doesn't also log anywhere:
- * this project has no diagnostic logger yet, AGENTS.md § "Registro e saída", and the worker's own
- * stdio is `'ignore'` besides, D-005).
+ * that vanishes it in silence). **S4-T3b**: the failure no longer just vanishes either — it becomes
+ * STATE (`DayState.daemonHealth`, `scheduler/health.ts`), because this project still has nowhere to
+ * log it (D-005: worker `stdio` is `'ignore'`; AGENTS.md § "Registro e saída": no inventing a
+ * logger mid-task, `docs/QUESTOES.md` Q-049's own item 9).
  *
  * @example
- * const outcome = await runDaemon(deps, process.pid, {});
+ * const outcome = await runDaemon(deps, process.pid, procStart, {});
  * // outcome.kind === 'alreadyRunning' → another instance already holds the lock; exit non-zero.
  * // otherwise this call never resolves under normal operation (real `POLL_INTERVAL_MS`, no
  * // `shouldStop`) — it's `maxIterations`/`shouldStop` that make it testable at all.
@@ -54,12 +56,23 @@ export type DaemonRunOutcome =
 export async function runDaemon(
   deps: DaemonDeps,
   pid: number,
+  /**
+   * The CALLER's own `procStart` (`cli/index.ts`, captured via
+   * `adapters/process/proc-start.ts#captureObservedProcStart` on its own `process.pid`, the same
+   * self-description Q-049 item 6 assumed wasn't possible — it always was, nothing in that
+   * function cares whose pid it's given) — never derived here, same discipline `pid` itself
+   * already gets (this file's own top comment). `undefined` when the platform's capture failed for
+   * some other reason: the lock is still written, just without a tie-break value to compare next
+   * time (D-025 — no tie-break available is not "no daemon").
+   */
+  procStart: string | undefined,
   options: RunDaemonOptions = {},
 ): Promise<DaemonRunOutcome> {
   const decision = await acquireDaemonLock(
     deps.storage,
     deps.processControl,
     pid,
+    procStart,
     deps.clock.now(),
   );
   if (decision.kind === 'refuse') {
@@ -75,8 +88,13 @@ export async function runDaemon(
     iterations += 1;
     try {
       await pollOnce(deps);
-    } catch {
-      // Swallowed on purpose — see this function's own docstring.
+      await recordPollSuccess(deps).catch(() => undefined);
+    } catch (error) {
+      // The poll itself is still swallowed here — see this function's own docstring — but S4-T3b
+      // means it no longer vanishes without a trace: recordPollFailure persists it to
+      // DayState.daemonHealth first. Best-effort itself (`.catch`): a failure recording its own
+      // failure must never be what actually crashes the loop.
+      await recordPollFailure(deps, error).catch(() => undefined);
     }
     if (
       shouldStop() ||

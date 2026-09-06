@@ -58,6 +58,7 @@ describe('runDaemonLauncher — refuse path (no spawn)', () => {
     (storage as LockOnlyStorage).seedLock({
       pid: 4242,
       startedAt: new Date('2026-09-01T00:00:00.000Z'),
+      procStart: undefined,
     });
     const processControl = new FixedAliveness(true);
 
@@ -91,10 +92,16 @@ describe('runDaemonWorker', () => {
 
   it('returns exit code 1 when another instance already holds a live lock — never polls', async () => {
     const storage = new LockOnlyStorage(DEFAULT_TEST_CONFIG);
-    storage.seedLock({ pid: 4242, startedAt: new Date('2026-09-01T00:00:00.000Z') });
+    storage.seedLock({
+      pid: 4242,
+      startedAt: new Date('2026-09-01T00:00:00.000Z'),
+      procStart: undefined,
+    });
     const deps = buildDeps(storage, new FixedAliveness(true));
 
-    const exitCode = await runDaemonWorker(deps, 555);
+    // `procStart: undefined` — this file never touches a real process, so there is nothing to
+    // capture; `tests/integration/cli/daemon-command.test.ts` covers the real capture path.
+    const exitCode = await runDaemonWorker(deps, 555, undefined);
     expect(exitCode).toBe(1);
   });
 
@@ -107,7 +114,7 @@ describe('runDaemonWorker', () => {
     // synchronous tick, right after calling the function, is what makes this deterministic instead
     // of racing a real timer. `discoverEarlyWarnings` above rejects the whole poll if ever called,
     // so a passing test here also proves zero polls ran, not just an exit code.
-    const resultPromise = runDaemonWorker(deps, 555);
+    const resultPromise = runDaemonWorker(deps, 555, undefined);
     process.emit('SIGTERM');
     const exitCode = await resultPromise;
 
