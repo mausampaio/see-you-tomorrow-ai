@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 import {
   applyConfigFieldUpdate,
   applyProjectPolicyUpdate,
+  CONFIG_SCHEMA_VERSION,
   DEFAULT_CONFIG,
   EDITABLE_CONFIG_KEYS,
   formatConfigValue,
   isEditableConfigKey,
   parseConfigDocument,
   parseConfigFieldUpdate,
+  schemaVersionNotEditableMessage,
   serializeConfigDocument,
   unknownConfigKeyMessage,
 } from '../../../../src/adapters/storage/config-schema.js';
@@ -121,6 +123,28 @@ describe('isEditableConfigKey / unknownConfigKeyMessage (S4-T4)', () => {
       expect(message).toContain(key);
     }
     expect(message).toContain('seeya config policy');
+  });
+});
+
+// S4-T6, D-025: `schemaVersion` is a REAL key — required, checked on every read — just not one
+// `isEditableConfigKey` recognizes, because there is nothing to set it to. `cli/config-command.ts`
+// checks `key === 'schemaVersion'` before ever consulting `isEditableConfigKey`, so this list
+// correctly excluding it is the precondition for that branch mattering, not a gap by itself.
+describe('schemaVersionNotEditableMessage (S4-T6)', () => {
+  it('is not among EDITABLE_CONFIG_KEYS (it is a known key, just not a settable one)', () => {
+    expect(isEditableConfigKey('schemaVersion')).toBe(false);
+  });
+
+  it('names schemaVersion, says it exists (not "unknown"), and says where it is checked', () => {
+    const message = schemaVersionNotEditableMessage();
+    expect(message).toContain('schemaVersion');
+    expect(message).not.toContain('unknown');
+    expect(message).toContain('config.json');
+    expect(message).toContain('handoff');
+  });
+
+  it('CONFIG_SCHEMA_VERSION is the value "seeya config get schemaVersion" reports', () => {
+    expect(CONFIG_SCHEMA_VERSION).toBe(1);
   });
 });
 

@@ -23,10 +23,12 @@
 import {
   applyConfigFieldUpdate,
   applyProjectPolicyUpdate,
+  CONFIG_SCHEMA_VERSION,
   EDITABLE_CONFIG_KEYS,
   formatConfigValue,
   isEditableConfigKey,
   parseConfigFieldUpdate,
+  schemaVersionNotEditableMessage,
   unknownConfigKeyMessage,
 } from '../adapters/storage/config-schema.js';
 import type { Storage } from '../core/ports.js';
@@ -69,6 +71,15 @@ export async function runConfigGetCommand(
   if (key === 'projectPolicy') {
     return renderProjectPolicySection(config);
   }
+  // S4-T6: `schemaVersion` is real and required (checked on every config/handoff read) — it's
+  // just not part of `Config` itself (`resolveSchemaVersion` strips it out before
+  // `configFileSchema` ever runs, `adapters/storage/config-schema.ts`'s own top comment), so there
+  // is no `config[key]` to read here. What's reported is the version this build of seeya writes and
+  // expects, `CONFIG_SCHEMA_VERSION` — the same fact `isEditableConfigKey` below would otherwise
+  // mislabel "unknown".
+  if (key === 'schemaVersion') {
+    return `schemaVersion: ${CONFIG_SCHEMA_VERSION}`;
+  }
   if (!isEditableConfigKey(key)) {
     return `seeya config get: ${unknownConfigKeyMessage(key)}`;
   }
@@ -80,6 +91,12 @@ export async function runConfigSetCommand(
   key: string,
   rawValue: string,
 ): Promise<string> {
+  // S4-T6: same distinction as `runConfigGetCommand` above, checked first so this never reaches
+  // `parseConfigFieldUpdate`'s generic "unknown key" branch, which would say `schemaVersion`
+  // doesn't exist — it does, it's just not settable.
+  if (key === 'schemaVersion') {
+    return `seeya config set: ${schemaVersionNotEditableMessage()}`;
+  }
   const parsed = parseConfigFieldUpdate(key, rawValue);
   if (!parsed.ok) {
     return `seeya config set: ${parsed.error}`;
