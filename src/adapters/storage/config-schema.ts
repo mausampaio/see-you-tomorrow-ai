@@ -195,6 +195,29 @@ export function unknownConfigKeyMessage(key: string): string {
 }
 
 /**
+ * S4-T6: `schemaVersion` is real, required, and checked on every read of `config.json` AND every
+ * handoff document (`resolveSchemaVersion`, `schema-version.ts`) — it just isn't something
+ * `seeya config set` can change, because it isn't a setting: it's fixed by this build of the code
+ * (cuidado (f) of this task: "não torne editável — ela é do código"). Before this, both
+ * `seeya config get schemaVersion` and `seeya config set schemaVersion ...` fell through to
+ * `unknownConfigKeyMessage`, which claims the key doesn't exist — false, and the opposite of D-025's
+ * spirit applied to a message instead of a value: a field the program itself requires on every read
+ * is not "unknown", and calling it that hides a real answer behind a wrong one.
+ *
+ * Kept separate from `unknownConfigKeyMessage` rather than folded into it (the way "projectPolicy"
+ * is, whose note is appended unconditionally to every unknown-key message) because the two claims
+ * are different in kind: "not editable, and here is where it's used" is a fact about a key that
+ * DOES exist, not a suffix tacked onto "doesn't exist".
+ */
+export function schemaVersionNotEditableMessage(): string {
+  return (
+    '"schemaVersion" exists, is required, and is validated on every read of config.json and of ' +
+    'every handoff document (adapters/storage/schema-version.ts) — it is fixed by this build of ' +
+    'seeya, not a setting, so there is nothing "seeya config set" can change it to.'
+  );
+}
+
+/**
  * Splits a comma-separated CLI argument into trimmed, non-empty parts — shared by every
  * list-shaped field (`leadTimesInMinutes`, `ignore`). An empty/whitespace-only `raw` (e.g. `""`)
  * resolves to `[]`, which is how a person clears a list back to empty, not a parse error.

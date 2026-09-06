@@ -39,6 +39,24 @@ describe('buildLeadTimeNotice', () => {
     expect(notice.body).toContain('seeya snooze');
     expect(notice.body).toContain('seeya skip-today');
   });
+
+  // S4-T6, D-025: the number this function prints is the ACTUAL remaining time, not the configured
+  // lead time that triggered the warning — the caller (`scheduler/poll.ts`) is what tells the two
+  // apart now, this function just renders whatever it's handed. A regression here would be passing
+  // the rule's own name back in, which this test can't distinguish from the honest case by itself —
+  // `tests/unit/scheduler/poll.test.ts` is what proves the caller passes the REAL gap, not this
+  // label-only rendering test.
+  it('a value smaller than any configured lead time is reported as-is, not rounded up to one', () => {
+    const notice = buildLeadTimeNotice(22, '2026-09-05');
+    expect(notice.title).toContain('22 min');
+    expect(notice.body).toContain('22 minutes');
+  });
+
+  it('singular "minute" at exactly 1 minute remaining (boundary)', () => {
+    const notice = buildLeadTimeNotice(1, '2026-09-05');
+    expect(notice.body).toContain('1 minute.');
+    expect(notice.body).not.toContain('1 minutes');
+  });
 });
 
 describe('buildDaemonEndOfDayNotice', () => {

@@ -32,6 +32,10 @@ export function runGit(workingDir: string, args: string[]): Promise<GitCommandRe
       cwd: workingDir,
       stdio: ['ignore', 'pipe', 'ignore'],
       shell: false,
+      // S4-T6: the daemon calls this once per repository at end-of-day, with no console of its own
+      // (D-005) — without this, each `git` invocation pops a real, visible window on Windows.
+      // Windows-only effect; doesn't change `ran`/`stdout`/`exitCode` either way.
+      windowsHide: true,
     });
     let stdout = '';
     child.stdout.on('data', (chunk: Buffer) => {

@@ -16,7 +16,12 @@
  * loop of its own: the daemon-relevant cache tier is ~1h, so 30s-grained polling was already the
  * chosen cadence for the whole design, not a workaround invented here.
  */
-import { decideSchedule, emptyDayState, resetIfNewDay } from '../core/schedule.js';
+import {
+  decideSchedule,
+  emptyDayState,
+  minutesRemaining,
+  resetIfNewDay,
+} from '../core/schedule.js';
 import { localDayString } from '../core/day.js';
 import { recordCaptureAttempts } from '../core/capture-retry.js';
 import type { Config, DayState } from '../core/types.js';
@@ -185,7 +190,13 @@ export async function pollOnce(deps: DaemonDeps): Promise<void> {
   const { decision, nextState } = decideSchedule(config, persisted, now);
 
   if (decision.kind === 'leadTimeWarning') {
-    await deps.notifier.notify(buildLeadTimeNotice(decision.leadTimeMinutes, nextState.day));
+    // S4-T6: the notice reports the REAL gap to the deadline, not the configured rule's own name
+    // (`decision.leadTimeMinutes`) — the two only match when the poll lands inside the same 30s
+    // window the threshold was crossed in. `firedLeadTimesInMinutes` (inside `nextState`, from
+    // `decideSchedule`) still records `decision.leadTimeMinutes` unchanged — only the notice text
+    // is derived from `now` via the injected `Clock` (D-019).
+    const remaining = minutesRemaining(decision.effectiveEndOfDay, now);
+    await deps.notifier.notify(buildLeadTimeNotice(remaining, nextState.day));
     await deps.storage.saveState(nextState);
     return;
   }

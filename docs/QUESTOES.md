@@ -5271,3 +5271,99 @@ Consequências, e nenhuma delas desfaz o conserto:
 A frequência de colisão em produção também é diferente, e para melhor: o daemon lê a cada 30s, não
 em laço apertado. Isso reduz **quantas** colisões acontecem — é outra coisa do que **quão bem** cada
 colisão se resolve, e o relatório da tarefa só observou a primeira.
+
+---
+
+## Q-059 — S4-T6 (as três correções do primeiro ensaio real): quais `spawn` receberam `windowsHide`, por que os outros três não, e se a opção deveria ser padrão num só lugar
+
+**Tarefa:** S4-T6 — janelas de console no daemon (parte 1), aviso com tempo errado (parte 2),
+`schemaVersion` chamada de desconhecida (parte 3).
+**Bloqueia:** não — `npm run verificar` e `npm run verificar:linux` estão verdes.
+
+**1) Nove `spawn(...)` existem em `src/`; exatamente quatro ganharam `windowsHide: true` nesta
+tarefa, dois já tinham (`console-signal.ts`), e três ficaram de fora — de propósito, não por
+esquecimento.**
+
+Ganharam a opção (os quatro que o próprio texto da S4-T6 no plano já apontava, "captura, evidência
+de git e notificação"):
+
+- `adapters/generation/spawn-claude.ts` (`spawnClaude` — um `claude` por captura)
+- `adapters/git/run-git.ts` (`runGit` — um `git` por repositório, no encerramento)
+- `adapters/process/spawn-stdout.ts` (`runForStdout` — chamado por `proc-start.ts` em todo
+  `isAlive` com `procStart`, a cada poll de 30s por sessão viva)
+- `adapters/notification/backend.ts` (`spawnCommand` — todo backend de notificação real)
+
+Já tinham (precedente, não coincidência — `console-signal.ts`'s próprio comentário já citava a
+técnica do Spike B para o WinRT toast):
+
+- `adapters/process/console-signal.ts`, dois `spawn` (`runPowerShellScript`, `runSendScript`)
+
+Ficaram sem a opção, e medi por que cada um está seguro sem ela:
+
+- `adapters/process/daemon-launch.ts#spawnDetachedDaemon` — usa `detached: true` +
+  `stdio: 'ignore'`. É o próprio mecanismo do D-005 ("no Windows isso significa console
+  nenhum" — `adapters/process/termination-windows.ts` mede a consequência: `AttachConsole` falha
+  com erro 6 contra um processo assim). Este `spawn` É o que produz o daemon sem console; não tem
+  janela para esconder porque a intenção aqui é exatamente "nenhum console", não "console
+  escondido" — são mecanismos diferentes que dão no mesmo resultado.
+- `adapters/process/termination-posix.ts` — POSIX-only por construção (S1-T12, o comentário do
+  próprio arquivo diz isso: "the mirror of `console-signal.ts`'s Windows-only exclusion").
+  `windowsHide` não existe nesse SO; a opção seria um no-op sempre.
+- `adapters/resumption/spawn-interactive.ts#runInteractive` — `stdio: 'inherit'`, deliberadamente
+  (docs/spikes/H-retomada-interativa.md): o `claude --resume` interativo precisa do terminal REAL
+  de quem digitou `seeya start-day`, não de um console escondido. Este caminho nunca é chamado pelo
+  daemon sem console — é comando manual, com console do usuário já presente — e esconder a janela
+  aqui esconderia a própria sessão interativa que o comando existe para abrir.
+
+Testado que os quatro que ganharam a opção continuam se comportando como antes (mesmos testes de
+integração contra processo real, verdes): `tests/integration/notification/spawn-command.test.ts`,
+`tests/integration/git/`, `tests/integration/generation/lean-generator.test.ts`,
+`tests/unit/adapters/process/proc-start.test.ts`.
+
+**2) Cuidado (a) do despacho: não escrevi teste que aparenta provar a correção da parte 1, porque
+não existe teste que prove.** O defeito só existe quando o processo pai não tem console (D-005);
+`vitest` sempre roda com console próprio, herdado pelo filho — a MESMA suíte que teoricamente
+provaria "sem janela" não tem como reproduzir "com janela" para começo de conversa. Um mock de
+`node:child_process` (`vi.mock`) provaria só que a chave está no objeto de opções — não que a
+janela some — e o projeto não usa `vi.mock` em lugar nenhum hoje (AGENTS.md: duplo é classe/objeto
+nomeado, não stub de módulo). Deixei isso registrado em `docs/TESTES.md`, na entrada da S4-T6, em
+vez de fingir cobertura. **O aceite real desta parte é o mantenedor rodando o daemon de verdade no
+Windows** — não tem como eu verificar isso a partir daqui.
+
+**3) Cuidado (c): a opção está repetida em quatro chamadas de `spawn` agora, seis contando
+`console-signal.ts`. Vale virar padrão de um `spawn` interno do projeto, em vez de repetida em
+cada call site?** Não refatorei — o despacho foi explícito em não pedir isso agora — mas registro a
+pergunta como pedido: um wrapper único (`adapters/process/spawn.ts#spawnHidden` ou nome parecido)
+que sempre passasse `windowsHide: true` fecharia a classe inteira de bug de uma vez, e um sexto
+`spawn` futuro (o próximo adapter que precisar de um processo externo) nasceria correto por
+construção, em vez de precisar lembrar da regra. Contras que vejo: cada `spawn` de hoje tem um
+`stdio`/`env`/`signal` diferente (pipe completo, ignore parcial, `AbortSignal.timeout`, herança de
+`env`), então o wrapper teria que aceitar as opções variáveis mesmo assim — o ganho real é só essa
+uma chave nunca mais ser esquecida, não uma redução grande de código. Ficou registrado aqui; quem
+decide se compensa é o mantenedor, e se a resposta for sim isso vira tarefa própria, não algo que
+eu misturaria nesta.
+
+**4) Cuidado (e): não mudei QUANDO o aviso prévio dispara — só o que ele diz — mas o caso que
+originou a parte 2 sugere uma pergunta maior que não é minha para decidir.** O defeito medido foi
+o daemon subindo atrasado e cruzando o limiar de 30 min já com só 22 min reais restantes;
+`core/schedule.ts#decideSchedule` ainda escolhe "qual regra disparou" pela ORDEM decrescente dos
+`leadTimesInMinutes` configurados, não pela distância real ao fim do dia — o que meu conserto NÃO
+toca. Isso significa que, num atraso grande o bastante, um aviso "de 30 minutos" pode disparar com
+menos tempo real do que o aviso "de 15 minutos" teria dado se checado a tempo — a pessoa recebe o
+número certo agora (graças a esta tarefa), mas ainda associado ao nome da regra errada
+(`firedLeadTimesInMinutes` registra `30`, nunca `15`, mesmo quando 15 seria a leitura mais honesta
+do "quão perto estamos"). Não decidi mudar isso — mudar o gatilho é decisão do mantenedor, exatamente
+como o despacho pediu para eu tratar. Registro aqui para ele confirmar se vale abrir tarefa nova, ou
+se o texto já corrigido (parte 2) é suficiente e a ordem de dependência dos `leadTimesInMinutes` não
+precisa mudar.
+
+**5) `schemaVersionNotEditableMessage` (parte 3): escolhi função dedicada, não generalizar
+`unknownConfigKeyMessage` para aceitar uma chave "conhecida mas não editável".** `projectPolicy` já
+usa `unknownConfigKeyMessage` com uma nota fixa sobre `seeya config policy` — decidi NÃO tocar
+nesse caminho (fora do escopo desta tarefa, e o despacho não apontou `projectPolicy` como defeito).
+`schemaVersion` ganhou checagem própria em `runConfigGetCommand`/`runConfigSetCommand`, antes de
+qualquer chamada a `isEditableConfigKey`. Cobertura: `tests/unit/adapters/storage/
+config-schema.test.ts` e `tests/unit/cli/config-command.test.ts`, provando que a mensagem nunca
+contém o texto que a de uma chave forjada contém, nos dois sentidos (`get` e `set`).
+
+**Cobertura e portão:** ver relatório da tarefa em `docs/PLANO-DE-ENTREGA.md` S4-T6.

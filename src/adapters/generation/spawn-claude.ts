@@ -64,6 +64,12 @@ export function spawnClaude(options: SpawnClaudeOptions): Promise<ClaudeProcessR
       shell: false,
       stdio: ['pipe', 'pipe', 'pipe'],
       signal: AbortSignal.timeout(timeoutMs),
+      // S4-T6: this is the daemon's own poll loop calling in (D-005, no console) — without this,
+      // every `claude` capture pops a real, visible console window on Windows for as long as the
+      // model takes to answer (~1 min measured), stealing keyboard focus from whoever is typing.
+      // Doesn't change what `spawn` reports: stdout/stderr/exit code are read the same way either
+      // side of this flag (Windows-only; a no-op everywhere else).
+      windowsHide: true,
     });
     let stdout = '';
     let stderr = '';

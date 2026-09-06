@@ -76,6 +76,15 @@ describe('runConfigGetCommand', () => {
     const report = await runConfigGetCommand({ storage }, 'projectPolicy');
     expect(report).toContain('c:\\code\\a: canTerminate=true, deepCapture=false');
   });
+
+  // S4-T6: before this, "schemaVersion" fell into the exact same branch as a made-up key
+  // ("bogusKey" above) and got called "unknown" — false, it's real and checked on every read.
+  it('"schemaVersion" reports the version this build reads/writes, never "unknown config key"', async () => {
+    const storage = new InMemoryScheduleStorage(config());
+    const report = await runConfigGetCommand({ storage }, 'schemaVersion');
+    expect(report).toBe('schemaVersion: 1');
+    expect(report).not.toContain('unknown');
+  });
 });
 
 describe('runConfigSetCommand', () => {
@@ -115,6 +124,17 @@ describe('runConfigSetCommand', () => {
     const storage = new InMemoryScheduleStorage(config());
     const message = await runConfigSetCommand({ storage }, 'projectPolicy', '{}');
     expect(message).toContain('seeya config policy');
+    expect(storage.savedConfigs).toHaveLength(0);
+  });
+
+  // S4-T6: distinguishes "doesn't exist" (the 'notARealKey' case above, which DOES say "unknown")
+  // from "exists, isn't editable" — schemaVersion is the latter, and must never say "unknown".
+  it('refuses "schemaVersion" WITHOUT writing anything, and never calls it unknown (D-025)', async () => {
+    const storage = new InMemoryScheduleStorage(config());
+    const message = await runConfigSetCommand({ storage }, 'schemaVersion', '2');
+
+    expect(message).toContain('schemaVersion');
+    expect(message).not.toContain('unknown');
     expect(storage.savedConfigs).toHaveLength(0);
   });
 

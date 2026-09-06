@@ -25,12 +25,23 @@ function pluralize(count: number, singular: string, plural: string): string {
  * docs/ESPECIFICACAO.md § "Comportamento do daemon": "dispara notificação prévia com as ações
  * disponíveis" — S4-T1's contract cut action buttons (Spike B), so this names the equivalent
  * command in `body` instead, the same substitute every other notice in this project already uses.
+ *
+ * **`minutesRemaining` is the actual gap to `effectiveEndOfDay`, not the configured lead time that
+ * fired (S4-T6, D-025).** This function used to take the CONFIGURED lead time itself
+ * (`leadTimeMinutes`, e.g. `30`) and print it back verbatim — that is the name of the rule that
+ * triggered, not a fact about how much time is left, and the two only agree when the poll lands
+ * inside the same 30s window the threshold was crossed in. `scheduler/poll.ts` computes this with
+ * `core/schedule.ts#minutesRemaining(decision.effectiveEndOfDay, now)` — `now` from the injected
+ * `Clock` (D-019), never read in here. Whether the warning fires at all is unchanged: that's still
+ * `core/schedule.ts#decideSchedule`'s call, and `firedLeadTimesInMinutes` still records the
+ * CONFIGURED lead time, exactly as before — only what this one sentence says about the wait changed.
  */
-export function buildLeadTimeNotice(leadTimeMinutes: number, day: string): Notice {
+export function buildLeadTimeNotice(minutesRemaining: number, day: string): Notice {
+  const unit = minutesRemaining === 1 ? 'minute' : 'minutes';
   return {
-    title: `seeya: closing in ${leadTimeMinutes} min`,
+    title: `seeya: closing in ${minutesRemaining} min`,
     body:
-      `Today's (${day}) end-of-day capture runs in about ${leadTimeMinutes} minutes. ` +
+      `Today's (${day}) end-of-day capture runs in about ${minutesRemaining} ${unit}. ` +
       'Run "seeya snooze +15m" (or +30m/+1h) to push it back, or "seeya skip-today" to skip it.',
   };
 }

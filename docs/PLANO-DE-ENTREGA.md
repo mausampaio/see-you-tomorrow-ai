@@ -2597,7 +2597,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
 ---
 
-- [ ] **S4-T6 — O daemon abre janelas de terminal na cara do usuário.** Saída do **primeiro
+- [~] **S4-T6 — O daemon abre janelas de terminal na cara do usuário.** Saída do **primeiro
       ensaio real** (2026-09-06): daemon no ar, encerramento agendado para 14:30, sessões vivas de
       verdade. Disparou na hora, capturou as duas sessões e escreveu o `summary.md` — e revelou
       três defeitos que nenhum teste tinha como pegar.
@@ -2639,6 +2639,95 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
       *Aceite:* a resposta distingue **chave inexistente** de **chave não editável**, e a segunda
       diz onde ela é usada. Vale para `get` e para `set`.
+
+      **Implementado em 2026-09-06.** As três partes, separadas.
+
+      **Parte 1 — `windowsHide: true` nos quatro `spawn` que faltavam.**
+      `adapters/generation/spawn-claude.ts#spawnClaude`, `adapters/git/run-git.ts#runGit`,
+      `adapters/process/spawn-stdout.ts#runForStdout` e
+      `adapters/notification/backend.ts#spawnCommand` — exatamente os quatro que o texto desta
+      entrada já apontava ("captura, evidência de git e notificação"). Não mexi nos outros três
+      `spawn` sem a opção: `daemon-launch.ts#spawnDetachedDaemon` já usa `detached`+`stdio:'ignore'`
+      (o próprio mecanismo do D-005 — não tem janela para esconder, o processo já nasce sem
+      console); `termination-posix.ts` é POSIX-only por construção (S1-T12), `windowsHide` seria
+      no-op sempre; `resumption/spawn-interactive.ts#runInteractive` usa `stdio: 'inherit'` de
+      propósito (Spike H) — é o comando manual `seeya start-day`, com o console do usuário já
+      presente, e esconder a janela ali esconderia a própria sessão interativa que o comando existe
+      para abrir. Detalhe completo dos nove `spawn` e por que cada um ficou de um lado, em Q-059.
+
+      **Não escrevi teste que aparenta provar esta parte — e essa ausência é a entrega, não uma
+      lacuna (cuidado (a) do despacho).** O defeito só existe quando o processo pai não tem console
+      (D-005); `vitest` sempre roda com console próprio, herdado pelo processo filho, então a MESMA
+      suíte que teoricamente provaria "sem janela" não tem como reproduzir "com janela" para
+      começo de conversa. Um `vi.mock('node:child_process')` provaria só que a chave está no objeto
+      de opções, não que a janela some — e o projeto não usa `vi.mock` em lugar nenhum da suíte
+      hoje (AGENTS.md: duplo é classe/objeto nomeado implementando a porta, não stub de módulo).
+      Os testes de integração existentes contra processo real continuam verdes com a opção
+      presente — provam que `stdout`/`stderr`/código de saída/erro não mudaram (cuidado (b)), não
+      que a janela sumiu. Detalhe em `docs/TESTES.md`, entrada S4-T6.
+
+      **MEDIDO PELO AGENTE: nenhuma regressão de contrato nos quatro `spawn`** — os testes de
+      integração que já exercitavam processo real
+      (`tests/integration/notification/spawn-command.test.ts`, `tests/integration/git/`,
+      `tests/integration/generation/lean-generator.test.ts`,
+      `tests/unit/adapters/process/proc-start.test.ts`) continuam verdes.
+      **NÃO MEDIDO PELO AGENTE, e é o aceite real desta parte: nenhuma janela aparecendo com o
+      daemon de verdade no Windows, durante um ciclo de laço e durante um encerramento completo.**
+      Isto exige o mantenedor rodando o binário fora do terminal do agente — peço que ele confirme
+      à mão antes de considerar esta parte fechada.
+
+      **Parte 2 — o aviso agora reporta o tempo real, via `Clock`.**
+      `core/schedule.ts#minutesRemaining(target, now)` — pura, dois `Date`, sem I/O — substitui o
+      antigo "printa de volta o nome da regra configurada". `scheduler/poll.ts` calcula
+      `minutesRemaining(decision.effectiveEndOfDay, now)` (o mesmo `now` já lido do `Clock`
+      injetado, D-019) e passa o resultado para `buildLeadTimeNotice`, cuja assinatura mudou de
+      `(leadTimeMinutes, day)` para `(minutesRemaining, day)`. **O que NÃO mudou (cuidado (e)):**
+      `decideSchedule` continua decidindo QUANDO o aviso dispara e QUAL regra configurada disparou
+      exatamente como antes; `firedLeadTimesInMinutes` continua gravando o valor configurado
+      (`30`/`15`), nunca o tempo real. Só a frase mudou.
+
+      Achado ao construir, registrado em Q-059 item 4 em vez de decidido: num atraso grande o
+      bastante, a regra "de 30 min" pode disparar com menos tempo real do que a regra "de 15 min"
+      teria dado se checada a tempo — a pessoa recebe o número certo agora, mas ainda associado ao
+      nome da regra que dispara primeiro em ordem decrescente, não à mais próxima da realidade.
+      Mudar essa ordem seria mudar o gatilho, o que o despacho pediu para eu não decidir sozinho.
+
+      **Testes:** `tests/unit/core/schedule.test.ts` (`minutesRemaining`, incluindo o caso exato
+      medido no ensaio real — 30 min configurados às 14:08, fim às 14:30, 22 min reais);
+      `tests/unit/scheduler/notices.test.ts` (`buildLeadTimeNotice` renderiza o número recebido,
+      singular/plural); `tests/unit/scheduler/poll.test.ts` — o teste que prova a composição e que
+      **falha sem o conserto em `poll.ts`**: um poll às 19:10 com fim às 19:30 e
+      `leadTimesInMinutes: [30, 15]` dispara a regra de 30 (é a próxima não disparada, em ordem
+      decrescente) mas a notificação diz "20 min", nunca "30 min" — e `firedLeadTimesInMinutes`
+      continua `[30]`.
+
+      **Parte 3 — `schemaVersion` deixa de ser chamada de desconhecida.**
+      `adapters/storage/config-schema.ts` ganhou `schemaVersionNotEditableMessage()`, função
+      própria (não generalizei `unknownConfigKeyMessage` — `projectPolicy` continua no caminho
+      antigo, fora do escopo desta tarefa). `cli/config-command.ts#runConfigGetCommand` responde
+      `schemaVersion: 1` (o `CONFIG_SCHEMA_VERSION` do código, já que `schemaVersion` não é campo
+      de `Config` — é removido antes de `configFileSchema` rodar, `resolveSchemaVersion`);
+      `runConfigSetCommand` responde a mensagem nova, que nomeia a chave, diz que ela existe e é
+      validada em toda leitura de `config.json` e de todo handoff, e nunca contém o texto que
+      `unknownConfigKeyMessage` usa. Não a tornei editável (cuidado (f)). Testes:
+      `tests/unit/adapters/storage/config-schema.test.ts`,
+      `tests/unit/cli/config-command.test.ts` — nos dois sentidos (`get`/`set`), provando ausência
+      do texto de "chave desconhecida".
+
+      **Cobertura, medida separadamente nas duas máquinas** (`npm run cobertura` no Windows,
+      `npm run verificar:linux` no container): 132 arquivos de teste, 1402 passaram + 3 pulados, as
+      duas vezes. `core/` 100% nas duas; `scheduler/` 98,42% statements/100% branches/93,33%
+      funções/100% linhas nas duas (idêntico — `loop.ts#sleepUntilNextPollOrStop`, função só,
+      contada uma vez, é o único gap de função, já registrado na S4-T5); `adapters/storage/`
+      94,88/88,06/98,5/95,21 no Windows e 93,7/86,93/95,52/94,02 no Linux; `cli/`
+      95,28/94,01/95,45/95,71 no Windows e 95,47/94,35/95,45/95,9 no Linux — as duas acima do piso
+      de 80%. `npm run verificar` e `npm run verificar:linux` verdes, códigos de saída lidos
+      separadamente do comando (o container precisou de `; echo "EXITCODE=$?"` numa chamada à
+      parte, mesma disciplina da S4-T5 — o processo rodou em segundo plano por passar de 120s, e o
+      código de saída real foi conferido no arquivo de saída dedicado da própria ferramenta, não
+      inferido do encadeamento).
+
+      Cinco escolhas registradas em **Q-059**, nenhuma bloqueando o portão.
 
 ## Sprint 5 — Entregar
 

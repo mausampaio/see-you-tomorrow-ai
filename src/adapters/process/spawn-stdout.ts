@@ -26,7 +26,16 @@ export type CommandRunner = (
 
 export const runForStdout: CommandRunner = (command, args, env) => {
   return new Promise((resolve) => {
-    const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'ignore'], shell: false, env });
+    const child = spawn(command, args, {
+      stdio: ['ignore', 'pipe', 'ignore'],
+      shell: false,
+      env,
+      // S4-T6: `proc-start.ts` calls this (via `powershell.exe`) on every `isAlive` check with a
+      // `procStart`, once per live session, every 30s poll — the daemon has no console of its own
+      // (D-005), so each call popped a real, visible window on Windows. Windows-only effect;
+      // doesn't change the resolved stdout/`undefined` contract either way.
+      windowsHide: true,
+    });
     let stdout = '';
     child.stdout.on('data', (chunk: Buffer) => {
       stdout += chunk.toString('utf8');
