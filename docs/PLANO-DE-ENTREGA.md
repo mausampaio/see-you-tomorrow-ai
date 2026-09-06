@@ -2029,8 +2029,6 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       para **0** dentro dos 6 segundos seguintes, medido por polling a cada 750ms — nunca mais
       cresce. Detalhes completos, incluindo os números passo a passo, em Q-052.
 
-- [ ] **S4-T3b — O daemon precisa deixar rastro quando falha, e o lock precisa desempatar PID.**
-
 - [~] **S4-T3b — O daemon precisa deixar rastro quando falha, e o lock precisa desempatar PID.**
       Saída da **Q-049**, respondida em 2026-09-05. **Antes da S4-T5**, que vai querer ler as duas
       coisas.
@@ -2598,6 +2596,49 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       Sete escolhas sem resposta literal no despacho da tarefa registradas em **Q-057**.
 
 ---
+
+- [ ] **S4-T6 — O daemon abre janelas de terminal na cara do usuário.** Saída do **primeiro
+      ensaio real** (2026-09-06): daemon no ar, encerramento agendado para 14:30, sessões vivas de
+      verdade. Disparou na hora, capturou as duas sessões e escreveu o `summary.md` — e revelou
+      três defeitos que nenhum teste tinha como pegar.
+
+      **Parte 1 — as janelas (o defeito grave).** O daemon roda **sem console** (D-005), e no
+      Windows um programa de console lançado por quem não tem console **ganha uma janela nova**.
+      Medido pelo mantenedor em uso real: a cada ciclo de 30s, uma janela **por sessão viva**
+      (`adapters/process/proc-start.ts` chama `powershell.exe` via
+      `adapters/process/spawn-stdout.ts` para cada `isAlive` com `procStart`), e **uma rajada no
+      instante do encerramento** — um `claude` por sessão (`adapters/generation/spawn-claude.ts`) e
+      um `git` por repositório (`adapters/git/run-git.ts`). A janela do modelo **fica visível pelo
+      tempo inteiro da resposta** (~1 min no ensaio). Cada uma **rouba o foco do teclado e corta o
+      que a pessoa está digitando**.
+
+      Nunca apareceu em teste porque, rodando pelo terminal, o filho herda o console existente e
+      não abre janela nenhuma. **Só o daemon sofre** — e o daemon é o modo normal de uso.
+
+      `adapters/process/console-signal.ts` **já passa `windowsHide: true`** nos seus dois `spawn`;
+      os outros quatro não. Nenhum dos quatro usa `detached`, então a opção se aplica limpa.
+
+      *Aceite:* nenhuma janela aparece durante um ciclo de laço **nem durante um encerramento
+      completo**, verificado com o daemon de verdade no Windows — não só com teste. O que os
+      `spawn` devolvem (stdout, código de saída) não pode mudar.
+
+      **Parte 2 — o aviso mente o tempo que falta.** `scheduler/notices.ts#buildLeadTimeNotice`
+      escreve `closing in ${leadTimeMinutes} min`, que é o **nome da regra**, não o tempo restante.
+      Medido: às 14:08, com encerramento às 14:30, o toast disse "closing in 30 min" — faltavam 22.
+      Em operação normal os dois batem (o laço dispara dentro de 30s da marca); descola quando o
+      daemon **sobe atrasado**, que é justamente quando a pessoa mais precisa do número certo. É a
+      D-025 aplicada ao texto: dizer o que se sabe, não o rótulo mais próximo.
+
+      *Aceite:* o texto informa o tempo real que falta, derivado de `effectiveEndOfDay` e do
+      `Clock` (D-019), e a marca que disparou continua sendo registrada como disparada.
+
+      **Parte 3 — `schemaVersion` não é chave desconhecida.** `seeya config get schemaVersion`
+      responde `unknown config key "schemaVersion"`. Ela existe, é obrigatória, e é conferida em
+      toda leitura — só não é editável. Chamar de desconhecida o que o próprio programa exige é
+      afirmar o contrário do que se sabe.
+
+      *Aceite:* a resposta distingue **chave inexistente** de **chave não editável**, e a segunda
+      diz onde ela é usada. Vale para `get` e para `set`.
 
 ## Sprint 5 — Entregar
 
