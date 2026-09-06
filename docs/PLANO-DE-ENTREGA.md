@@ -2470,8 +2470,132 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       `src/**` fora de `adapters/clock/`, sem exceção por intenção), e por que a solução escolhida
       foi `setImmediate` sem `Clock` em vez de expandir a assinatura de `StorageAdapter`.
 
-- [ ] **S4-T5 — `seeya daemon --stop/--status`.**
+- [~] **S4-T5 — `seeya daemon --stop/--status`.** Fecha o Sprint 4.
       *Aceite do sprint:* e2e 6, 7 e 8 passam. Um dia inteiro de uso real sem intervenção.
+
+      **Implementado em 2026-09-06.** `src/cli/daemon-command.ts` ganhou `runDaemonStatus` e
+      `runDaemonStop`, ambos sobre um único `checkLiveLock` que lê `daemon.lock` e desempata
+      liveness com o `procStart` que a S4-T3b já construiu (`ProcessControl.isAlive(pid,
+      procStart)`) — os dois comandos nunca podem discordar sobre qual dos quatro estados (D-024)
+      estão vendo, porque leem exatamente a mesma decisão.
+
+      **Os quatro estados, nunca achatados.** `LiveLockCheck` é uma união discriminada:
+      `noLock` (nunca subiu, ou já saiu limpo), `dead` (lock existe, PID confirmado morto pelo
+      desempate — "não rodando", mas com texto diferente de `noLock` para um crash não parecer algo
+      "atualmente errado"), `alive` (lock existe, PID confirmado vivo), e `unknown` (a própria
+      checagem de liveness **lançou** — `adapters/process/liveness.ts#interpretExistenceCheckError`
+      se recusa a adivinhar um código de erro desconhecido, e nem `--status` nem `--stop` fingem
+      saber "rodando" ou "não rodando" nesse caso, D-025). `--status` mostra, junto: `DayState.
+      daemonHealth` (o ponto inteiro da S4-T3b — reaproveita `buildDaemonUnhealthyNotice` para o
+      texto/estimativa de minutos, nunca recalculando a aritmética uma segunda vez, e destensa a
+      frase — presente quando o daemon está vivo, passado quando não está, "status atual
+      desconhecido" no caso `unknown` — para nunca afirmar "ainda falhando" sobre um processo que já
+      não existe), e o estado de agenda de hoje via `decideSchedule` (nunca uma releitura própria de
+      `skipped`/`endOfDayFired`, mesma disciplina que `cli/snooze-command.ts#renderSnoozeConfirmation`
+      já usa — o texto não pode discordar do que o próximo poll real faria). `--status` é read-only:
+      nunca escreve `daemon.lock` nem `estado.json`, nem quando encontra lock obsoleto.
+
+      **A premissa do brief ("SIGTERM entre processos no Windows não roda o handler JS") já estava
+      medida, não precisou de medição nova.** `tests/integration/process/daemon-launch.test.ts`
+      (S4-T3) já documentava isso no próprio comentário, ao explicar por que
+      `termination-windows.ts` existe. Conferido de novo aqui só para ter certeza de que a leitura
+      não mudou.
+
+      **Por que o Windows é necessariamente abrupto, e o texto do `--stop` diz isso em vez de
+      fingir simetria.** Duas medições, nenhuma nova: (1) o Spike G mediu que `AttachConsole` falha
+      com erro 6 contra um processo sem console — e o daemon sobe exatamente assim, de propósito
+      (D-005, `DETACHED_PROCESS`), então `CTRL_BREAK_EVENT` nunca alcança o worker. (2) a S4-T3b
+      mediu que `process.kill(pid, 'SIGTERM')` entre processos no Windows chama `TerminateProcess`
+      na hora, sem rodar handler nenhum. As duas medições juntas fecham a pergunta: não existe
+      **nenhum** caminho gracioso para o daemon no Windows, nem o que já existia
+      (`terminateGracefully`) nem um `SIGTERM` cru. `runDaemonStop` no Windows pula direto para o
+      abrupto e diz por quê na própria mensagem, em vez de tentar `terminateGracefully` primeiro só
+      para observar o "no-console" de sempre.
+
+      **Novo primitivo, deliberadamente fora de `ProcessControl`:**
+      `adapters/process/termination.ts#terminateAbruptly(pid)` — `SIGKILL`/`TerminateProcess`
+      incondicional, tolerando `ESRCH` (já morto), relançando qualquer outro erro. **Nunca** usado
+      em sessão descoberta (D-002 seguiria proibindo kill forçado ali); existe só para o `seeya`
+      encerrar o próprio daemon. Não entrou na porta `ProcessControl` porque nenhum chamador em
+      `scheduler/`/`application/` precisa dele — só `cli/daemon-command.ts`, que já importa função
+      de adapter diretamente noutros pontos (`spawnDetachedDaemon`, `captureObservedProcStart`),
+      então isto segue o mesmo precedente em vez de inchar um contrato cruzado por uma única chamada.
+
+      **Quem limpa o lock — respondendo à pergunta do brief.** `runDaemonStop` **sempre** confirma a
+      morte primeiro e **sempre** limpa o lock depois, em qualquer caminho (grácil, abrupto, ou lock
+      já obsoleto) — nunca confia só no próprio `clearDaemonLock()` do daemon ao sair
+      (`scheduler/loop.ts`), porque essa confiança já provou ser furada no Windows (não há saída
+      graciosa) e não é garantida nem no POSIX (o processo pode cair entre o sinal e a própria
+      escrita de limpeza). O `clearDaemonLock()` do daemon continua existindo como segunda linha de
+      defesa para um `--stop` que ele **não** disparou (um `kill -TERM` de fora, por exemplo) — as
+      duas coisas convivem, mas `--stop` nunca depende da segunda. A limpeza só acontece com
+      **evidência positiva** de morte (D-025): se o `SIGKILL` não pôde nem ser enviado (erro de
+      permissão) ou o PID ainda aparece vivo depois de reconferido, o lock fica como está e a
+      mensagem manda checar à mão — soltar um lock cujo PID pode continuar vivo arrisca dois daemons
+      simultâneos, o defeito que o resto do D-005 existe para evitar.
+
+      **Achado ao construir, corrigido no mesmo commit: `scheduler/loop.ts` só notava um `--stop`
+      depois de até 30s dormindo.** `runDaemon`'s laço só checava `shouldStop` antes/depois de cada
+      poll e de UM sleep de `POLL_INTERVAL_MS` inteiro — um `SIGTERM` real chegando logo no início
+      da soneca ficava sem efeito prático por quase 30s. `sleepUntilNextPollOrStop` (novo,
+      `scheduler/loop.ts`) fatia a mesma espera em pedaços de 1s, checando `shouldStop` entre eles —
+      o tempo total dormido não muda (ainda `POLL_INTERVAL_MS` quando ninguém pede parada), só a
+      **reação** a um pedido de parada, que cai de "até 30s" para "cerca de 1s". Medido pelo próprio
+      e2e novo (item 8, abaixo): a jornada inteira — dois daemons reais, `--status`, `--stop`,
+      terceiro daemon — roda em ~2-3s, não nos 30s+ que o `GRACEFUL_STOP_DEADLINE_MS` sozinho
+      pediria sem essa mudança. Sem essa correção, `--stop` continuaria correto, só lento; com ela,
+      fica rápido no caso comum e ainda correto no raro.
+
+      **Números escolhidos sem base na spec, registrados em Q-057:**
+      `GRACEFUL_STOP_DEADLINE_MS` (15s) e `ABRUPT_STOP_CONFIRM_MS` (2s).
+
+      **Testes.** Unidade (`tests/unit/cli/daemon-command.test.ts`): os quatro estados de
+      `--status` (incluindo a checagem que lança), a diferença de tempo verbal saudável/vivo vs.
+      obsoleto/desconhecido na saúde, a nota de agenda (desabilitado, pulado, com adiamento
+      acumulado), e os ramos de `--stop` que não tocam processo real (sem lock, lock obsoleto —
+      limpo —, checagem que lança — lock intocado). Integração
+      (`tests/integration/process/termination.test.ts`): `terminateAbruptly` contra um processo
+      real — mata sem rodar o handler grácil (a prova de que é abrupto), e tolera PID já morto;
+      medido que a confirmação de morte **precisa** de uma espera curta (o Linux do CI mostrou
+      `isAlive` ainda `true` no instante seguinte ao `SIGKILL`, sob carga — corrigido com o mesmo
+      padrão de espera-e-reconfere que `waitForExit`/`waitForExitWindows` já usam). Integração
+      (`tests/integration/cli/daemon-command.test.ts`): `runDaemonStop`/`runDaemonStatus` contra
+      processo real e `ProcessControl` real — parada graciosa POSIX de verdade (marcador escrito,
+      handler rodou), parada abrupta com plataforma forçada para `'win32'` **em qualquer host**
+      (prova a seleção do ramo — nunca tenta gracioso no Windows — de forma portátil; a chamada de
+      SO por baixo, `SIGKILL` vs. `TerminateProcess`, difere por host, mas a alegação sob teste —
+      "abrupto, handler nunca roda, morte confirmada, lock limpo" — vale para as duas, e é isso que
+      o teste prova), lock obsoleto limpo. E2e novo (`tests/e2e/daemon.test.ts`, item 8): segunda
+      instância recusa; `--status` vê o mesmo lock real, vivo e depois morto; `--stop` sem forçar
+      plataforma (o único teste do repositório que exercita o despacho real, não forçado); terceira
+      instância sobe limpa — a prova direta do aceite "o lock não fica para trás".
+
+      **Itens 6 e 7 do e2e continuam sem teste, e não é descuido — o motivo já registrado pela
+      S4-T3/S4-T4 não mudou.** Item 6 precisa de um ponto de injeção de relógio no binário
+      compilado, que não existe (`cli/index.ts` sempre monta `systemClock` real) — construir isso
+      agora seria escopo além desta tarefa, e sem ele o teste exigiria minutos de relógio real por
+      execução. Item 7 foi deixado agrupado com 6 e 8 de propósito pela S4-T3/S4-T4, para nascerem
+      juntos como uma jornada "dia inteiro" coerente quando o 6 deixasse de estar bloqueado — isso
+      não mudou aqui. Entregue o que ficou novo e possível: o item 8, agora provado ponta a ponta
+      **com** `--stop`/`--status`, não uma peça isolada.
+
+      **Cobertura:** medida via `npm run cobertura` (Windows) e dentro do container Linux
+      (`npm run verificar:linux`) — `core/` 100% nas duas máquinas; `scheduler/` 98,4%
+      statements/100% branches/93,33% funções/100% linhas (o único gap de função é `loop.ts`'s
+      `sleepUntilNextPollOrStop` sendo uma função só, contada uma vez, sem nada a mais para cobrir);
+      `adapters/process/` 91,61%/81,33%/93,02%/92,56% no Windows e 89,71%/81,35%/92,85%/90,38% no
+      Linux — as duas acima do piso de 80% do `AGENTS.md` (precisou de um teste novo,
+      `tests/unit/adapters/process/termination.test.ts`, mockando `process.kill` para exercitar o
+      ramo de erro não-`ESRCH` de `terminateAbruptly`, que nenhum teste com processo real cobre por
+      construção); `cli/` 95,25%/93,93%/95,45%/95,68% no Windows e 95,43%/94,27%/95,45%/95,87% no
+      Linux. `npm run verificar` e `npm run verificar:linux` verdes, códigos de saída lidos
+      separadamente do comando, nunca encadeados com commit — o segundo confirmado explicitamente
+      por `; echo "EXITCODE=$?"` numa chamada própria, porque o texto final de resumo do `vitest`
+      não sobreviveu à captura de saída do Docker neste ambiente (achado registrado, não um
+      vermelho: a contagem de testes e a tabela de cobertura por diretório chegaram inteiras, só o
+      bloco de resumo final some — o código de saída é a fonte de verdade de qualquer forma).
+
+      Sete escolhas sem resposta literal no despacho da tarefa registradas em **Q-057**.
 
 ---
 

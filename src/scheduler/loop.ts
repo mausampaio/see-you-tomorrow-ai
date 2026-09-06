@@ -20,13 +20,49 @@ import type { DaemonDeps } from './types.js';
  * to sleep. */
 export const POLL_INTERVAL_MS = 30_000;
 
+/**
+ * How often the wait BETWEEN polls rechecks `shouldStop`, in `sleepUntilNextPollOrStop` below —
+ * much finer than `POLL_INTERVAL_MS` itself, which still governs how often a POLL happens
+ * (unchanged). Added for S4-T5's `seeya daemon --stop`: a real POSIX `SIGTERM` sets `stopRequested`
+ * (`cli/daemon-command.ts#runDaemonWorker`) the instant it's delivered, but before this constant
+ * existed the loop only ever checked it right after waking from a single, un-chunked 30s sleep —
+ * meaning a `--stop` request landing early in that window could sit unnoticed for most of it. This
+ * turns "the daemon takes 30s to acknowledge a stop, in the worst case" into "about one second,
+ * regardless of when in the window the signal arrives" — a pure responsiveness knob, not a
+ * correctness one: an all-healthy daemon that's never asked to stop still sleeps for exactly the
+ * same total `POLL_INTERVAL_MS` between polls either way.
+ */
+const STOP_CHECK_INTERVAL_MS = 1_000;
+
+/**
+ * Waits up to `POLL_INTERVAL_MS`, in `STOP_CHECK_INTERVAL_MS`-sized chunks, returning EARLY the
+ * moment `shouldStop` reports `true` instead of always waiting out the full interval. `Clock.sleep`
+ * is still the only timer this file ever calls (D-019) — this just calls it more than once per
+ * poll instead of once, so the wait itself has somewhere to check in.
+ */
+async function sleepUntilNextPollOrStop(
+  clock: DaemonDeps['clock'],
+  shouldStop: () => boolean,
+): Promise<void> {
+  let waited = 0;
+  while (waited < POLL_INTERVAL_MS) {
+    if (shouldStop()) {
+      return;
+    }
+    const chunk = Math.min(STOP_CHECK_INTERVAL_MS, POLL_INTERVAL_MS - waited);
+    await clock.sleep(chunk);
+    waited += chunk;
+  }
+}
+
 export interface RunDaemonOptions {
   /** Test-only: stop after this many polls instead of running forever. `undefined` (the real
    * `cli/daemon-command.ts` worker's own default) means "until told to stop". */
   readonly maxIterations?: number;
-  /** Checked before every poll and again before every sleep, so a request to stop lands between
-   * cycles rather than in the middle of one. `cli/daemon-command.ts` wires this to a POSIX
-   * SIGINT/SIGTERM handler; `undefined` (default) never stops on its own. */
+  /** Checked before every poll, again right after one finishes, and every `STOP_CHECK_INTERVAL_MS`
+   * while waiting for the next one (S4-T5: `sleepUntilNextPollOrStop`) — a request to stop lands
+   * within about a second, never in the middle of a poll itself. `cli/daemon-command.ts` wires this
+   * to a POSIX SIGINT/SIGTERM handler; `undefined` (default) never stops on its own. */
   readonly shouldStop?: () => boolean;
 }
 
@@ -102,7 +138,7 @@ export async function runDaemon(
     ) {
       break;
     }
-    await deps.clock.sleep(POLL_INTERVAL_MS);
+    await sleepUntilNextPollOrStop(deps.clock, shouldStop);
   }
   // Best-effort: a real, unclean kill (crash, taskkill, a Windows worker with no console to
   // deliver a signal to at all, D-005) never reaches this line — the NEXT `seeya daemon` start is

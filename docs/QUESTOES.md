@@ -5069,6 +5069,119 @@ AGENTS.md pede para não improvisar.
 **Cobertura e portão, medidos nesta máquina:** ver relatório da tarefa em
 `docs/PLANO-DE-ENTREGA.md` S4-T4.
 
+---
+
+## Q-057 — S4-T5 (`seeya daemon --stop/--status`): sete escolhas registradas, e uma correção de responsividade no laço que a S4-T3 tinha deixado passar
+
+**Tarefa:** S4-T5. **Fecha o Sprint 4.**
+**Bloqueia:** não — `npm run verificar` e `npm run verificar:linux` estão verdes (medidos nesta
+máquina, o segundo via Docker Desktop, container Linux real, código de saída conferido
+explicitamente numa chamada própria — ver o relatório da tarefa para o porquê). Registro no mesmo
+espírito de Q-049/Q-053/Q-054/Q-056: cada escolha abaixo tem leitura alternativa razoável, e a
+tarefa pediu para registrar em vez de decidir calado.
+
+**1) `terminateAbruptly` não entrou na porta `ProcessControl` — ficou como função solta em
+`adapters/process/termination.ts`, importada direto por `cli/daemon-command.ts`.** Nenhum chamador
+em `scheduler/`/`application/` precisa dela (só existe para o `--stop` encerrar o **próprio**
+daemon, nunca uma sessão descoberta — D-002 continua banindo kill forçado ali). `cli/` já importa
+função de adapter direto sem passar por porta noutros pontos do mesmo arquivo
+(`spawnDetachedDaemon`, `captureObservedProcStart`), então segui esse precedente. **Opções:** A)
+função solta, importada direto (o que implementei). B) acrescentar à porta `ProcessControl` mesmo
+sem uso em `scheduler/`, por simetria com `terminateGracefully`. **Minha escolha:** A — B inflaria
+um contrato cruzado de camada por uma chamada que só um arquivo faz, e correria o risco de alguém
+um dia chamá-la sobre uma sessão descoberta por "já estar ali".
+
+**2) `scheduler/loop.ts` ganhou `sleepUntilNextPollOrStop`, fatiando a espera de 30s em pedaços de
+1s — mudança num arquivo que a S4-T3 já tinha entregue e aprovado.** Sem isso, um `SIGTERM` real
+enviado logo no início da soneca do daemon só seria notado até quase 30s depois — `--stop`
+continuaria **correto**, só lento. Medido pelo e2e novo: sem a fatia, a jornada completa (dois
+daemons, `--status`, `--stop`, terceiro daemon) exigiria o `GRACEFUL_STOP_DEADLINE_MS` inteiro (15s)
+no caminho comum; com ela, roda em ~2-3s. O comportamento sem pedido de parada nenhum não muda —
+ainda dorme o total de `POLL_INTERVAL_MS` entre polls, só em vários `Clock.sleep(1000)` em vez de um
+`Clock.sleep(30000)`. **Opções:** A) fatiar a espera (o que implementei), tocando um arquivo de
+outra tarefa já aprovada. B) aceitar a latência de até 30s no `--stop` gracioso e não tocar
+`loop.ts` — mais conservador quanto a escopo, mas deixaria `--stop` lento no caso comum sem
+necessidade. C) reportar a lentidão como limitação conhecida e não corrigir, deixando para uma
+tarefa futura. **Minha escolha:** A — o brief desta tarefa é exatamente sobre parar o daemon
+educadamente, e uma parada que educadamente demora 30s por desenho evitável pareceu pior que tocar
+um arquivo aprovado com uma mudança pequena, isolada e com teste próprio (`tests/unit/scheduler/
+loop.test.ts` ganhou um teste novo provando a checagem entre pedaços, além do teste existente
+atualizado para a nova contagem de chamadas de `sleep`).
+
+**3) `GRACEFUL_STOP_DEADLINE_MS` (15s) e `ABRUPT_STOP_CONFIRM_MS` (2s) são escolhas de engenharia,
+sem número na spec.** O primeiro é generoso o bastante para cobrir a folga de resposta que a fatia
+do item 2 deixou (cerca de 1s) mais uma margem para um poll em andamento terminar — não precisa mais
+cobrir os 30s inteiros do laço, exatamente por causa do item 2. O segundo é só o tempo de o SO
+terminar de derrubar um processo depois de um `SIGKILL`/`TerminateProcess`, que já é quase instantâneo
+(medido: a única vez que isto importou de verdade foi no container Linux, sob carga, onde
+`isAlive` ainda respondia `true` no instante seguinte ao envio do sinal). **Opções:** A) os números
+acima (o que implementei). B) um deadline gracioso bem menor (ex.: 3s), aceitando escalar para
+abrupto com mais frequência mesmo num daemon saudável que só estava numa fatia de sono um pouco
+mais longa. **Minha escolha:** A — B tornaria o caminho abrupto (mais barulhento, sem chance de o
+daemon salvar nada) o comum em vez do raro.
+
+**4) `--stop` sempre confirma morte e sempre limpa o lock ele mesmo, em todo caminho — nunca confia
+só no `clearDaemonLock()` que o próprio daemon já chama ao sair de forma limpa.** É a resposta
+direta à pergunta do brief ("quem limpa"). Justificativa completa no relatório da tarefa em
+`docs/PLANO-DE-ENTREGA.md`; resumo aqui: confiar só na limpeza do daemon já provou ser furado no
+Windows (não há saída graciosa possível) e não é garantido nem no POSIX (queda entre o sinal e a
+escrita). **Opções:** A) `--stop` sempre confirma e limpa (o que implementei), mantendo a limpeza do
+próprio daemon como segunda linha de defesa para paradas que `--stop` não disparou. B) `--stop`
+confia na limpeza do daemon no caminho gracioso, só limpando ele mesmo no caminho abrupto. **Minha
+escolha:** A — B deixaria uma janela real (crash entre o sinal e a escrita) sem cobertura, e o custo
+de A é só uma chamada extra e idempotente a `clearDaemonLock()`.
+
+**5) A limpeza do lock só acontece com evidência POSITIVA de morte — nunca por "o sinal foi
+enviado".** Se o `SIGKILL` não pôde nem ser enviado (erro de permissão) ou o PID ainda aparece vivo
+depois de reconferido, o lock fica como está. **Opções:** A) exigir confirmação positiva (o que
+implementei) — o risco de um lock obsoleto ficando para trás é pequeno e reversível (a pessoa apaga
+à mão, ou tenta `--stop` de novo). B) limpar sempre que um kill foi tentado, mesmo sem confirmação —
+mais otimista, mas arrisca dois daemons vivos ao mesmo tempo se a tentativa de fato falhou. **Minha
+escolha:** A — a Q-049 item 6/S4-T3b já estabeleceram a mesma prioridade (o erro silencioso, nenhum
+daemon rodando, é pior que o barulhento, dois rodando) na direção oposta; aqui o raciocínio espelha:
+soltar um lock sem confirmação arrisca justamente o erro barulhento, mas ainda assim reintroduziria
+incerteza que D-025 pede para não inventar.
+
+**6) `describeHealth` destensa a frase de saúde do daemon conforme ele está vivo, morto-confirmado
+ou "status desconhecido" — nunca reaproveita o texto de `buildDaemonUnhealthyNotice` verbatim
+quando o daemon não está mais rodando.** O texto original ("The daemon has failed every poll for
+about N minutes **and hasn't completed a cycle since**") é uma afirmação no presente, correta só
+enquanto o processo referido ainda existe; aplicá-lo sem ajuste a um daemon já morto afirmaria que
+ele "continua" travado quando na verdade só parou de existir. **Opções:** A) três variantes de
+frase por estado de vivacidade, reaproveitando só o corpo (contagem + último erro) de
+`buildDaemonUnhealthyNotice` (o que implementei). B) mostrar o texto original sempre, sem qualificar
+por vivacidade — mais simples, mas assume tempo presente sobre um fato que pode ser passado.
+**Minha escolha:** A.
+
+**7) O teste de "parada abrupta" em `tests/integration/cli/daemon-command.test.ts` força
+`platform: 'win32'` e roda em QUALQUER sistema operacional, em vez de ficar atrás de um
+`describe.skipIf(process.platform !== 'win32')` como os testes de `terminateGracefully` já fazem em
+`termination.test.ts`.** Isto prova a **seleção do ramo** (nunca tenta gracioso no Windows) de
+forma portátil — o `SIGKILL` real que o host desta máquina executa por baixo não é literalmente
+`TerminateProcess`, mas a alegação sob teste ("abrupto, handler nunca roda, morte confirmada, lock
+limpo") vale igual para os dois. **O que isto NÃO prova, e fica registrado como inferido, não
+medido:** que `TerminateProcess` de verdade, num Windows real, produz exatamente a mesma evidência
+— isso só foi medido de fato nesta máquina (que é Windows), não isolado do resto da suíte.
+**Opções:** A) teste portátil com plataforma forçada, cobrindo todo host de CI (o que implementei).
+B) `describe.skipIf(process.platform !== 'win32')`, só rodando de verdade em runner Windows — mais
+fiel à API real, mas o CI do Linux/macOS nunca exerceria a lógica de despacho nenhuma vez. **Minha
+escolha:** A — a lógica que mais importa proteger (a DECISÃO de nunca tentar gracioso no Windows)
+independe de qual chamada de SO está por baixo, e rodar em todo host dá cobertura real ali; a
+chamada de SO em si (`process.kill(pid, 'SIGKILL')`) já não é nova nem específica desta tarefa.
+
+**Achado à parte, não é escolha — a saída do `npm run verificar:linux` some antes do bloco final de
+resumo do `vitest`.** A tabela de cobertura por diretório chega inteira e a contagem de testes
+também, mas o texto final ("Coverage summary" com os quatro percentuais agregados, que aparece
+depois da tabela numa execução local no Windows) não aparece na saída capturada do container Docker
+neste ambiente de execução. Não bloqueou a entrega — o código de saída (`echo "EXITCODE=$?"`, numa
+chamada isolada) é `0`, e ele é a fonte de verdade que o `AGENTS.md`/`docs/FLUXO-DE-AGENTES.md`
+pedem para ler, não o texto. Registrado para quem revisar não estranhar a ausência do bloco se
+repetir a mesma verificação.
+
+**Resposta:** _(aguardando)_
+
+---
+
 ## Q-058 — S4-T4b (retentativa em `atomic-write.ts`): por que a retentativa mora sem `Clock`, e o número de tentativas escolhido
 
 **Tarefa:** S4-T4b (retentativa limitada em `writeFileAtomic`, disparada pela medição da S4-T4/Q-056)

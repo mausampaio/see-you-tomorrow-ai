@@ -18,6 +18,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { processControl } from '../../../src/adapters/process/index.js';
+import { terminateAbruptly } from '../../../src/adapters/process/termination.js';
 import { spawnInNewConsole } from './_windows-console.js';
 
 const CHILD_SCRIPT = fileURLToPath(
@@ -135,6 +136,49 @@ describe.skipIf(process.platform === 'win32')('terminateGracefully (POSIX: real 
     await new Promise<void>((resolve) => child.once('exit', () => resolve()));
 
     await expect(processControl.terminateGracefully(pid, 1_000)).resolves.toBe(true);
+  });
+});
+
+// Not platform-dispatched (unlike `terminateGracefully` above) — a single `SIGKILL` call, so one
+// describe block covers both OSes (S4-T5: `cli/daemon-command.ts`'s only escalation path when a
+// real SIGTERM doesn't finish in time, and the WHOLE mechanism `runDaemonStop` uses when the
+// platform is Windows, where no graceful path reaches a console-less daemon at all — D-005).
+describe('terminateAbruptly (S4-T5: SIGKILL/TerminateProcess, no chance for the target to react)', () => {
+  it('kills the process WITHOUT running its own shutdown handler — abrupt, not graceful', async () => {
+    const marker = await markerPath();
+    const child = await spawnDetachedChild(marker);
+    const pid = child.pid as number;
+
+    await terminateAbruptly(pid);
+
+    // `terminateAbruptly` only SENDS the signal — it never waits for the OS to actually finish
+    // tearing the process down (that's `cli/daemon-command.ts#waitUntilDead`'s own job, one layer
+    // up). Measured on the Linux CI container: `isAlive` can still read `true` for a brief moment
+    // right after `SIGKILL` is sent, under load — so this polls with a real courtesy wait instead
+    // of asserting once, the same shape `waitForExit`/`waitForExitWindows` already use elsewhere
+    // in this adapter for the exact same reason.
+    const deadline = Date.now() + 2_000;
+    while (await processControl.isAlive(pid)) {
+      if (Date.now() > deadline) {
+        throw new Error(`pid ${pid} was still alive 2s after terminateAbruptly`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    // The defining proof this is abrupt, not graceful: the same child whose SIGTERM/SIGBREAK
+    // handler writes `marker` before exiting (`terminateGracefully`'s own test above) never gets
+    // the chance to here — no handler runs, so the marker is never written, even after death is
+    // confirmed above.
+    expect(await markerExists(marker)).toBe(false);
+  });
+
+  it('a pid that is already dead is tolerated, not thrown (D-025: "make sure it is dead" already holds)', async () => {
+    const marker = await markerPath();
+    const child = await spawnDetachedChild(marker);
+    const pid = child.pid as number;
+    child.kill('SIGKILL');
+    await new Promise<void>((resolve) => child.once('exit', () => resolve()));
+
+    await expect(terminateAbruptly(pid)).resolves.toBeUndefined();
   });
 });
 

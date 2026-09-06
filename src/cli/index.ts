@@ -28,7 +28,12 @@ import { runSessionsCommand } from './sessions-command.js';
 import { runStatusCommand } from './status-command.js';
 import { runEndDayCommand } from './end-day-command.js';
 import { runStartDayCommand } from './start-day-command.js';
-import { runDaemonLauncher, runDaemonWorker } from './daemon-command.js';
+import {
+  runDaemonLauncher,
+  runDaemonWorker,
+  runDaemonStatus,
+  runDaemonStop,
+} from './daemon-command.js';
 import { runSnoozeCommand, runSkipTodayCommand } from './snooze-command.js';
 import {
   runConfigGetCommand,
@@ -136,7 +141,30 @@ program
       'logging out does not stop it. A second instance refuses to start while one is already ' +
       'running.',
   )
-  .action(async () => {
+  .option(
+    '--stop',
+    'Stop the currently running daemon, if any (D-005). Not an error when none is running.',
+  )
+  .option(
+    '--status',
+    "Show whether a daemon is running, its health (S4-T3b), and today's schedule. Read-only.",
+  )
+  .action(async (options: { stop?: boolean; status?: boolean }) => {
+    if (options.stop === true && options.status === true) {
+      console.error('seeya: --stop and --status cannot be used together.');
+      process.exitCode = 1;
+      return;
+    }
+    if (options.stop === true) {
+      const { storage, processControl, clock } = await buildDaemonContext();
+      console.log(await runDaemonStop({ storage, processControl, clock }));
+      return;
+    }
+    if (options.status === true) {
+      const { storage, processControl, clock } = await buildDaemonContext();
+      console.log(await runDaemonStatus({ storage, processControl, clock }));
+      return;
+    }
     if (process.env[DAEMON_CHILD_ENV_VAR] === '1') {
       const deps = await buildDaemonContext();
       // S4-T3b: the lock's own recycled-PID tie-break needs the WORKER's own procStart at the

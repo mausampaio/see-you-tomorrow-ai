@@ -131,6 +131,20 @@ O que precisa estar coberto com rigor, porque é onde os bugs vão doer:
   poll que lança na primeira chamada e resolve normalmente na segunda — a segunda chamada
   acontece (docs/PLANO-DE-ENTREGA.md S4-T3: "o perigo que só existe em laço"). `shouldStop`
   interrompe o laço entre ciclos, nunca no meio de um, e limpa o lock ao parar de forma limpa.
+- **A espera entre polls reage a `shouldStop` em ~1s, não só nos limites de 30s (S4-T5)**:
+  `sleepUntilNextPollOrStop` testado com um `Clock.sleep` fake que vira `shouldStop` verdadeiro no
+  meio da espera — o teste prova que o laço larga a espera assim que o sinalizador muda, sem
+  esperar os 30 pedaços inteiros (`tests/unit/scheduler/loop.test.ts`).
+- **`seeya daemon --status`/`--stop` distinguem os quatro estados do lock, nunca achatando em
+  "existe arquivo" (S4-T5, D-024)**: sem lock, lock com PID morto (limpo só por `--stop`, nunca por
+  `--status` — read-only), PID vivo saudável/com falha em série (texto no presente enquanto vivo,
+  no passado depois de morto — nunca "ainda falhando" sobre um processo que já não existe), e a
+  checagem de liveness que **lança** (nem "rodando" nem "não rodando" é afirmado — D-025). O
+  `--stop` grácil e o abrupto (Windows, ou POSIX depois do prazo gracioso vencer) contra processo
+  real ficam em `tests/integration/cli/daemon-command.test.ts`; `terminateAbruptly` isolado (mata
+  sem rodar o handler grácil, tolera PID já morto) em `tests/integration/process/termination.test.ts`;
+  o ramo de erro não-`ESRCH` (sem processo real para provocar de propósito) em
+  `tests/unit/adapters/process/termination.test.ts`, mockando `process.kill`.
 
 Cobertura mínima: **`core/` 95%**, demais diretórios de produção **80%**. Configurado por
 diretório no vitest, e o CI falha abaixo disso.
@@ -360,6 +374,21 @@ concorrentemente... até esta tarefa"). 300 iterações de leitura/escrita conco
 `StorageAdapter` real: ~18-20% das escritas colidem com `EPERM` no Windows (o risco que
 `atomic-write.ts` já documentava), e nenhuma leitura, em seis execuções, viu documento corrompido.
 Sem retry/lock implementado — ver docs/QUESTOES.md Q-056 para as opções registradas ao mantenedor.
+
+**S4-T5 (2026-09-06): o item 8 chegou — segunda instância, `--status` e `--stop` juntos, contra o
+binário real (`tests/e2e/daemon.test.ts`).** Sobe um primeiro daemon de verdade, confirma que um
+segundo recusa por causa do lock, lê `--status` com o daemon vivo (saudável), pede `--stop` **sem
+forçar plataforma** — o único teste do repositório que exercita o despacho real gracioso/abrupto,
+não uma versão forçada por parâmetro —, lê `--status` de novo (não rodando) e sobe um terceiro
+daemon para provar que o lock não ficou para trás. Espera por arquivo (`daemon.lock` aparecer,
+`processExists` sumir), nunca por tempo fixo. **Itens 6 e 7 continuam sem teste, e o motivo não
+mudou desde a S4-T3/S4-T4 acima:** o item 6 ainda precisa de um ponto de injeção de relógio que não
+existe no binário compilado, e o item 7 continua deliberadamente agrupado com o 6 para nascerem
+juntos como uma jornada "dia inteiro" — S4-T5 não resolveu essa dependência, só entregou o que
+ficou novo e possível (o 8, agora com `--stop`/`--status` de verdade em vez de isolado). Cobertura
+de integração nova nesta mesma tarefa (`tests/integration/process/termination.test.ts`'s
+`terminateAbruptly`, `tests/integration/cli/daemon-command.test.ts`'s parada real graciosa/abrupta)
+prova cada mecanismo isolado contra processo real; o e2e é só a jornada ponta a ponta.
 
 ## Contrato — a faixa que protege contra o mundo mudar
 
