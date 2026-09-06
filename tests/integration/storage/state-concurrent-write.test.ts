@@ -14,23 +14,25 @@
  * does that race actually fire, how often, and does a reader ever observe anything worse than
  * "old value, new value, or briefly absent" (a torn write, a validation error)?
  *
- * **Measured on this machine (Windows), 2026-09-06, 300 concurrent read/write iterations, 3 runs:
- * the write side hits `EPERM` for real, and often — 57/300, 59/300, 55/300 (~18-20%).** The reader
- * side never once threw or saw a corrupted document across all 3 runs (0/300 read errors every
- * time) — `writeFileAtomic`'s rename-based swap really does keep every reader looking at either the
- * fully-old or fully-new document, exactly as advertised. But the WRITER'S OWN promise rejects with
- * a raw `EPERM` on a real fraction of calls whenever a reader happens to have the destination file
- * open for reading at the instant of `rename` — this is not a rare edge case at this contention
- * level, and nothing in `seeya snooze`/`config`/`StorageAdapter#saveState`/`saveConfig` catches or
- * retries it: it propagates all the way to `cli/index.ts`'s top-level `.catch`, printing a raw
- * Node error and exiting 1 — while the file on disk stays fully intact at its PREVIOUS value (never
- * torn, never lost, just not updated this one time). A person's `seeya snooze +30m` run at the
- * unlucky instant would see this ugly error and have to re-run the command; the underlying state is
- * never corrupted. See docs/QUESTOES.md Q-056 for the full writeup, why no retry/lock was added
- * (AGENTS.md: "não invente travamento" — this task's brief is explicit that discovering this is
- * the deliverable, not fixing it), and why a real daemon's much lower actual poll frequency (every
- * 30s, vs. this test's tight loop) makes the real-world rate far lower than the number above, but
- * not zero.
+ * **Measured on this machine (Windows), 2026-09-06 (Q-056/S4-T4), 300 concurrent read/write
+ * iterations, 3 runs: the write side hit `EPERM` for real, and often — 60/300, 64/300, 56/300
+ * (~19-21%).** The reader side never once threw or saw a corrupted document across all 3 runs
+ * (0/300 read errors every time) — `writeFileAtomic`'s rename-based swap really does keep every
+ * reader looking at either the fully-old or fully-new document, exactly as advertised. Before
+ * S4-T4b, the WRITER'S OWN promise rejected with a raw `EPERM` on that fraction of calls whenever a
+ * reader happened to have the destination file open for reading at the instant of `rename`, and
+ * nothing caught or retried it: it propagated all the way to `cli/index.ts`'s top-level `.catch`.
+ *
+ * **S4-T4b (Q-058) added a bounded retry inside `writeFileAtomic` — re-measured here, same
+ * machine, same 300-iteration/3-run shape: 3/300, 5/300, 1/300 (~0.3-1.7%).** Same instrument,
+ * before and after, is the point: a ~19-21% writer rejection rate is now ~1%, and the invariant
+ * this test exists to protect — 0/300 reader-side corruption — is unchanged. See
+ * `atomic-write.ts`'s own module comment for the full attempt-count tuning table and why
+ * `MAX_RENAME_ATTEMPTS = 8`, and docs/QUESTOES.md Q-058 for the full writeup (why the fix lives
+ * entirely inside `writeFileAtomic` rather than a `Clock`-injected backoff threaded through
+ * `StorageAdapter`). What's left after 8 attempts is no longer a raw `EPERM` — it's a message that
+ * names the file and says it's still locked (AGENTS.md § "Mensagens de erro"), which is what the
+ * assertion below checks for instead of the old `/EPERM/` pattern.
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import { StorageAdapter } from '../../../src/adapters/storage/index.js';
@@ -94,11 +96,18 @@ describe('estado.json under real concurrent read+write pressure (Q-056)', () => 
     // many writes raced it.
     expect(readErrors).toEqual([]);
 
-    // The writer-side risk is a DIFFERENT thing, already known and documented (not this test's
-    // job to eliminate it — see the module comment above and Q-056): if it fires at all, it must
-    // be exactly the EPERM `atomic-write.ts` already describes, never a new failure mode.
+    // The writer-side risk is a DIFFERENT thing, already known and documented (not this test's job
+    // to eliminate entirely — see the module comment above and Q-058): S4-T4b's bounded retry
+    // drives it from ~20% down to ~1%, but a reader can still win 8 attempts in a row. What must
+    // NEVER happen again is the raw `EPERM` reaching the caller unreadable — every survivor here
+    // must be `writeFileAtomic`'s readable message (names the file, says it's locked), never a new
+    // failure mode.
     for (const error of writeErrors) {
-      expect(String(error)).toMatch(/EPERM/);
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toMatch(
+        /still locked by another process after \d+ attempts/,
+      );
+      expect(String((error as Error).cause)).toMatch(/EPERM/);
     }
   }, 30_000);
 });
