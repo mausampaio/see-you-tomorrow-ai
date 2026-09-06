@@ -2393,6 +2393,45 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       arquivos novos (`snooze-command.ts`, `config-command.ts`) e o `config-schema.ts` estendido
       todos acima de 80%. `npm run verificar` e `npm run verificar:linux` verdes, códigos de saída
       lidos separadamente do comando, nunca encadeados com commit.
+- [ ] **S4-T4b — Escrita concorrente não pode virar stack trace no `snooze`.** Saída da medição
+      da S4-T4, em 2026-09-06.
+
+      **Medido**, 300 iterações concorrentes de leitura/escrita, 3 execuções cada:
+
+      ```
+      ~18-20%  das ESCRITAS rejeitadas com EPERM no rename (Windows)
+        0/300  das LEITURAS viram documento corrompido — em nenhuma das 6 execuções
+      ```
+
+      **A garantia do rename atômico segura inteira** — nenhum leitor vê arquivo partido, e o
+      `atomic-write.ts` já documentava esse risco desde a S1-T5, sem ninguém poder medir porque
+      não havia escritor. Quem perde é a **promessa do escritor**.
+
+      **O problema:** ninguém captura essa rejeição. Um `seeya snooze` no instante infeliz falha
+      com **stack trace e código 1** — embora o arquivo em disco permaneça válido.
+
+      **E o motivo de não esperar relato de usuário, que os números escondem: a colisão não é
+      uniformemente distribuída.** O daemon escreve a cada 30 segundos, e o `snooze` é justamente
+      o comando que se roda **no momento do encerramento** — o instante em que o daemon está mais
+      ativo. O relato seria *"o snooze quebrou às 19h30, quando eu precisava dele"*.
+
+      *Escopo:* retentativa **limitada** dentro do `atomic-write.ts`, que conserta os dois
+      escritores de uma vez (o comando e o daemon), **mais** mensagem legível quando a
+      retentativa esgota — nunca stack trace para o usuário (AGENTS.md § "Mensagens de erro").
+
+      *Cuidados:*
+      **(a)** retentativa **limitada**, não infinita — problema real de permissão (antivírus
+      segurando o arquivo, por exemplo) precisa continuar aparecendo, não virar travamento;
+      **(b)** `atomic-write.ts` é adapter, então dormir ali é permitido — o **D-019 proíbe ler o
+      relógio**, não esperar. Mas se você precisar de `Clock`, diga em vez de improvisar;
+      **(c)** a medição existente (`state-concurrent-write.test.ts`,
+      `config-concurrent-write.test.ts`) é o seu instrumento — **rode antes e depois** e mostre os
+      dois números.
+
+      *Aceite:* a taxa de escrita rejeitada **cai de forma medida**, e o que restar sai como
+      mensagem, não como stack trace. **A garantia de leitura não pode regredir**: 0 documento
+      corrompido continua sendo 0.
+
 - [ ] **S4-T5 — `seeya daemon --stop/--status`.**
       *Aceite do sprint:* e2e 6, 7 e 8 passam. Um dia inteiro de uso real sem intervenção.
 
