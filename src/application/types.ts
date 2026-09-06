@@ -84,6 +84,15 @@ export interface EndDayOptions {
   readonly dryRun?: boolean;
   readonly sessionFilter?: (session: DiscoveredSession) => boolean;
   readonly scope?: EndDayScope;
+  /**
+   * D-036: the daemon's own overdue-but-same-day case (`scheduler/poll.ts`, past
+   * `Config.overdueFireThresholdMinutes` but still today) — every session is still captured
+   * normally, but NONE is terminated this run, regardless of `canTerminate: true`
+   * (`application/capture-session.ts#captureSession` is what actually enforces this, per session).
+   * Defaults to `false` so `seeya end-day` and every existing caller keep their original behavior;
+   * only the daemon's own overdue path ever sets this `true`.
+   */
+  readonly skipTermination?: boolean;
 }
 
 /** One session `evaluateEligibility` (`core/eligibility.ts`) excluded, and why — the "aceitos e

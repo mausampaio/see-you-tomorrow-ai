@@ -160,6 +160,12 @@ export interface StartDayContext {
   readonly storage: Storage;
   readonly clock: Clock;
   readonly sessionResumer: SessionResumer;
+  /**
+   * D-035: `findPendingBriefing`'s own scan ceiling (`Config.maxBriefingScanDays`) now lives in
+   * config, so this command has to read `config.json` after all — see this function's own
+   * docstring for what changed and why.
+   */
+  readonly config: Config;
 }
 
 /**
@@ -168,17 +174,21 @@ export interface StartDayContext {
  * resumed bookkeeping (step 5), `SessionResumer` for steps 4-5's actual resume. No
  * `SessionProvider`/git/generation here: unlike `end-day`, this command never re-discovers
  * sessions from `~/.claude/` — it works entirely from what `end-day` already persisted (D-004).
+ *
+ * **Reads `config.json` since D-035/S4-T3d, unlike before.** This command used to skip the read
+ * entirely (it needed no config field at all); now `application/find-pending-briefing.ts
+ * #findPendingBriefing`'s own scan ceiling is `Config.maxBriefingScanDays`, so `start-day-command.ts`
+ * needs a real `Config` to pass it through.
  */
-export function buildStartDayContext(homeDir: string = os.homedir()): Promise<StartDayContext> {
+export async function buildStartDayContext(
+  homeDir: string = os.homedir(),
+): Promise<StartDayContext> {
   const home = resolveCliHome(homeDir);
   const clock = systemClock;
   const storage = buildStorage(home);
+  const config = await storage.readConfig();
   const sessionResumer = new ClaudeSessionResumer({ seeyaHome: home.seeyaHome });
-  // No `await`: unlike `buildCliContext`/`buildEndDayContext`, this command never reads
-  // `config.json` (it doesn't need `relevanceHours` or any other config field) — but the return
-  // type stays `Promise<StartDayContext>` for the same reason those two are async, so `index.ts`
-  // can `await` every `build*Context` call uniformly without caring which ones actually do I/O.
-  return Promise.resolve({ storage, clock, sessionResumer });
+  return { storage, clock, sessionResumer, config };
 }
 
 /**

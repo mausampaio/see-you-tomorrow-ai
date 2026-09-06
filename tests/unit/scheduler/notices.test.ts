@@ -7,6 +7,7 @@ import {
   buildDaemonUnhealthyNotice,
   buildEarlyWarningNotice,
   buildLeadTimeNotice,
+  buildMissedEndOfDayNotice,
 } from '../../../src/scheduler/notices.js';
 import type { EndDayResult } from '../../../src/application/types.js';
 
@@ -41,21 +42,27 @@ describe('buildLeadTimeNotice', () => {
 });
 
 describe('buildDaemonEndOfDayNotice', () => {
-  it('an on-time close (delayMs well under the threshold) is not marked delayed', () => {
-    const notice = buildDaemonEndOfDayNotice(emptyEndDayResult(), 5_000, '2026-09-05');
+  // D-036/D-035: the threshold comparison itself now lives in `scheduler/poll.ts` (it reads
+  // `Config.overdueFireThresholdMinutes`), not here — this function only renders whatever `overdue`
+  // boolean the caller already decided. `tests/unit/scheduler/poll.test.ts` covers the threshold
+  // boundary; this file only covers rendering.
+  it('overdue: false is not marked delayed and says nothing about termination', () => {
+    const notice = buildDaemonEndOfDayNotice(emptyEndDayResult(), 5_000, '2026-09-05', false);
     expect(notice.title).not.toContain('delayed');
-    expect(notice.body).not.toContain('asleep');
+    expect(notice.body).not.toContain('terminated');
   });
 
-  it('a delay right at the threshold IS marked delayed (boundary)', () => {
-    const notice = buildDaemonEndOfDayNotice(emptyEndDayResult(), 5 * 60_000, '2026-09-05');
+  it('overdue: true is marked delayed and says termination was skipped (D-036)', () => {
+    const notice = buildDaemonEndOfDayNotice(emptyEndDayResult(), 5 * 60_000, '2026-09-05', true);
     expect(notice.title).toContain('delayed');
-    expect(notice.body).toContain('asleep');
+    expect(notice.body).toContain('no session was terminated');
+    expect(notice.body).toContain('canTerminate');
   });
 
-  it('a delay one millisecond under the threshold is NOT marked delayed (boundary)', () => {
-    const notice = buildDaemonEndOfDayNotice(emptyEndDayResult(), 5 * 60_000 - 1, '2026-09-05');
-    expect(notice.title).not.toContain('delayed');
+  it('singular "minute" at exactly 1 minute late (boundary)', () => {
+    const notice = buildDaemonEndOfDayNotice(emptyEndDayResult(), 60_000, '2026-09-05', true);
+    expect(notice.body).toContain('1 minute late');
+    expect(notice.body).not.toContain('1 minutes late');
   });
 
   it('reports how many sessions were captured', () => {
@@ -65,7 +72,7 @@ describe('buildDaemonEndOfDayNotice', () => {
         { handoff: { sessionId: 'b' } as never, terminated: false },
       ],
     });
-    const notice = buildDaemonEndOfDayNotice(result, 0, '2026-09-05');
+    const notice = buildDaemonEndOfDayNotice(result, 0, '2026-09-05', false);
     expect(notice.body).toContain('2 sessions captured');
   });
 
@@ -73,13 +80,29 @@ describe('buildDaemonEndOfDayNotice', () => {
     const result = emptyEndDayResult({
       failedCaptures: [{ sessionId: 'a', cwd: 'c:\\x', name: 'x', reason: 'boom' }],
     });
-    const notice = buildDaemonEndOfDayNotice(result, 0, '2026-09-05');
+    const notice = buildDaemonEndOfDayNotice(result, 0, '2026-09-05', false);
     expect(notice.body).toContain('1 capture failed');
   });
 
   it('says nothing about failures when there are none', () => {
-    const notice = buildDaemonEndOfDayNotice(emptyEndDayResult(), 0, '2026-09-05');
+    const notice = buildDaemonEndOfDayNotice(emptyEndDayResult(), 0, '2026-09-05', false);
     expect(notice.body).not.toContain('failed');
+  });
+});
+
+describe('buildMissedEndOfDayNotice (D-036, "dia local diferente")', () => {
+  it('names the missed day and says nothing was captured or terminated', () => {
+    const notice = buildMissedEndOfDayNotice('2026-09-04');
+    expect(notice.title).toContain('2026-09-04');
+    expect(notice.body).toContain('2026-09-04');
+    expect(notice.body).toContain('Nothing was captured or terminated');
+  });
+
+  it('points at "seeya sessions" and "seeya end-day" as the honest recovery, not a promise to redo the missed day', () => {
+    const notice = buildMissedEndOfDayNotice('2026-09-04');
+    expect(notice.body).toContain('seeya sessions');
+    expect(notice.body).toContain('seeya end-day');
+    expect(notice.body).toContain('no way to redo it');
   });
 });
 

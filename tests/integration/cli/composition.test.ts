@@ -209,4 +209,16 @@ describe('buildStartDayContext', () => {
     const reread = await context.storage.readResumedSessionIds('2026-08-16');
     expect([...reread]).toEqual(['session-1']);
   });
+
+  it('D-035: reads config.json, so maxBriefingScanDays reflects a real config.json edit', async () => {
+    fixture = await createDiscoveryFixture();
+    await writeFile(
+      path.join(fixture.seeyaHome, 'config.json'),
+      JSON.stringify({ schemaVersion: 1, maxBriefingScanDays: 90 }),
+      'utf8',
+    );
+
+    const context = await buildStartDayContext(fixture.root);
+    expect(context.config.maxBriefingScanDays).toBe(90);
+  });
 });

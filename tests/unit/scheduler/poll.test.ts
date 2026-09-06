@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { pollOnce } from '../../../src/scheduler/poll.js';
+import { emptyDayState } from '../../../src/core/schedule.js';
 import { createConfig, createSessionWithPid } from '../core/_fixtures.js';
 import {
   FakeForkCleanup,
@@ -18,6 +19,7 @@ import { ControllableProcessControl, InMemoryDaemonStorage, RecordingNotifier } 
 import type { DaemonDeps } from '../../../src/scheduler/types.js';
 import type { Config, DiscoveredSession } from '../../../src/core/types.js';
 import type { EarlyWarning } from '../../../src/core/early-warnings.js';
+import type { ProcessControl } from '../../../src/core/ports.js';
 
 interface FixedClock {
   now(): Date;
@@ -45,6 +47,7 @@ function buildHarness(
     readonly transcriptReader?: FakeTranscriptReader;
     readonly leanGenerator?: DaemonDeps['leanGenerator'];
     readonly earlyWarnings?: readonly EarlyWarning[];
+    readonly processControl?: ProcessControl;
   } = {},
 ): TestHarness {
   const storage = new InMemoryDaemonStorage(config);
@@ -57,7 +60,7 @@ function buildHarness(
       clock: clockAt(now),
       storage,
       notifier,
-      processControl: new ControllableProcessControl(),
+      processControl: options.processControl ?? new ControllableProcessControl(),
       transcriptReader: options.transcriptReader ?? new FakeTranscriptReader(),
       gitReader: new FakeGitReader(),
       leanGenerator:
@@ -311,5 +314,160 @@ describe('pollOnce — non-model retry budget (Q-040 item 3)', () => {
     // never succeed today.
     const finalState = await harness.storage.readState();
     expect(finalState?.endOfDayFired).toBe(true);
+  });
+});
+
+describe('pollOnce — D-036 case 1: the local day rolled over before yesterday ever closed', () => {
+  it('notifies once that the day cannot be redone, and never fires the stale schedule', async () => {
+    const harness = buildHarness(createConfig({ endOfDayTime: '19:30' }));
+    // Yesterday's DayState, exactly as a real daemon that never got to fire it would leave behind:
+    // never fired, never skipped.
+    await harness.storage.saveState(emptyDayState('2026-09-04'));
+
+    // Well before TODAY's own 19:30 — proves this isn't "case 2/3" (same-day delay) sneaking in.
+    await harness.poll(new Date(2026, 8, 5, 8, 0, 0), { sessions: [] });
+
+    expect(harness.notifier.notices).toHaveLength(1);
+    expect(harness.notifier.notices[0]?.title).toContain('2026-09-04');
+    expect(harness.notifier.notices[0]?.body).toContain('no way to redo it');
+
+    const state = await harness.storage.readState();
+    expect(state?.day).toBe('2026-09-05');
+    expect(state?.endOfDayFired).toBe(false); // today's own schedule is untouched, still pending
+
+    // A second poll later the SAME day must not repeat the notice (D-018's "avisa uma vez").
+    await harness.poll(new Date(2026, 8, 5, 9, 0, 0), { sessions: [] });
+    expect(harness.notifier.notices).toHaveLength(1);
+  });
+
+  it('does not notify when yesterday actually closed on time before the day rolled over', async () => {
+    const harness = buildHarness(createConfig({ endOfDayTime: '19:30' }));
+    await harness.storage.saveState({ ...emptyDayState('2026-09-04'), endOfDayFired: true });
+
+    await harness.poll(new Date(2026, 8, 5, 8, 0, 0), { sessions: [] });
+
+    expect(harness.notifier.notices).toStrictEqual([]);
+    expect((await harness.storage.readState())?.day).toBe('2026-09-05');
+  });
+
+  it('does not notify when yesterday was explicitly skipped (D-006 opt-out, not a miss)', async () => {
+    const harness = buildHarness(createConfig({ endOfDayTime: '19:30' }));
+    await harness.storage.saveState({ ...emptyDayState('2026-09-04'), skipped: true });
+
+    await harness.poll(new Date(2026, 8, 5, 8, 0, 0), { sessions: [] });
+
+    expect(harness.notifier.notices).toStrictEqual([]);
+  });
+
+  it('does not notify when the schedule is disabled (endOfDayTime: null)', async () => {
+    const harness = buildHarness(createConfig({ endOfDayTime: null }));
+    await harness.storage.saveState(emptyDayState('2026-09-04'));
+
+    await harness.poll(new Date(2026, 8, 5, 8, 0, 0), { sessions: [] });
+
+    expect(harness.notifier.notices).toStrictEqual([]);
+  });
+});
+
+describe('pollOnce — D-036 case 2/3: same day, captures always, terminates only within the threshold', () => {
+  const SESSION_ID = '11111111-1111-4111-8111-111111111111';
+  const TERMINATABLE_CWD = 'c:\\code\\projeto';
+
+  /** A session with recent-but-not-active-turn activity, so it captures cleanly on the FIRST poll —
+   * no active-turn retry muddying whether termination ran because of D-036 or because a retry
+   * hadn't finished yet. */
+  function terminatableSession(now: Date): DiscoveredSession {
+    return createSessionWithPid({
+      sessionId: SESSION_ID,
+      cwd: TERMINATABLE_CWD,
+      lastActivity: new Date(now.getTime() - 10 * 60_000), // 10 minutes ago — outside the 60s window
+    });
+  }
+
+  function transcriptReaderFor(now: Date): FakeTranscriptReader {
+    return new FakeTranscriptReader(
+      new Map([
+        [
+          SESSION_ID,
+          {
+            facts: {
+              lastActivity: new Date(now.getTime() - 10 * 60_000),
+              lastPrompts: [],
+              assistantMessages: [],
+              touchedFiles: [],
+            },
+            rejected: [],
+            unknownEntryTypeCount: 0,
+          },
+        ],
+      ]),
+    );
+  }
+
+  /** `terminateGracefully` throws if it's ever called — a stronger proof than a call counter that
+   * D-036's overdue path never even attempts termination, the same "exploding double" pattern the
+   * non-model-retry-budget test above already uses for its own "must never be called" assertion. */
+  class ExplodingProcessControl implements ProcessControl {
+    isAlive(): Promise<boolean> {
+      return Promise.resolve(true);
+    }
+    terminateGracefully(): Promise<boolean> {
+      throw new Error('D-036: must not terminate a session on an overdue, same-day close');
+    }
+  }
+
+  it('THE test that protects real work: overdue past the threshold captures but does NOT terminate, even with canTerminate: true', async () => {
+    const config = createConfig({
+      endOfDayTime: '19:30',
+      overdueFireThresholdMinutes: 5,
+      projectPolicy: { [TERMINATABLE_CWD]: { canTerminate: true, deepCapture: false } },
+    });
+    const wokeUpLate = new Date(2026, 8, 5, 19, 45, 0); // 15 minutes past 19:30 — well past 5
+    const harness = buildHarness(config, {
+      transcriptReader: transcriptReaderFor(wokeUpLate),
+      processControl: new ExplodingProcessControl(),
+    });
+
+    await harness.poll(wokeUpLate, { sessions: [terminatableSession(wokeUpLate)] });
+
+    // The handoff still exists — capture happened normally (D-036: "captura, mas NÃO encerra").
+    const handoff = await harness.storage.readHandoff('2026-09-05', SESSION_ID);
+    expect(handoff).not.toBeNull();
+
+    const state = await harness.storage.readState();
+    expect(state?.endOfDayFired).toBe(true);
+
+    expect(harness.notifier.notices).toHaveLength(1);
+    expect(harness.notifier.notices[0]?.title).toContain('delayed');
+    expect(harness.notifier.notices[0]?.body).toContain('no session was terminated');
+    // ExplodingProcessControl never threw — pollOnce resolved above without rejecting — proving
+    // terminateGracefully was genuinely never invoked, not just that its result was discarded.
+  });
+
+  it('within the threshold: captures AND terminates normally, same canTerminate: true session', async () => {
+    const config = createConfig({
+      endOfDayTime: '19:30',
+      overdueFireThresholdMinutes: 5,
+      projectPolicy: { [TERMINATABLE_CWD]: { canTerminate: true, deepCapture: false } },
+    });
+    const justAfter = new Date(2026, 8, 5, 19, 30, 5); // 5s past — ordinary poll jitter, well under 5min
+    let terminateCalledWith: number | null = null;
+    const processControl: ProcessControl = {
+      isAlive: () => Promise.resolve(true),
+      terminateGracefully: (pid: number) => {
+        terminateCalledWith = pid;
+        return Promise.resolve(true);
+      },
+    };
+    const harness = buildHarness(config, {
+      transcriptReader: transcriptReaderFor(justAfter),
+      processControl,
+    });
+
+    await harness.poll(justAfter, { sessions: [terminatableSession(justAfter)] });
+
+    expect(terminateCalledWith).toBe(4242); // createSessionWithPid's own default pid
+    expect(harness.notifier.notices[0]?.title).not.toContain('delayed');
+    expect(harness.notifier.notices[0]?.body).not.toContain('no session was terminated');
   });
 });

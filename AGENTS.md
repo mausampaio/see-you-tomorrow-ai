@@ -335,6 +335,10 @@ usa. Fixados em S1-T0g, antes de qualquer um deles existir em código.
 | política por projeto | `projectPolicy` | config |
 | pode encerrar | `canTerminate` | config |
 | dias para limpar forks | `forkCleanupDays` | config (D-012, default 7) |
+| teto de raízes de git visitadas | `maxGitRootsToVisit` | config (D-035, default 8) |
+| limite de retentativa de captura | `maxCaptureAttemptsPerSessionPerDay` | config (D-035, default 3) |
+| teto de dias de busca do briefing pendente | `maxBriefingScanDays` | config (D-035, default 30) |
+| limiar de disparo vencido | `overdueFireThresholdMinutes` | config (D-035/D-036, default 5) |
 | avisos já dados | `early-warnings.json` | arquivo em `~/.seeya/` (S1-T7) |
 | sessões já avisadas | `warnedSessionIds` / `warnedKeyFiles` | `early-warnings.json` (S1-T7) |
 | captura profunda | `deepCapture` | config (`projectPolicy`) |

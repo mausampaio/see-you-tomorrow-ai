@@ -2166,7 +2166,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* handoff novo grava e relê o texto do assistente; **handoff v2 já em disco
       continua legível**, com `[]`. Os dois com teste.
 
-- [ ] **S4-T3d — Quatro números para a config (D-035) e o agendamento vencido (D-036).**
+- [~] **S4-T3d — Quatro números para a config (D-035) e o agendamento vencido (D-036).**
       Saída da varredura de questões com o mantenedor, em 2026-09-05.
 
       **Parte 1 — D-035.** Quatro números viram chave de `config.json`, **com o valor atual como
@@ -2204,6 +2204,89 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
       *Cuidado:* `docs/ESPECIFICACAO.md` é documento de autoridade. **Atualize o texto dela**
       apontando para a D-036, em vez de deixar a spec contradizendo o código.
+
+      **Implementado em 2026-09-06.** Os quatro números viraram campos de `Config`
+      (`core/types.ts`), opcionais em `configFileSchema` e com o valor atual como default em
+      `CONFIG_DEFAULTS` (`adapters/storage/config-schema.ts`): `maxGitRootsToVisit` (8),
+      `maxCaptureAttemptsPerSessionPerDay` (3), `maxBriefingScanDays` (30) e
+      `overdueFireThresholdMinutes` (5). As constantes antigas (`MAX_GIT_ROOTS_TO_VISIT`,
+      `MAX_CAPTURE_ATTEMPTS_PER_SESSION_PER_DAY`, `MAX_BRIEFING_SCAN_DAYS`) continuam existindo,
+      agora documentadas como "o default que a config espelha" — `core/` não pode importar
+      `adapters/storage/config-schema.ts` (matriz de camadas), então cada uma pina o mesmo literal
+      de novo, o mesmo padrão que `POLL_INTERVAL_MS` já usava em `scheduler/`.
+
+      **Threading até o uso real.** `GitReader.readEvidenceAcrossRepos` (`core/ports.ts`) ganhou
+      `maxRootsToVisit?: number`; `application/evidence-gathering.ts#gatherEvidence` repassa
+      `config.maxGitRootsToVisit`, chamado por `application/capture-session.ts` (usado tanto por
+      `seeya end-day` quanto pelo daemon). `scheduler/capture-filter.ts#buildRetryFilter` e
+      `core/capture-retry.ts#sessionsExhaustedToday` ganharam `maxAttempts` opcional, alimentado
+      por `config.maxCaptureAttemptsPerSessionPerDay` em `scheduler/poll.ts`.
+      `application/find-pending-briefing.ts#findPendingBriefing` já aceitava `maxScanDays` desde a
+      S3-T3 — só precisou de um chamador real: `cli/composition.ts#buildStartDayContext` **passou
+      a ler `config.json`**, coisa que evitava de propósito antes (comentário antigo removido,
+      motivo em Q-054 item 3).
+
+      **D-036, as três regras, em `scheduler/poll.ts`.** Caso 1 (dia virado):
+      `pollOnce` compara `estado.json` (`stored.day`) com o dia local de `now` **antes** de chamar
+      `decideSchedule` — `core/schedule.ts#resetIfNewDay` foi **exportado** (não alterado de
+      contrato) para o daemon reaproveitar a mesma comparação em vez de duplicá-la. Se o dia virou
+      e o fechamento de ontem nunca disparou (`!endOfDayFired`) nem foi pulado (`!skipped`) com
+      `endOfDayTime` ligado, notifica **uma vez** (`scheduler/notices.ts#buildMissedEndOfDayNotice`)
+      e grava o estado resetado imediatamente — é essa gravação que move `stored.day` para hoje e
+      impede o mesmo aviso de repetir a cada poll de 30s enquanto a pessoa não interage (o mesmo
+      padrão "avisa uma vez" que `core/daemon-health.ts`/S4-T3b já tinha estabelecido, reaproveitado
+      como o brief pediu). Casos 2/3 (mesmo dia): `runEndOfDay` compara o `delayMs` cru que
+      `core/schedule.ts` já devolvia (Q-037 item 3, contrato **não** alterado) contra
+      `config.overdueFireThresholdMinutes`; se vencido, chama `endDay` com o novo
+      `EndDayOptions.skipTermination: true` (`application/types.ts`), que
+      `application/capture-session.ts#captureSession` transforma em
+      `policy.canTerminate && !skipTermination` — o handoff é gravado e verificado normalmente
+      (D-002 continua valendo), só a terminação é pulada. Dentro do limiar, `skipTermination` é
+      `false` e o comportamento é idêntico ao de antes desta tarefa.
+
+      **O teste que protege trabalho real** (`tests/unit/scheduler/poll.test.ts`, describe "D-036
+      case 2/3"): uma sessão com `canTerminate: true` e um `ProcessControl.terminateGracefully` que
+      **lança exceção se for chamado** (prova mais forte que um contador — se a terminação fosse
+      tentada, `pollOnce` teria rejeitado e o teste teria falhado); poll 15 minutos depois do
+      `endOfDayTime` configurado, sessão capturada com sucesso (handoff existe em disco), aviso
+      diz "delayed"/"no session was terminated", e a promessa `pollOnce(...)` resolve sem lançar —
+      prova que `terminateGracefully` nunca foi invocado. Um segundo teste espelha o mesmo cenário
+      **dentro** do limiar (5s de atraso) com um `ProcessControl` real que registra a chamada, e
+      confirma que a terminação ACONTECE normalmente — sem o par positivo, o primeiro teste só
+      provaria "meu guarda reprova", não "meu guarda reprova o caso certo" (AGENTS.md: "teste o
+      caso permitido, não só o proibido").
+
+      **O caso 1 também tem os dois lados testados:** dia virado com fechamento nunca disparado
+      notifica uma vez e não repete num segundo poll no mesmo dia; dia virado com fechamento **já
+      disparado**, ou explicitamente **pulado** (`skip-today`), ou com `endOfDayTime: null`
+      (agendamento desligado) — nenhum desses notifica, provando que o aviso não é automático só
+      porque o dia mudou.
+
+      **Seis escolhas sem resposta literal no despacho da tarefa, registradas em Q-054** — os
+      quatro nomes (em especial `overdueFireThresholdMinutes`, escolhido para nomear o FATO, não a
+      consequência), o acoplamento (deliberado, sob o default) entre este limiar e a janela de
+      retentativa de turno ativo (as duas usam 5 minutos por construção, não coincidência — mesma
+      lógica que a Q-049 item 5 já tinha adotado para a versão só-texto deste número), a leitura
+      nova de `config.json` em `seeya start-day`, o uso da config ATUAL (não a de ontem) para
+      decidir se um dia perdido merece aviso, a redação do aviso do dia perdido (não promete refazer
+      o fechamento — não existe `--day` no `seeya end-day`), e `docs/ARQUITETURA.md` § "Config" não
+      atualizado com os quatro campos (mesmo gap já existente para `forkCleanupDays`).
+
+      **Migração testada:** `tests/integration/storage/read-config.test.ts` escreve um
+      `config.json` no formato EXATO de antes desta tarefa (sem as quatro chaves novas) e confirma
+      que a leitura devolve os quatro defaults em vez de rejeitar o arquivo; um segundo teste
+      confirma que um `config.json` com as quatro chaves presentes honra cada uma.
+
+      Cobertura, `npm run cobertura` (Windows, esta máquina): geral 97,87%/93,50%/98,51%/98,04%
+      (statements/branches/functions/lines); dentro do container Linux
+      (`npm run verificar:linux`, `node:22-bookworm`): 97,92%/93,67%/98,64%/98,04% — as duas acima
+      dos mínimos do `AGENTS.md`. `core/` 100% em statements/functions/lines nas duas máquinas,
+      99,06% branches (`briefing.ts`, não tocado por esta tarefa, é a única linha de branch
+      faltante ali). `scheduler/` 98,29%/100%/93,1%/100%
+      (`poll.ts`/`capture-filter.ts`/`notices.ts` 100% nas quatro métricas; o único gap de funções
+      em `scheduler/` é `loop.ts`, não tocado por esta tarefa). `npm run verificar` e
+      `npm run verificar:linux` verdes, códigos de saída lidos separadamente do comando, nunca
+      encadeados com commit.
 
 - [ ] **S4-T4 — `seeya snooze`, `seeya skip-today`, `seeya config`.**
 - [ ] **S4-T5 — `seeya daemon --stop/--status`.**

@@ -85,3 +85,21 @@ describe('sessionsExhaustedToday', () => {
     expect(sessionsExhaustedToday(state)).toStrictEqual(new Set(['session-a']));
   });
 });
+
+describe('sessionsExhaustedToday — D-035 configurable maxAttempts', () => {
+  it('a caller-supplied ceiling replaces the default, in both directions', () => {
+    const state = { ...emptyDayState(DAY), captureAttemptsToday: { 'session-a': 2 } };
+    // Below the default (3) but AT a caller-supplied ceiling of 2 — exhausted.
+    expect(sessionsExhaustedToday(state, 2).has('session-a')).toBe(true);
+    // Below a caller-supplied ceiling of 5 — not exhausted, even though it's above the default.
+    expect(sessionsExhaustedToday(state, 5).has('session-a')).toBe(false);
+  });
+
+  it('omitting maxAttempts still falls back to MAX_CAPTURE_ATTEMPTS_PER_SESSION_PER_DAY', () => {
+    const state = {
+      ...emptyDayState(DAY),
+      captureAttemptsToday: { 'session-a': MAX_CAPTURE_ATTEMPTS_PER_SESSION_PER_DAY },
+    };
+    expect(sessionsExhaustedToday(state).has('session-a')).toBe(true);
+  });
+});

@@ -201,6 +201,57 @@ export interface Config {
    * that S2-T6 is its first real reader (docs/QUESTOES.md Q-013, item 2).
    */
   readonly forkCleanupDays: number;
+  /**
+   * Ceiling on how many git repository roots one session's evidence gathering will visit
+   * (D-032, `GitReader.readEvidenceAcrossRepos`). Was a hardcoded constant
+   * (`adapters/git/git-adapter.ts`'s own `MAX_GIT_ROOTS_TO_VISIT`, still the literal this field's
+   * default mirrors) until **D-035** reclassified it: how many repositories a session's work spans
+   * depends on how THIS person lays out their projects, not on any fact about git or the disk — the
+   * E/S cost is real, but the ceiling on how much of it to pay is a preference, not a technical
+   * limit. Default **8**, unchanged from the prior constant (D-035: "com o valor atual como
+   * default, então nada muda de comportamento").
+   */
+  readonly maxGitRootsToVisit: number;
+  /**
+   * How many non-model-sourced capture attempts (`core/capture-retry.ts`) a single session gets in
+   * one local day before the daemon's active-turn retry stops re-attempting it. Was
+   * `core/capture-retry.ts`'s own `MAX_CAPTURE_ATTEMPTS_PER_SESSION_PER_DAY` (S4-T3,
+   * docs/QUESTOES.md Q-040 item 3); **D-035** reclassified it because how many wasted `claude -p`
+   * calls someone tolerates before giving up on a session for the day is what THEY are willing to
+   * spend, not a technical fact. Default **3**, unchanged from the prior constant.
+   */
+  readonly maxCaptureAttemptsPerSessionPerDay: number;
+  /**
+   * How many local days back `application/find-pending-briefing.ts#findPendingBriefing` is willing
+   * to scan before giving up. Was that module's own `MAX_BRIEFING_SCAN_DAYS`, once labeled an
+   * I/O bound (docs/QUESTOES.md Q-025); **D-035** corrected that label: how far back someone wants
+   * "where was I" to reach depends on how long THEY were away — a vacation is longer for some
+   * people than others — which is preference, not a disk-cost fact. Default **30**, unchanged from
+   * the prior constant.
+   */
+  readonly maxBriefingScanDays: number;
+  /**
+   * How many minutes past the effective end-of-day instant (`core/schedule.ts`'s own raw
+   * `delayMs`, never a threshold the core itself picks — Q-037 item 3) the daemon still considers
+   * today's scheduled close ON TIME. Past this, **D-036** applies: the daemon still captures — a
+   * late photograph of the sessions is still a valid one — but skips terminating any session, even
+   * one opted into `canTerminate: true`, because a daemon that just woke up cannot tell "sessions
+   * still open from last night" from "sessions somebody opened five minutes ago this morning" (the
+   * exact surprise D-002 was cautious about).
+   *
+   * **Named for what it now governs — action, not notification wording** (D-036: "o limiar mudou
+   * de significado... antes era 'a partir de quando eu digo que atrasou'... agora é 'a partir de
+   * quando eu deixo de agir'"). Was `scheduler/notices.ts`'s own hardcoded
+   * `DELAY_WARNING_THRESHOLD_MS`, which only ever changed a notification's wording. Default **5**
+   * (minutes) — the same number that constant used, unchanged (D-035: "com o valor atual como
+   * default").
+   *
+   * A *different* local calendar day than `now` (the machine slept across midnight) is never
+   * governed by this field at all — that boundary is a fact (D-036: "não é número escolhido, é
+   * fato"), not a tolerance: `scheduler/poll.ts` refuses to fire in that case unconditionally, no
+   * matter how small this threshold is set.
+   */
+  readonly overdueFireThresholdMinutes: number;
 }
 
 /**

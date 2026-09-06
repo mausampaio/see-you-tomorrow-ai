@@ -102,8 +102,18 @@ Loop de verificação a cada 30 s, decidindo sempre por relógio de parede:
 - Nos instantes `horario - antecedencia` (para cada antecedência configurada, ex. 30 min e
   15 min) → dispara notificação prévia com as ações disponíveis.
 - No horário efetivo (já somados os adiamentos) → executa o encerramento.
-- Se a máquina estava suspensa e o horário passou sem disparo, o encerramento acontece assim
-  que o daemon acorda, com aviso de que houve atraso.
+- **Disparo vencido — ver D-036.** Se o daemon só consegue rodar depois do horário efetivo
+  (ex.: a máquina estava suspensa), o comportamento depende de quanto tempo passou e se o dia
+  local já virou:
+  1. **Dia local diferente do dia agendado → não dispara, nunca.** O daemon notifica que o
+     encerramento daquele dia não aconteceu e precisa ser feito à mão — disparar depois da
+     virada escreveria o encerramento de ontem na pasta de hoje.
+  2. **Mesmo dia, atrasado além de `overdueFireThresholdMinutes` (config, default 5 min) →
+     captura normalmente, mas NÃO encerra nenhuma sessão**, mesmo as marcadas
+     `canTerminate: true`. O aviso diz que o encerramento rodou atrasado e que a terminação foi
+     pulada.
+  3. **Mesmo dia, dentro do limiar → comportamento normal** (captura e encerra como de
+     costume).
 
 **Guarda de turno ativo.** Antes de capturar, o app checa se o transcript da sessão foi escrito
 nos últimos 60 s. Se foi, a sessão está no meio de um turno: adia a captura daquela sessão por

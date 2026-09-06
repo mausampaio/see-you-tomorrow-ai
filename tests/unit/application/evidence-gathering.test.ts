@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { gatherEvidence } from '../../../src/application/evidence-gathering.js';
 import { createSessionWithPid, createSessionWithoutPid } from '../core/_fixtures.js';
 import { FakeGitReader, FakeTranscriptReader, StaticGitReader } from './_fakes.js';
-import type { GitReadResult, TranscriptReadResult } from '../../../src/core/ports.js';
+import type {
+  GitEvidenceAcrossRepos,
+  GitReadResult,
+  GitReader,
+  TranscriptReadResult,
+} from '../../../src/core/ports.js';
 
 const REPO_FACTS: GitReadResult = {
   hasGit: true,
@@ -152,5 +157,41 @@ describe('gatherEvidence — D-032, git evidence follows touchedFiles across sev
     // "at least one repository must respond" the other tests in this file already exercise.
     expect(sources).not.toContain('git');
     expect(facts.reposNotVisited).toBe(3);
+  });
+});
+
+describe('gatherEvidence — D-035 threads maxGitRootsToVisit through to the GitReader', () => {
+  /** Records exactly what `readEvidenceAcrossRepos` was called with — proving the plumbing, not
+   * the multi-root discovery algorithm itself (that's `adapters/git/git-adapter.ts`'s own suite,
+   * against a real filesystem). */
+  class RecordingGitReader implements GitReader {
+    lastMaxRootsToVisit: number | undefined = undefined;
+
+    readFacts(): Promise<GitReadResult> {
+      return Promise.reject(new Error('not exercised'));
+    }
+
+    readEvidenceAcrossRepos(
+      _cwd: string,
+      _touchedFiles: readonly string[],
+      maxRootsToVisit?: number,
+    ): Promise<GitEvidenceAcrossRepos> {
+      this.lastMaxRootsToVisit = maxRootsToVisit;
+      return Promise.resolve({ repositories: [], filesOutsideRepository: 0, reposNotVisited: 0 });
+    }
+  }
+
+  it('forwards the configured ceiling when the caller passes one', async () => {
+    const session = createSessionWithPid({ hasTranscript: false, cwd: 'c:\\code\\projeto' });
+    const gitReader = new RecordingGitReader();
+    await gatherEvidence(new FakeTranscriptReader(), gitReader, session, 4);
+    expect(gitReader.lastMaxRootsToVisit).toBe(4);
+  });
+
+  it('forwards undefined (adapter default applies) when the caller omits it', async () => {
+    const session = createSessionWithPid({ hasTranscript: false, cwd: 'c:\\code\\projeto' });
+    const gitReader = new RecordingGitReader();
+    await gatherEvidence(new FakeTranscriptReader(), gitReader, session);
+    expect(gitReader.lastMaxRootsToVisit).toBeUndefined();
   });
 });

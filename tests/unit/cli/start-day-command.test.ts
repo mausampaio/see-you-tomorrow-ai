@@ -49,6 +49,7 @@ function makeContext(overrides: Partial<StartDayCommandContext> = {}): StartDayC
     storage: new FakeStorage(DEFAULT_TEST_CONFIG),
     clock: new FakeClock(TODAY),
     sessionResumer: cleanlyResumingResumer(),
+    config: DEFAULT_TEST_CONFIG,
     ...overrides,
   };
 }
@@ -60,6 +61,16 @@ describe('runStartDayCommand — no pending briefing (aceite: caso normal, não 
     const exitCode = await runStartDayCommand(context, { all: false }, io);
     expect(exitCode).toBe(0);
     expect(output()).toContain('No pending briefing found');
+  });
+
+  it('D-035: context.config.maxBriefingScanDays threads through to the reported days scanned', async () => {
+    const context = makeContext({
+      config: { ...DEFAULT_TEST_CONFIG, maxBriefingScanDays: 2 },
+    });
+    const { io, output } = makeIo({ isTTY: true });
+    await runStartDayCommand(context, { all: false }, io);
+    // findPendingBriefing scans days 0..maxScanDays inclusive, so daysSearched = maxScanDays + 1.
+    expect(output()).toContain('last 3 days scanned');
   });
 });
 

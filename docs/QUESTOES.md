@@ -4785,3 +4785,131 @@ dev altera, por convenção de `docs/FLUXO-DE-AGENTES.md`); sinalizo aqui para o
 **Opções que enxergo para o review, além das sete acima:** confirmar as sete como estão, ou pedir
 ajuste em qualquer uma antes de marcar a tarefa `[x]`.
 **Resposta:** _(aguardando)_
+
+---
+
+## Q-054 — S4-T3d: os quatro nomes de config, o acoplamento com a retentativa de turno ativo, e o `start-day` passando a ler `config.json`
+
+**Tarefa:** S4-T3d (D-035: quatro números para a config; D-036: agendamento vencido)
+**Bloqueia:** não — `npm run verificar` está verde com as três regras de D-036 testadas
+(`tests/unit/scheduler/poll.test.ts`), inclusive o caso que protege trabalho real (captura sem
+encerrar, mesmo com `canTerminate: true`). Registro no mesmo espírito de Q-037/Q-049/Q-053: cada
+escolha abaixo tem leitura alternativa razoável, e a tarefa pediu para registrar em vez de decidir
+calado.
+
+**1) Os quatro nomes escolhidos.** `MAX_GIT_ROOTS_TO_VISIT` → `maxGitRootsToVisit`;
+`MAX_CAPTURE_ATTEMPTS_PER_SESSION_PER_DAY` → `maxCaptureAttemptsPerSessionPerDay`;
+`MAX_BRIEFING_SCAN_DAYS` → `maxBriefingScanDays`; o limiar de disparo obsoleto →
+`overdueFireThresholdMinutes`. Os três primeiros são tradução direta do nome da constante para
+`camelCase`. O quarto é o que a tarefa pediu para escolher com cuidado — "algo como 'a partir de
+quando considero o disparo vencido', não 'a partir de quando aviso que atrasou'". Escolhi
+"overdue**Fire**Threshold" (não "overdue**Notice**Threshold" nem "delay**Warning**Threshold", o
+nome que o campo carregava dentro de `scheduler/notices.ts` antes desta tarefa) exatamente para
+nomear o "disparo" (o `endOfDay` agendado), não o aviso — e "Minutes" no fim porque toda outra
+chave de duração na config já usa esse sufixo (`idleMinutes`, `leadTimesInMinutes`). **Opções:** A)
+`overdueFireThresholdMinutes` (o que implementei). B) um nome citando "action"/"skip" diretamente
+(ex. `skipTerminationAfterMinutes`) — mais explícito sobre a CONSEQUÊNCIA, menos sobre o que o
+número MEDE. **Minha escolha:** A — o nome descreve o fato (quando o disparo é considerado
+vencido); a consequência (pular a terminação) é do `core/types.ts#Config` doc e do D-036, não do
+nome do campo.
+
+**2) Uma sessão que fica em turno ativo até o fim do orçamento de retentativa (5 min) também vira
+"overdue" e perde a terminação — sob o default, e é de propósito, não descuido.** Detalhado no
+comentário de `scheduler/poll.ts#runEndOfDay`, resumido aqui: `ACTIVE_TURN_RETRY_BUDGET_MS` (a
+janela de 5 minutos da guarda de turno ativo, docs/ESPECIFICACAO.md) e o DEFAULT de
+`overdueFireThresholdMinutes` (5 min) compartilham o valor de propósito — a Q-049 item 5 já tinha
+feito essa mesma escolha para a versão "só texto" deste limiar ("o mesmo número da janela de turno
+ativo, de propósito, não coincidência"). O efeito: um fechamento que só finaliza porque o
+orçamento de retentativa esgotou (não porque a máquina estava suspensa) também é tratado como
+"vencido" e pula a terminação — mesmo numa sessão que ficou ativa até o segundo antes de fechar,
+num dia comum, sem suspensão nenhuma. Não há como este arquivo distinguir "acordou de uma
+suspensão" de "gastou a janela inteira em turno ativo" — os dois produzem o mesmo `delayMs`
+crescente a cada poll de 30s. **Opções:** A) aceitar o acoplamento, com o default atual (o que
+implementei) — quem quiser separar os dois pode configurar `overdueFireThresholdMinutes` acima de
+5 min. B) inventar um sinal extra (ex.: `DayState` guardar "este fechamento nunca teve um poll
+anterior no mesmo dia", para distinguir "primeira tentativa já atrasada" de "atrasou por
+retentativa") — mais preciso, mas é maquinaria nova que a tarefa não pediu, e o próprio D-036
+argumenta a favor do lado conservador ("quando em dúvida, não encerre") nos dois casos. **Minha
+escolha:** A.
+
+**3) `buildStartDayContext` (`cli/composition.ts`) passa a ler `config.json`, coisa que
+evitava de propósito antes desta tarefa.** O comentário que ali existia dizia literalmente "este
+comando nunca lê config.json (não precisa de relevanceHours nem de nenhum outro campo)". Como
+`findPendingBriefing`'s ceiling virou `Config.maxBriefingScanDays` (D-035), `seeya start-day`
+passou a precisar de um campo de config pela primeira vez. Isso é uma leitura de disco a mais por
+invocação do comando (mas o comando já faz várias — briefings, resumed.json — então o custo
+marginal é o mesmo tipo de I/O que ele já paga). **Opções:** A) aceitar a leitura nova (o que
+implementei) — é a consequência direta e mínima de mover o número para a config. B) manter
+`findPendingBriefing` chamado com o parâmetro omitido (usa o default 30 embutido no módulo) só
+neste comando, para `start-day` não precisar ler config — mas isso quebraria a promessa de D-035
+("os quatro lidos da config") especificamente para quem muda `maxBriefingScanDays` e espera que
+`start-day` obedeça. **Minha escolha:** A.
+
+**4) O aviso do "dia virado" (D-036 caso 1) usa a config ATUAL, não a de ontem, para decidir se
+havia agendamento para perder.** `missedYesterdayClosure` (`scheduler/poll.ts`) checa
+`config.endOfDayTime !== null` com o `config` lido NESTE poll — se a pessoa desligou o
+agendamento (`endOfDayTime: null`) só hoje de manhã, um dia de ontem que ficou sem fechar por causa
+da suspensão não gera aviso (porque a leitura atual diz "sem agendamento"), mesmo que ontem o
+agendamento estivesse ligado. O inverso também vale: ligar o agendamento hoje de manhã não deveria
+gerar um aviso retroativo sobre ontem (quando não havia agendamento nenhum), e a implementação
+atual também erra nesse sentido (avisaria, porque só olha a config de agora). O daemon não tem
+como saber qual era a config de ontem sem persisti-la por dia, o que é escopo bem maior que esta
+tarefa. **Opções:** A) usar sempre a config atual, aceitando a imprecisão nos dois sentidos (o que
+implementei) — o caso comum (agendamento não muda de um dia para o outro) sai correto. B)
+persistir o `endOfDayTime` do dia anterior dentro do próprio `DayState` só para este propósito —
+mais uma chave em disco (D-027) para um caso raro (mudar a config no exato dia em que a máquina
+também ficou suspensa demais). **Minha escolha:** A.
+
+**5) O aviso do dia perdido não promete refazer o fechamento — e isso é deliberado, não só honesto
+por acidente.** `seeya end-day` só sabe fechar o dia de HOJE (`localDayString(clock.now())`,
+`application/end-day.ts`); não existe `--day` para reabrir um dia específico. A primeira versão do
+texto do aviso dizia 'rode "seeya end-day" à mão se ainda quiser um handoff para {dia perdido}' —
+falso, porque rodar `end-day` agora produziria um handoff datado de HOJE, não daquele dia. Corrigi
+para "não há como refazer depois do fato" mais "rode `seeya sessions`/`seeya end-day` para ver o
+que ainda está aberto" — o que a pessoa pode genuinamente fazer. Sinalizando porque é o tipo de
+frase que soa bem e some numa leitura rápida sem alguém testar contra o que o CLI realmente faz.
+
+**6) `docs/ARQUITETURA.md` § "Config" não foi atualizado com os quatro campos novos.** Mesmo gap
+que já existia para `forkCleanupDays` (o exemplo daquela seção nunca foi atualizado quando esse
+campo chegou, confirmado no comentário de `adapters/storage/config-schema.ts`) — não é
+alteração de fronteira, e `docs/ARQUITETURA.md` está na lista de documentos que exigem aprovação
+para editar (`AGENTS.md`). Não toquei nele. **Opções:** A) deixar como está, consistente com o
+precedente do `forkCleanupDays` (o que fiz). B) o PO atualiza o exemplo agora, cobrindo os cinco
+campos que já faltam (o quatro novos mais `forkCleanupDays`). **Minha escolha:** A.
+
+**Cobertura e portão, medidos nesta máquina:** `npm run verificar` verde (cobertura `core/`
+reportada acima de 95%, demais diretórios acima de 80%); `npm run verificar:linux` ainda não
+rodado no momento deste registro — ver o relatório da tarefa para o resultado final.
+
+**Opções que enxergo para o review:** confirmar as seis escolhas acima como estão, ou pedir ajuste
+em qualquer uma antes de marcar a tarefa `[x]`.
+**Resposta:** _(aguardando)_
+
+**Resposta:** **FECHADA — as seis confirmadas.**
+
+**O acoplamento dos dois "5 minutos" (item que você levantou sozinho) é o único com consequência
+de comportamento, e fica.** O `ACTIVE_TURN_RETRY_BUDGET_MS` e o default de
+`overdueFireThresholdMinutes` valem 5 minutos, então uma sessão que esgota a retentativa de turno
+ativo **num dia inteiramente normal** também é classificada como vencida — e a terminação é
+pulada, sem suspensão nenhuma envolvida.
+
+**Você julgou consistente com a D-036 e está certo, mas por um motivo ainda melhor do que o
+"na dúvida, não encerre":** uma sessão que estava **no meio de um turno cinco minutos atrás** é
+uma sessão **em uso**. Não encerrar ali não é conservadorismo — é a resposta certa. O acoplamento
+produz, por acidente, exatamente o comportamento que alguém desenharia de propósito.
+
+**O que precisa ficar dito, e é o motivo de eu não fechar isto em silêncio:** os dois números são
+independentes. Se alguém subir o `overdueFireThresholdMinutes` para 15, a sessão que esgotou o
+turno ativo aos 5 minutos **volta a ser encerrável** — e ninguém vai relacionar as duas coisas.
+**Quem mexer naquele número precisa saber disso**, e agora está escrito aqui.
+
+**Os nomes:** confirmados. `overdueFireThresholdMinutes` nomeia o **fato** (o disparo venceu) e
+não a consequência (pular terminação), que é o certo — a consequência pode mudar, o fato não.
+
+**O `buildStartDayContext` passar a ler o `config.json`:** confirmado. Ele evitava de propósito, e
+o motivo caducou quando o teto de varredura virou config. Ler config não é acoplamento novo — é
+o mesmo que os outros dois contextos já fazem.
+
+**A redação honesta do aviso de dia perdido:** confirmada, e é o tipo de contenção que eu quero.
+O `seeya end-day` não tem `--day`, então prometer "rode para ontem" seria mandar a pessoa fazer
+algo que o produto não oferece.

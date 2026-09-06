@@ -47,6 +47,15 @@ describe('buildRetryFilter', () => {
     expect(filter?.(exhausted)).toBe(false);
     expect(filter?.(fresh)).toBe(true);
   });
+
+  it('D-035: an explicit maxAttempts overrides the default ceiling', () => {
+    const state = { ...emptyDayState(DAY), captureAttemptsToday: { 'session-a': 2 } };
+    // Default ceiling (3) would NOT exclude a session at 2 attempts — a caller-supplied 2 does.
+    expect(buildRetryFilter(state)).toBeUndefined();
+    const filter = buildRetryFilter(state, 2);
+    const session = createSessionWithPid({ sessionId: 'session-a' });
+    expect(filter?.(session)).toBe(false);
+  });
 });
 
 describe('nonModelSessionIds', () => {

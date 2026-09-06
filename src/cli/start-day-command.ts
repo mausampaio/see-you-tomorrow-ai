@@ -29,7 +29,7 @@ import { resumeSessions } from '../application/start-day.js';
 import { renderConsolidatedPlan } from '../core/consolidated-plan.js';
 import { unresumedHandoffs } from '../core/pending-briefing.js';
 import type { Clock, SessionResumer, Storage } from '../core/ports.js';
-import type { Day, Handoff } from '../core/types.js';
+import type { Config, Day, Handoff } from '../core/types.js';
 import {
   findHandoffBySessionReference,
   parseInteractiveSelection,
@@ -63,6 +63,8 @@ export interface StartDayCommandContext {
   readonly storage: Storage;
   readonly clock: Clock;
   readonly sessionResumer: SessionResumer;
+  /** D-035: `findPendingBriefing`'s scan ceiling is now `config.maxBriefingScanDays`. */
+  readonly config: Config;
 }
 
 type FoundLookup = Extract<PendingBriefingLookup, { found: true }>;
@@ -157,7 +159,11 @@ export async function runStartDayCommand(
   options: StartDayCommandOptions,
   io: StartDayIo,
 ): Promise<number> {
-  const lookup = await findPendingBriefing(context.storage, context.clock);
+  const lookup = await findPendingBriefing(
+    context.storage,
+    context.clock,
+    context.config.maxBriefingScanDays,
+  );
   if (!lookup.found) {
     io.stdout.write(`${formatNoPendingBriefing(lookup.daysSearched)}\n`);
     return 0;
