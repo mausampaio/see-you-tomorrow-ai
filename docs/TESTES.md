@@ -390,6 +390,40 @@ de integração nova nesta mesma tarefa (`tests/integration/process/termination.
 `terminateAbruptly`, `tests/integration/cli/daemon-command.test.ts`'s parada real graciosa/abrupta)
 prova cada mecanismo isolado contra processo real; o e2e é só a jornada ponta a ponta.
 
+**S4-T6 (2026-09-06): `windowsHide: true` nos quatro `spawn` que faltavam (captura, evidência de
+git, liveness com `procStart`, notificação) — sem teste automatizado que prove a correção, e essa
+ausência é deliberada, não descuido.** O defeito (janela de console real roubando o foco a cada
+poll de 30s e durante toda a captura) só existe quando o processo pai não tem console (D-005) — e
+`vitest` sempre roda com um console próprio, herdado pelo processo filho, então a MESMA suíte que
+provaria a ausência de janela nunca teria como reproduzir a presença dela. Uma asserção que
+inspecionasse `spawn`'s options via mock (`vi.mock('node:child_process')`) provaria só que a opção
+foi passada — o mesmo problema que uma reintrodução acidental do bug (removendo a chave sem tocar
+a assinatura da chamada) não seria pega por esse teste, e o projeto não usa `vi.mock` em lugar
+nenhum da suíte hoje (duplo é sempre classe/objeto nomeado — AGENTS.md § "Testes"). Os testes de
+integração existentes contra processo real (`tests/integration/notification/spawn-command.test.ts`,
+`tests/integration/git/`, `tests/integration/generation/lean-generator.test.ts`,
+`tests/unit/adapters/process/proc-start.test.ts`) continuam verdes com a opção presente — provam
+que `stdout`/`stderr`/código de saída/erro não mudaram, não que a janela sumiu. **O aceite real é
+o mantenedor rodando o daemon de verdade no Windows e não vendo janela nenhuma** — ver
+docs/PLANO-DE-ENTREGA.md S4-T6.
+
+**S4-T6: `scheduler/notices.ts#buildLeadTimeNotice` agora recebe o tempo restante real, não o nome
+da regra configurada — coberto em três faixas.** `core/schedule.ts#minutesRemaining` (pura, dois
+`Date`) ganhou suíte própria em `tests/unit/core/schedule.test.ts`, incluindo o caso exato medido
+no primeiro ensaio real (30 min configurados, 22 min reais). `tests/unit/scheduler/notices.test.ts`
+prova que a função de renderização mostra o número que recebe, com singular/plural corretos.
+`tests/unit/scheduler/poll.test.ts` é o teste que prova a composição — um poll atrasado que cruza o
+limiar de 30 min com só 20 min reais restantes produz uma notificação que diz "20 min", nunca "30
+min" — esse teste falha sem a correção em `scheduler/poll.ts` (regressão de verdade, não só de
+unidade isolada).
+
+**S4-T6: `seeya config get/set schemaVersion` distingue "chave inexistente" de "chave existente,
+não editável" — `tests/unit/adapters/storage/config-schema.test.ts` e
+`tests/unit/cli/config-command.test.ts`.** Antes, as duas caíam na mesma mensagem
+(`unknownConfigKeyMessage`); os testes novos provam que a mensagem de `schemaVersion` nunca contém
+o texto que a de uma chave forjada contém, e que `get` devolve o valor real
+(`CONFIG_SCHEMA_VERSION`) em vez de recusar.
+
 ## Contrato — a faixa que protege contra o mundo mudar
 
 O app depende de estruturas internas e não documentadas do Claude Code
