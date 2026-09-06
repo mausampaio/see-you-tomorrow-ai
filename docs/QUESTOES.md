@@ -2801,6 +2801,45 @@ usuário). **Resposta:** em aberto — decisão do mantenedor, não do agente.
 
 ---
 
+---
+
+**Resposta (2026-09-05): o `assistantMessages` PASSA a ser persistido.** Decisão do mantenedor,
+e o argumento dele é medição, não preferência: o campo **já tem teto**.
+
+**A assimetria, verificada no código, e ela inverte o que eu tinha argumentado:**
+
+```
+assistantMessages : 10 mensagens × 500 caracteres  → teto ~5 KB
+lastPrompts       : 10 prompts   × SEM LIMITE      → sem teto
+```
+
+O `MAX_ASSISTANT_MESSAGE_CHARS` corta em 500 e marca com `[…]`. O `extractPromptText`, do lado do
+usuário, **não trunca nada** — um prompt de dez mil caracteres vai inteiro para o disco **hoje**.
+
+**Ou seja: o campo que a gente se recusava a gravar é o único dos dois que tem limite.** O
+argumento que eu usei para não persistir — "volume muito maior que os prompts" — **estava
+errado**, e o inverso é que é verdade. Fica registrado porque a decisão anterior se apoiava nele.
+
+**O que se ganha.** O `understanding` é **derivado** do texto do assistente. Sem ele em disco, o
+handoff **não é auditável**: não dá para saber, relendo, se o modelo leu ou inventou. E este
+projeto já pegou as duas coisas acontecendo — identificador fabricado (sonnet) e conclusão
+invertida (haiku). Guardar a evidência é o que permite conferir em vez de confiar.
+
+**Vira a S4-T3c.** Leva o handoff para `schemaVersion: 3`, com **migração obrigatória** — mesma
+disciplina da D-032, que já provou valer: os quatro dias reais do mantenedor foram lidos com o
+código novo antes de a mudança ser aceita.
+
+**O que NÃO entra junto:** dar teto ao `lastPrompts`. Truncar prompt do usuário pode piorar a
+captura, e é decisão de outra natureza — juntar as duas faria uma tarefa carregar dois riscos
+diferentes. Fica como **Q-051**.
+
+**Uma consequência de privacidade, dita agora e sem alarmismo.** Isto aumenta o conteúdo de
+trabalho real gravado em `~/.seeya/`. O `scripts/verificar-termos-locais.mjs` protege **o
+repositório**, não aquela pasta — que nunca foi tratada como sensível porque só continha os
+prompts. Com as respostas junto, ela passa a conter o suficiente para reconstruir boa parte de
+uma sessão. **Não é motivo para não fazer**; é motivo para o `README` dizer isso quando o projeto
+abrir (S5-T3).
+
 ## Q-037 — Seis escolhas feitas fazendo S4-T2 (`core/schedule.ts`), registradas para confirmação
 
 **Tarefa:** S4-T2
@@ -4338,4 +4377,33 @@ modelo ter confirmado ou por um bug silencioso na formatação.
 continua lá sem alteração nenhuma desta tarefa. Só o relatório de terminal (`cli/format-end-day.ts`)
 mudou.
 
+**Resposta:** _(em aberto)_
+
+---
+
+## Q-051 — O `lastPrompts` não tem teto de tamanho, e o `assistantMessages` tem
+
+**Origem:** achado ao responder a Q-036, em 2026-09-05. **Bloqueia:** não.
+
+**O fato.** `MAX_ASSISTANT_MESSAGES = 10` **e** `MAX_ASSISTANT_MESSAGE_CHARS = 500`, com corte
+marcado por `[…]`. Do lado do usuário existe `MAX_LAST_PROMPTS = 10` e **nenhum limite de
+caracteres** — o `extractPromptText` não trunca. Um prompt de dez mil caracteres vai inteiro
+para o prompt da captura **e** para o disco.
+
+**Por que não foi corrigido junto com a Q-036.** Truncar prompt do usuário tem risco que truncar
+resposta do assistente não tem: o prompt costuma **conter a instrução inteira** — requisitos,
+exemplo, restrição —, e cortar pode remover justamente a parte que define o que estava sendo
+feito. A resposta do assistente é mais redundante: o essencial costuma se repetir.
+
+**E há um efeito de custo que não é óbvio:** prompt longo entra no prompt da captura **sem teto**,
+então uma sessão com prompts gigantes encarece a captura de um jeito que ninguém mediu. A **Q-036**
+registra que **custo não é previsível pelo volume** neste caminho — o que torna isto medição, não
+palpite.
+
+**Opções:** (A) deixar como está e aceitar o assimétrico; (B) dar teto igual ao do assistente,
+com a mesma marca de corte; (C) teto maior para o usuário, reconhecendo que a instrução importa
+mais que a resposta; (D) medir primeiro o custo de sessões com prompts longos, e decidir depois.
+
+**Inclinação:** (D) antes de qualquer corte. Truncar por simetria seria a analogia-em-vez-de-
+medição que este projeto já corrigiu duas vezes na D-011.
 **Resposta:** _(em aberto)_

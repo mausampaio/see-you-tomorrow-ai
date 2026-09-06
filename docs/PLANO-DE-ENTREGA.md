@@ -2004,6 +2004,43 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       `procStart` é indisponível **continua sendo respeitado**. **Os três com teste** — o terceiro
       é o que impede o conserto de virar o defeito oposto.
 
+- [ ] **S4-T3c — Persistir o `assistantMessages` no handoff.** Decisão do mantenedor ao fechar a
+      **Q-036**, em 2026-09-05.
+
+      **Por que muda.** O `understanding` é **derivado** do texto do assistente. Sem ele em disco,
+      o handoff **não é auditável** — não dá para saber, relendo, se o modelo leu ou inventou. E
+      este projeto já pegou as duas coisas: identificador fabricado (sonnet, 02/09) e conclusão
+      invertida (haiku, 02/09). **Guardar a evidência é o que permite conferir em vez de confiar.**
+
+      **O argumento que sustentava não persistir caiu, e a medição é simples:**
+
+      ```
+      assistantMessages : 10 mensagens × 500 caracteres  → teto ~5 KB
+      lastPrompts       : 10 prompts   × SEM LIMITE      → sem teto
+      ```
+
+      O campo que não era gravado é **o único dos dois com teto**. "Volume muito maior que os
+      prompts" era o meu argumento, e é o inverso da verdade.
+
+      *Escopo:* `assistantMessages` entra no `handoffFactsSchema` e no `serializeHandoff`; o
+      `parseHandoffFacts` **deixa de devolver `[]` fixo** e passa a ler do disco.
+
+      **Migração obrigatória — `schemaVersion` 2 → 3.** Documento v2 volta a ser lido com
+      `assistantMessages: []`, porque um handoff v2 **nunca mediu isso** e `[]` é o valor honesto
+      (D-025). Mesma disciplina da D-032, que já provou valer: os quatro dias reais do mantenedor
+      foram lidos com o código novo **antes** de a mudança ser aceita. **Faça o mesmo** — e diga
+      no relatório que fez.
+
+      *Cuidado de privacidade, e ele não é bloqueante:* isto aumenta o conteúdo de trabalho real
+      em `~/.seeya/`. Nada disso pode aparecer em fixture do repositório — o portão de termos
+      locais existe para isso e **já recusou um commit** nesta sessão.
+
+      *Fora de escopo:* dar teto ao `lastPrompts` (**Q-051**). Truncar prompt do usuário pode
+      piorar a captura e é decisão de outra natureza; juntar faria uma tarefa carregar dois riscos.
+
+      *Aceite:* handoff novo grava e relê o texto do assistente; **handoff v2 já em disco
+      continua legível**, com `[]`. Os dois com teste.
+
 - [ ] **S4-T4 — `seeya snooze`, `seeya skip-today`, `seeya config`.**
 - [ ] **S4-T5 — `seeya daemon --stop/--status`.**
       *Aceite do sprint:* e2e 6, 7 e 8 passam. Um dia inteiro de uso real sem intervenção.
