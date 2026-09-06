@@ -2041,6 +2041,45 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* handoff novo grava e relê o texto do assistente; **handoff v2 já em disco
       continua legível**, com `[]`. Os dois com teste.
 
+- [ ] **S4-T3d — Quatro números para a config (D-035) e o agendamento vencido (D-036).**
+      Saída da varredura de questões com o mantenedor, em 2026-09-05.
+
+      **Parte 1 — D-035.** Quatro números viram chave de `config.json`, **com o valor atual como
+      default**, então nada muda de comportamento:
+
+      | de | default | por quê é preferência, não fato técnico |
+      |---|---|---|
+      | `MAX_GIT_ROOTS_TO_VISIT` | 8 | depende do arranjo de pastas da pessoa |
+      | limite de retentativa de captura | 3 | depende do quanto ela topa gastar |
+      | `MAX_BRIEFING_SCAN_DAYS` | 30 | quem volta de um mês fora quer mais |
+      | limiar de disparo obsoleto | 5 min | quanta obsolescência ela tolera (D-036) |
+
+      **Leia a D-035 antes de escolher os nomes** — ela tem o critério, e a lista do que
+      **continua constante** e por quê. Não mova nada além destes quatro.
+
+      **Parte 2 — D-036, e é mudança de comportamento.** Emenda a `docs/ESPECIFICACAO.md`, que
+      mandava o encerramento acontecer ao acordar "com aviso de que houve atraso". Passa a ser:
+
+      1. **Dia local diferente → não dispara, nunca.** Notifica que o encerramento daquele dia
+         não aconteceu e precisa ser feito à mão.
+      2. **Mesmo dia, atrasado além do limiar → captura, mas NÃO encerra.** Aviso diz que rodou
+         atrasado e que a terminação foi pulada.
+      3. **Mesmo dia, dentro do limiar → normal.**
+
+      **Por que a assimetria:** capturar tarde é quase inofensivo — a captura fotografa as sessões
+      como estão. **Encerrar tarde pode destruir trabalho:** com `canTerminate: true`, uma máquina
+      que acorda às 8h faria um agendamento de ontem **matar as sessões abertas hoje**.
+
+      *O `core/schedule.ts` não muda:* ele continua devolvendo `delayMs` cru e **não** escolhe
+      limiar (Q-037 item 3). Quem decide é o daemon, agora lendo a config.
+
+      *Aceite:* dia virado **não** dispara e notifica; mesmo dia atrasado captura e **não**
+      encerra, mesmo com `canTerminate: true`; dentro do limiar tudo normal. **Os três com
+      teste** — o segundo é o que protege trabalho de quem deixa a máquina suspender.
+
+      *Cuidado:* `docs/ESPECIFICACAO.md` é documento de autoridade. **Atualize o texto dela**
+      apontando para a D-036, em vez de deixar a spec contradizendo o código.
+
 - [ ] **S4-T4 — `seeya snooze`, `seeya skip-today`, `seeya config`.**
 - [ ] **S4-T5 — `seeya daemon --stop/--status`.**
       *Aceite do sprint:* e2e 6, 7 e 8 passam. Um dia inteiro de uso real sem intervenção.

@@ -1109,3 +1109,89 @@ ações — é alguém construir.**
 **Consequência prática:** a cadeia de fallback do `adapters/notification/` fica como está, com um
 backend por SO. Nenhum `terminal-notifier`, nenhum `notify-send -A`, nenhuma escrita em registro no
 caminho de produção. Se alguém propuser acrescentar, a resposta está aqui.
+
+## D-035 — O que vira config e o que fica constante
+
+**Decisão do mantenedor, em 2026-09-05**, ao revisar três números escolhidos sem medição.
+
+**O problema que ela resolve.** O projeto vinha decidindo caso a caso, e as decisões já não
+combinavam. A **Q-027** manteve `RESUME_PROMPT_ARG_LIMIT_CHARS` como constante com o argumento "é
+limite técnico do SO, não preferência de produto". A **Q-025** manteve `MAX_BRIEFING_SCAN_DAYS`
+como constante, rotulado "limite de E/S, não julgamento de produto". Sem um critério escrito, a
+próxima pessoa não teria como saber onde pôr o número dela.
+
+**O critério.**
+
+**Constante** quando o número é determinado pelo **sistema operacional, pelo protocolo ou por um
+fato técnico** — o teto de linha de comando do Windows (~32.767 unidades), quanto custa subir um
+`powershell.exe` frio, o intervalo do laço do daemon. **Ninguém configura o Windows**, e um número
+desses mudar significa que a medição mudou, não que a preferência mudou.
+
+**Config** quando depende de **como esta pessoa trabalha ou do que ela topa gastar**. Aí o valor
+certo é diferente por pessoa, e nenhuma medição nossa resolve — porque não é sobre o sistema, é
+sobre ela.
+
+**O que muda por causa disto** (todos com o valor atual como default, então nada muda de
+comportamento):
+
+| número | de | para | por quê |
+|---|---|---|---|
+| `MAX_GIT_ROOTS_TO_VISIT` (8) | constante | **config** | depende do arranjo de pastas da pessoa |
+| limite de retentativa de captura (3) | constante | **config** | depende do quanto ela topa gastar |
+| `MAX_BRIEFING_SCAN_DAYS` (30) | constante | **config** | quem volta de um mês fora quer mais |
+| limiar de disparo obsoleto (5 min) | constante | **config** | quanta obsolescência ela tolera (D-036) |
+
+**O que NÃO muda**, e agora com o motivo escrito: `RESUME_PROMPT_ARG_LIMIT_CHARS` (teto do
+`CreateProcess` do Windows), `FAST_FAILURE_GRACE_MS` (tempo medido de falha rápida do `claude`),
+`MAX_ASSISTANT_MESSAGE_CHARS` e `MAX_LAST_PROMPTS` (forma do prompt, não preferência de uso),
+`UNDERSTANDING_EXCERPT_CHARS` (largura de terminal), e o intervalo de 30s do laço.
+
+**A inconsistência que isto conserta foi a minha.** O `MAX_BRIEFING_SCAN_DAYS` estava rotulado como
+E/S, e pelo critério novo ele é preferência: "quantos dias procurar para trás" é como a pessoa
+trabalha, não um fato do disco. Corrigido aqui em vez de deixado para alguém tropeçar depois.
+
+**Consequência (D-027):** quatro chaves novas em `config.json`. É o custo de tornar o critério
+explícito, e ele é pago uma vez — a alternativa é continuar decidindo por caso e acumular
+incoerência.
+
+## D-036 — Agendamento vencido não age sozinho: captura sim, encerra não, e virou o dia não faz nada
+
+**Decisão do mantenedor, em 2026-09-05.** **Emenda a `docs/ESPECIFICACAO.md` § "Comportamento do
+daemon"**, que dizia: *"Se a máquina estava suspensa e o horário passou sem disparo, o encerramento
+acontece assim que o daemon acorda, com aviso de que houve atraso."*
+
+**O argumento dele, e ele está certo:** *"atrasar uma ação agendada que não se sabe quando
+retornará pode ser pior do que não executar nada."*
+
+**Onde o dano mora, e ele não é uniforme.** Capturar tarde é quase inofensivo — a captura fotografa
+as sessões como estão, continua sendo um retrato válido, só que de outro momento. **Encerrar sessão
+tarde pode destruir trabalho:** com `canTerminate: true`, uma máquina que acorda às 8h da manhã
+seguinte faria um agendamento de ontem **matar as sessões abertas hoje de manhã**. É exatamente a
+surpresa contra a qual a D-002 foi cautelosa.
+
+**E há um corte que não é número escolhido, é fato:** se o **dia local virou**, a janela acabou.
+Disparar depois disso escreveria o encerramento de ontem na pasta de hoje, capturando a manhã como
+se fosse o fechamento da noite anterior. Aí não é atraso, é **dado errado**.
+
+**A regra, em três casos:**
+
+1. **Dia local diferente → não dispara, nunca.** Notifica que o encerramento daquele dia não
+   aconteceu e precisa ser feito à mão. **Fronteira factual**, sem número arbitrário.
+2. **Mesmo dia, atrasado além do limiar → captura, mas NÃO encerra.** O handoff não se perde, e
+   nenhuma sessão morre por agendamento vencido. A notificação diz que rodou atrasado e que a
+   terminação foi pulada.
+3. **Mesmo dia, dentro do limiar → normal.**
+
+**O limiar mudou de significado, e é por isso que ele virou config (D-035).** Antes era "a partir
+de quando eu **digo** que atrasou" — texto. Agora é "a partir de quando eu **deixo de agir**" —
+comportamento. Um número que governa ação merece ser preferência de quem convive com a
+consequência.
+
+**Por que não a versão pura ("nunca disparar atrasado").** Ela é mais simples de explicar, e foi
+considerada. Perde o caso barato: máquina que dormiu vinte minutos e acordou às 19h50 mandaria a
+pessoa ao terminal por nada. A regra acima entrega o valor onde ele é gratuito e recua onde ele
+custa.
+
+**Consequência para o `core/schedule.ts`:** o `endOfDay` continua devolvendo `delayMs` **cru** — o
+núcleo segue sem escolher limiar (Q-037 item 3). Quem decide é o daemon, agora lendo o valor da
+config em vez de uma constante.

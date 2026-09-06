@@ -217,6 +217,45 @@ Cada adapter contra o mundo real, mas num mundo de mentira controlado.
   binário `seeya` compilado — sem esse cuidado, `npm run test:e2e` mostraria uma notificação real
   na tela de quem roda o portão.
 
+## Suíte lenta ou instável? Conte os processos antes de investigar o código
+
+**Medido em 2026-09-05, e resolveu um vermelho que já tinha custado duas investigações.** O
+guarda `eslint-restrictions.test.ts` falhou duas vezes seguidas estourando o
+`CHILD_PROCESS_BUDGET_MS` de 30s — e passava quando rodado isolado. A causa não era a suíte:
+
+```
+365 processos node vivos na máquina
+  7 de 18/08 · 57 de 29/08 · 170 de 30/08 · 59 de 31/08 · 17 de 01/09 · 31 de hoje
+```
+
+Restos de execuções de teste e de agentes, acumulados por semanas. O pico coincide com o dia em
+que vários agentes rodaram em paralelo.
+
+**A desproporção que denuncia:** o `eslint` sozinho, num arquivo, leva **4 segundos** (medido). O
+orçamento é de 30. Havia folga de **sete vezes** e ele estourava mesmo assim — porque disputava
+CPU com centenas de processos.
+
+Depois de matar os 334 antigos, **o portão passou de primeira**, 1218 testes, sem tocar em código.
+
+**A regra, e ela é barata:**
+
+```
+powershell -NoProfile -Command '(Get-Process node -ErrorAction SilentlyContinue | Measure-Object).Count'
+```
+
+**Faça isso antes de investigar suíte lenta ou teste instável.** Um número na casa das centenas
+explica sozinho qualquer vermelho por tempo, e nenhuma leitura de código vai encontrar a causa —
+ela não está no código.
+
+**Por que isto enganou duas vezes.** A **Q-030a** registrou vermelho local que sumia no rerun e
+concluiu "contenção, não mexer" — certo por acaso, pelo motivo errado. A **S4-T0g** gastou uma
+tarefa inteira procurando regressão no CI e concluiu corretamente que não havia: **o runner do
+GitHub nasce limpo a cada execução**, então este problema **nunca** poderia aparecer lá. Vermelho
+que só acontece na máquina de quem desenvolve e some no CI é o sintoma exato disto.
+
+**Cuidado ao limpar:** a sessão do Claude Code **é** um processo node. Filtre por data
+(`$_.StartTime -lt (Get-Date).Date`) em vez de matar tudo, e use **aspas simples** no Git Bash —
+aspas duplas expandem o `$_`, que é variável do próprio bash.
 ## Medir custo de chamada real: controle o calor do cache
 
 **Três medições de custo neste projeto já foram confundidas pela mesma coisa**, e a terceira só
