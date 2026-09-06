@@ -115,12 +115,12 @@ describe('StorageAdapter#readHandoff', () => {
     }
   });
 
-  // S4-T00c/Q-036: assistantMessages feeds the lean prompt but is not a disk key (a maintainer
-  // decision, not an oversight — see core/types.ts#SessionFacts.assistantMessages's docstring and
-  // adapters/storage/handoff-schema.ts#parseHandoffFacts). This is the regression test for that
-  // exclusion: saving a handoff whose facts DO carry assistant text must read back empty, not
-  // reconstruct or persist it.
-  it('never persists facts.assistantMessages, even when present when saving (Q-036)', async () => {
+  // S4-T3c/Q-036: assistantMessages became a real disk key (schemaVersion 3) because
+  // `understanding` is DERIVED from this text — without it on disk a handoff isn't auditable
+  // (core/types.ts#SessionFacts.assistantMessages's docstring, adapters/storage/handoff-schema.ts).
+  // This is the regression test for the reversal of the older Q-036 exclusion: saving a handoff
+  // whose facts carry assistant text must now WRITE it and read it back unchanged.
+  it('persists facts.assistantMessages, round-tripping the assistant text exactly (Q-036)', async () => {
     const seeyaHome = await makeTmpDir();
     try {
       const handoff: Handoff = {
@@ -133,9 +133,9 @@ describe('StorageAdapter#readHandoff', () => {
         path.join(seeyaHome, 'days', '2026-08-16', 'sessions', `${handoff.sessionId}.json`),
         'utf8',
       );
-      expect(raw).not.toContain('4 done, 6 pending');
+      expect(raw).toContain('4 done, 6 pending');
       const readBack = await storage.readHandoff('2026-08-16', handoff.sessionId);
-      expect(readBack?.facts.assistantMessages).toEqual([]);
+      expect(readBack?.facts.assistantMessages).toEqual(['4 done, 6 pending']);
     } finally {
       await rm(seeyaHome, { recursive: true, force: true });
     }
@@ -155,7 +155,7 @@ describe('StorageAdapter#readHandoff', () => {
       );
       const raw = await readFile(expectedPath, 'utf8');
       const parsed: unknown = JSON.parse(raw);
-      expect(parsed).toMatchObject({ sessionId: SAMPLE_HANDOFF.sessionId, schemaVersion: 2 });
+      expect(parsed).toMatchObject({ sessionId: SAMPLE_HANDOFF.sessionId, schemaVersion: 3 });
     } finally {
       await rm(seeyaHome, { recursive: true, force: true });
     }
@@ -292,6 +292,20 @@ describe('StorageAdapter#readHandoff — D-032 migration from schemaVersion 1', 
     }
   });
 
+  // S4-T3c: a v1 document is two migrations away from current (1→2→3). It never measured
+  // assistantMessages either — chaining through migrateHandoffV2ToV3 must still land on `[]`.
+  it("a v1 handoff's assistantMessages comes back [] after chaining through v2 (S4-T3c)", async () => {
+    const seeyaHome = await makeTmpDir();
+    try {
+      await writeV1Document(seeyaHome, '2026-08-30', V1_DOCUMENT);
+      const storage = new StorageAdapter(seeyaHome);
+      const handoff = await storage.readHandoff('2026-08-30', V1_DOCUMENT.sessionId);
+      expect(handoff!.facts.assistantMessages).toEqual([]);
+    } finally {
+      await rm(seeyaHome, { recursive: true, force: true });
+    }
+  });
+
   it("a v1 handoff's filesOutsideRepository/reposNotVisited come back null — never 0 (D-025)", async () => {
     const seeyaHome = await makeTmpDir();
     try {
@@ -347,6 +361,118 @@ describe('StorageAdapter#readHandoff — D-032 migration from schemaVersion 1', 
       // `--dry-run` or a second `seeya start-day` reading the same day must never depend on the
       // first read having "upgraded the file on disk" as a side effect.
       expect(JSON.parse(rawBetweenReads)).toMatchObject({ schemaVersion: 1 });
+      expect(second).toEqual(first);
+    } finally {
+      await rm(seeyaHome, { recursive: true, force: true });
+    }
+  });
+});
+
+/**
+ * S4-T3c's migration (docs/QUESTOES.md Q-036, docs/PLANO-DE-ENTREGA.md): `facts.assistantMessages`
+ * becomes a real disk key at `HANDOFF_SCHEMA_VERSION` 3. Same discipline as the D-032 block above —
+ * every document here is written as PLAIN JSON, deliberately never through `serializeHandoff`
+ * (which only ever writes the CURRENT version), because this is what a real schemaVersion-2 file
+ * captured before this task — the maintainer has real days on disk from before 2026-09-05 — looks
+ * like.
+ */
+describe('StorageAdapter#readHandoff — S4-T3c migration from schemaVersion 2', () => {
+  function writeV2Document(seeyaHome: string, day: string, document: Record<string, unknown>) {
+    const dir = path.join(seeyaHome, 'days', day, 'sessions');
+    return mkdir(dir, { recursive: true }).then(() =>
+      writeFile(path.join(dir, `${document.sessionId as string}.json`), JSON.stringify(document)),
+    );
+  }
+
+  const V2_DOCUMENT = {
+    schemaVersion: 2,
+    sessionId: '44444444-4444-4444-8444-444444444444',
+    cwd: 'c:\\code\\projeto-v2',
+    name: 'projeto-v2-01',
+    capturedAt: '2026-09-02T21:00:00.000Z',
+    sessionState: 'ended',
+    capturedDuringActiveTurn: false,
+    source: 'model',
+    captureMode: 'lean',
+    sources: ['git', 'transcript', 'registry'],
+    facts: {
+      lastActivity: '2026-09-02T20:45:00.000Z',
+      lastPrompts: ['fix the other bug'],
+      // No `assistantMessages` key at all — schemaVersion 2 never wrote one.
+      touchedFiles: ['src/b.ts'],
+      git: [
+        {
+          root: 'c:\\code\\projeto-v2',
+          branch: 'main',
+          dirty: false,
+          modifiedFiles: [],
+          commitsToday: [{ sha: '2c8ef00', title: 'fix: other bug' }],
+          worktrees: [],
+        },
+      ],
+      filesOutsideRepository: 0,
+      reposNotVisited: 0,
+    },
+    understanding: 'worked on the other thing',
+    pendingItems: [],
+    tomorrowPlan: [],
+    generationError: null,
+  };
+
+  it('a v2 handoff with no assistantMessages key is read without error, as []', async () => {
+    const seeyaHome = await makeTmpDir();
+    try {
+      await writeV2Document(seeyaHome, '2026-09-02', V2_DOCUMENT);
+      const storage = new StorageAdapter(seeyaHome);
+      const handoff = await storage.readHandoff('2026-09-02', V2_DOCUMENT.sessionId);
+      expect(handoff).not.toBeNull();
+      expect(handoff!.facts.assistantMessages).toEqual([]);
+    } finally {
+      await rm(seeyaHome, { recursive: true, force: true });
+    }
+  });
+
+  it('a v2 handoff keeps its already-migrated facts.git list intact across the v2→v3 step', async () => {
+    const seeyaHome = await makeTmpDir();
+    try {
+      await writeV2Document(seeyaHome, '2026-09-02', V2_DOCUMENT);
+      const storage = new StorageAdapter(seeyaHome);
+      const handoff = await storage.readHandoff('2026-09-02', V2_DOCUMENT.sessionId);
+      expect(handoff!.facts.git).toEqual(V2_DOCUMENT.facts.git);
+      expect(handoff!.facts.filesOutsideRepository).toBe(0);
+      expect(handoff!.facts.reposNotVisited).toBe(0);
+    } finally {
+      await rm(seeyaHome, { recursive: true, force: true });
+    }
+  });
+
+  it('listHandoffs (the whole-day briefing read) also migrates a v2 file transparently', async () => {
+    const seeyaHome = await makeTmpDir();
+    try {
+      await writeV2Document(seeyaHome, '2026-09-02', V2_DOCUMENT);
+      const storage = new StorageAdapter(seeyaHome);
+      const { handoffs, rejected } = await storage.listHandoffs('2026-09-02');
+      expect(rejected).toEqual([]);
+      expect(handoffs).toHaveLength(1);
+      expect(handoffs[0]!.facts.assistantMessages).toEqual([]);
+    } finally {
+      await rm(seeyaHome, { recursive: true, force: true });
+    }
+  });
+
+  it('reading the same v2 file twice produces the identical result both times (no write-on-read)', async () => {
+    const seeyaHome = await makeTmpDir();
+    try {
+      await writeV2Document(seeyaHome, '2026-09-02', V2_DOCUMENT);
+      const storage = new StorageAdapter(seeyaHome);
+      const first = await storage.readHandoff('2026-09-02', V2_DOCUMENT.sessionId);
+      const rawBetweenReads = await readFile(
+        path.join(seeyaHome, 'days', '2026-09-02', 'sessions', `${V2_DOCUMENT.sessionId}.json`),
+        'utf8',
+      );
+      const second = await storage.readHandoff('2026-09-02', V2_DOCUMENT.sessionId);
+      // Same guarantee as the v1 block above: migration is in-memory only, never rewritten to disk.
+      expect(JSON.parse(rawBetweenReads)).toMatchObject({ schemaVersion: 2 });
       expect(second).toEqual(first);
     } finally {
       await rm(seeyaHome, { recursive: true, force: true });

@@ -21,8 +21,16 @@ import type { SchemaMigration } from './schema-version.js';
  * handoff already on disk readable — the maintainer has real days captured before this change
  * (docs/PLANO-DE-ENTREGA.md S4-T0's own warning: subir a versão sem migração tornaria ilegível
  * todo handoff já gravado, e é exatamente isso que `seeya start-day` lê).
+ *
+ * **Bumped 2 → 3 by S4-T3c (docs/QUESTOES.md Q-036, closed 2026-09-05): `facts.assistantMessages`
+ * becomes a real disk key.** The measurement that reversed the earlier call: the field already had
+ * a fixed ceiling (`MAX_ASSISTANT_MESSAGES` × `MAX_ASSISTANT_MESSAGE_CHARS`, ~5 KB), while
+ * `facts.lastPrompts` — persisted since schemaVersion 1 — has none (Q-051). "Volume muito maior
+ * que os prompts" was the argument for not persisting it, and it was backwards. Same migration
+ * discipline as D-032: a v2 document never measured this, so it comes back `[]`, never a
+ * reconstruction (D-025).
  */
-export const HANDOFF_SCHEMA_VERSION = 2;
+export const HANDOFF_SCHEMA_VERSION = 3;
 
 const gitCommitSchema = z.object({ sha: z.string(), title: z.string() });
 
@@ -47,6 +55,9 @@ const repositoryGitFactsSchema = gitFactsSchema.extend({ root: z.string().min(1)
 const handoffFactsSchema = z.object({
   lastActivity: z.iso.datetime().nullable(),
   lastPrompts: z.array(z.string()),
+  /** S4-T3c (Q-036): present from schemaVersion 3 on. A schemaVersion-2 document is migrated to
+   * `[]` by `migrateHandoffV2ToV3` below before this schema ever sees it. */
+  assistantMessages: z.array(z.string()),
   touchedFiles: z.array(z.string()),
   git: z.array(repositoryGitFactsSchema),
   /** `null` only for a handoff migrated up from schemaVersion 1 — see `HandoffFacts`'s own
@@ -99,10 +110,37 @@ function migrateHandoffV1ToV2(document: Record<string, unknown>): Record<string,
   };
 }
 
+/**
+ * S4-T3c's migration (Q-036): a schemaVersion-2 document never wrote `facts.assistantMessages` at
+ * all — `serializeHandoff` didn't carry it and `parseHandoffFacts` always answered `[]` regardless
+ * of what was on disk. Backfilling `[]` here keeps that the honest read for a v2 record: it never
+ * measured the assistant's own text, so `[]` states "not found", the same D-025 reading
+ * `lastActivity: null` already gets for a transcript that answered nothing. Unlike
+ * `filesOutsideRepository`/`reposNotVisited` (D-032), this field's own type never distinguishes
+ * "not measured" from "measured, found none" — `SessionFacts.assistantMessages` was already `[]`
+ * for "no assistant text found" before this task, so giving a migrated record the same value is
+ * not a new ambiguity, just the one the type already carried.
+ *
+ * Only reshapes `facts.assistantMessages`; everything else a v2 document carries is left alone,
+ * same discipline as `migrateHandoffV1ToV2` above.
+ */
+function migrateHandoffV2ToV3(document: Record<string, unknown>): Record<string, unknown> {
+  const facts =
+    typeof document.facts === 'object' && document.facts !== null
+      ? (document.facts as Record<string, unknown>)
+      : {};
+  return {
+    ...document,
+    schemaVersion: 3,
+    facts: { ...facts, assistantMessages: [] },
+  };
+}
+
 /** Passed to `resolveSchemaVersion` for every handoff read (`adapters/storage/index.ts`) — the
  * production migrations table `schema-version.ts`'s own top comment says was empty "so far". */
 export const HANDOFF_SCHEMA_MIGRATIONS: Readonly<Record<number, SchemaMigration>> = {
   1: migrateHandoffV1ToV2,
+  2: migrateHandoffV2ToV3,
 };
 
 /**
@@ -129,17 +167,17 @@ const handoffDocumentSchema = z.object({
 });
 
 /**
- * `assistantMessages` (S4-T00c, `core/types.ts#SessionFacts`) is deliberately absent from
- * `handoffFactsSchema` above and from `serializeHandoff` below — see that field's own docstring
- * and docs/QUESTOES.md Q-036: it feeds the lean prompt, it is not a persisted key. Reading it back
- * from disk therefore always answers `[]`, the same "not found" D-025 already gives any other
- * field this document never wrote — never an invented reconstruction of what the assistant said.
+ * `assistantMessages` (S4-T3c, `core/types.ts#SessionFacts`) is a real disk key as of
+ * `HANDOFF_SCHEMA_VERSION` 3 (docs/QUESTOES.md Q-036) — the `understanding` field is *derived*
+ * from this text, and without it on disk a handoff can't be audited against the evidence that
+ * produced it. A document already migrated to v3 (`migrateHandoffV2ToV3` above) always carries the
+ * key by the time this runs, so reading it back is a plain pass-through, same as `lastPrompts`.
  */
 function parseHandoffFacts(raw: z.infer<typeof handoffFactsSchema>): HandoffFacts {
   return {
     lastActivity: raw.lastActivity === null ? null : new Date(raw.lastActivity),
     lastPrompts: raw.lastPrompts,
-    assistantMessages: [],
+    assistantMessages: raw.assistantMessages,
     touchedFiles: raw.touchedFiles,
     git: raw.git,
     filesOutsideRepository: raw.filesOutsideRepository,
@@ -198,8 +236,8 @@ export function serializeHandoff(handoff: Handoff): Record<string, unknown> {
       lastActivity:
         handoff.facts.lastActivity === null ? null : handoff.facts.lastActivity.toISOString(),
       lastPrompts: handoff.facts.lastPrompts,
-      // handoff.facts.assistantMessages is deliberately NOT written here — see
-      // parseHandoffFacts's docstring above and docs/QUESTOES.md Q-036.
+      // S4-T3c (Q-036): written from schemaVersion 3 on — see parseHandoffFacts's docstring above.
+      assistantMessages: handoff.facts.assistantMessages,
       touchedFiles: handoff.facts.touchedFiles,
       git: handoff.facts.git,
       filesOutsideRepository: handoff.facts.filesOutsideRepository,

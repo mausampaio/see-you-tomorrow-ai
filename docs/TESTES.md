@@ -167,6 +167,20 @@ Cada adapter contra o mundo real, mas num mundo de mentira controlado.
   resultado idêntico as duas vezes, com o arquivo em disco inalterado entre as leituras — prova de
   que a migração só traduz em memória, nunca reescreve (seguro para `--dry-run` e para
   `seeya end-day --session` repetido no mesmo dia).
+  **S4-T3c, segunda migração real (Q-036): schemaVersion 2 → 3.** Mesmo arquivo, novo describe
+  "S4-T3c migration from schemaVersion 2" — documento v2 **bruto** sem a chave
+  `facts.assistantMessages` (a chave nunca existiu antes desta tarefa) é lido como `[]`; os campos
+  de D-032 já migrados (`filesOutsideRepository`/`reposNotVisited`) continuam corretos depois do
+  passo v2→v3, provando que a migração nova não pisa na anterior; `listHandoffs` migra
+  transparentemente; ler duas vezes não reescreve. O describe de D-032 ganhou um teste a mais
+  provando que um documento v1 encadeia as duas migrações (1→2→3) e chega também em
+  `assistantMessages: []`. E o teste que antes provava a **exclusão** do campo (Q-036, resposta
+  original) foi invertido: agora prova que um handoff com texto real do assistente é **persistido**
+  e volta idêntico. **Verificação adicional, fora da suíte automatizada:** os handoffs reais do
+  mantenedor em `~/.seeya/days/` (mistura de v1 e v2, oito diretórios de dia, doze arquivos) foram
+  lidos com o código novo antes de a tarefa ser aceita — mesma disciplina da D-032 — e todos
+  leram sem erro, com `assistantMessages: []` (nenhum foi capturado com o código novo ainda).
+  Detalhe em `docs/QUESTOES.md` Q-055 e `docs/PLANO-DE-ENTREGA.md` S4-T3c.
 - **`generation/`**: um script falso de `claude` colocado no PATH do teste, que devolve JSON
   canned, JSON inválido, código de saída != 0, e um que trava (para testar o timeout).
   **Nenhum teste da suíte chama a API de verdade.** Obrigatório: um teste que passa contexto com

@@ -4913,3 +4913,41 @@ o mesmo que os outros dois contextos já fazem.
 **A redação honesta do aviso de dia perdido:** confirmada, e é o tipo de contenção que eu quero.
 O `seeya end-day` não tem `--day`, então prometer "rode para ontem" seria mandar a pessoa fazer
 algo que o produto não oferece.
+
+---
+
+## Q-055 — S4-T3c: `assistantMessages` migrado vem como `[]`, não `null` como os outros dois campos de D-032, e a verificação contra os handoffs reais
+
+**Origem:** S4-T3c, fechando a Q-036. **Bloqueia:** não — é registro de uma escolha e de uma
+verificação, não uma pergunta em aberto.
+
+**A escolha registrada.** `filesOutsideRepository`/`reposNotVisited` (D-032) usam `null` para
+distinguir "um handoff v1 nunca mediu isto" de "mediu e deu zero". `assistantMessages` migrado de
+schemaVersion 2 **não** segue esse padrão — vem `[]`, não `null`. A diferença não é descuido: o
+tipo de `assistantMessages` já era `readonly string[]` **antes** desta tarefa (nunca `string[] |
+null`), porque "nenhuma mensagem do assistente encontrada" sempre foi representado como lista
+vazia, mesmo numa captura ao vivo (`extractAssistantMessageText` devolve `null` por entrada, mas
+`SessionFacts.assistantMessages` já agrega para `[]` quando nenhuma sobra). Dar `null` ao campo
+migrado exigiria mudar o tipo do próprio `SessionFacts` para `readonly string[] | null`, o que
+tornaria toda leitura existente (`buildLeanPrompt`, os testes) mais complicada por uma distinção
+que o campo nunca precisou fazer. Segui a instrução literal da tarefa (`[] é o valor honesto`) em
+vez de replicar o padrão de D-032 — os dois campos parecem análogos e não são: um é contagem
+(onde `0` e "não medido" colidem), o outro já é lista (onde "vazio" sempre significou "não
+encontrado", medido ou não).
+
+**A verificação pedida, feita e o que saiu.** Rodei um script só-leitura (`StorageAdapter` do
+build novo, `listHandoffs` por dia, nunca escrita) contra o `~/.seeya/days/` real desta máquina:
+8 diretórios de dia (`2026-08-30`, `2026-08-31`, `2026-09-02` e três backups dele, `2026-09-05` e
+um backup), 12 handoffs no total, mistura real de `schemaVersion` 1 (8 arquivos) e 2 (4 arquivos)
+— exatamente a mistura que o despacho da tarefa previa. **Todos os 12 leram sem erro, zero
+rejeitados, todos com `assistantMessages: []`** (nenhum documento real jamais escreveu esse
+campo, então `[]` é o valor certo para os 12). Os `filesOutsideRepository`/`reposNotVisited` de
+D-032 continuaram corretos depois do passo v2→v3 (`null` nos v1, números reais nos v2, incluindo
+um `filesOutsideRepository: 14` num handoff v2 real) — prova de que a migração nova não pisou na
+migração anterior. Conferido depois, por `grep`, que os 12 arquivos em disco continuam com o
+`schemaVersion` original (1 ou 2) — a leitura não reescreveu nada, mesma garantia que o teste
+"reading the same file twice" já prova em fixture sintética.
+
+**O que isso não prova:** que um handoff real algum dia *tivesse* texto de assistente para
+persistir — nenhum dos 12 tinha, porque nenhum foi capturado com o código desta tarefa. Só a
+próxima captura real, já em schemaVersion 3, vai mostrar o campo preenchido de verdade.
