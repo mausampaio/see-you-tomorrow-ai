@@ -66,6 +66,11 @@ describe('runDaemon — single instance (D-005)', () => {
 
 describe('runDaemon — the loop itself', () => {
   it('polls exactly `maxIterations` times, sleeping between each', async () => {
+    // S4-T5: the wait between polls is chunked into 1s pieces (`sleepUntilNextPollOrStop`) so a
+    // `--stop` request lands quickly instead of waiting out a single 30s sleep — so each of the
+    // gaps between polls below now costs POLL_INTERVAL_MS / 1_000 = 30 `Clock.sleep` calls, not 1.
+    // `shouldStop` is never set here, so every chunk actually runs (no early return).
+    const CHUNKS_PER_GAP = 30;
     let pollCount = 0;
     let sleepCount = 0;
     const deps = buildDeps({
@@ -84,7 +89,33 @@ describe('runDaemon — the loop itself', () => {
 
     await runDaemon(deps, 555, undefined, { maxIterations: 3 });
     expect(pollCount).toBe(3);
-    expect(sleepCount).toBe(2); // sleeps BETWEEN polls, never after the last one
+    expect(sleepCount).toBe(2 * CHUNKS_PER_GAP); // sleeps BETWEEN polls, never after the last one
+  });
+
+  it('a shouldStop that flips true mid-wait is noticed within one chunk, not a full 30s sleep', async () => {
+    // The whole point of S4-T5's chunking: `seeya daemon --stop` sets this flag asynchronously
+    // (a real SIGTERM handler), and the loop must not need to finish a full POLL_INTERVAL_MS sleep
+    // to notice it. Flips true after the 2nd `Clock.sleep` call within the wait — proving the loop
+    // checks `shouldStop` BETWEEN chunks, not only before/after the whole wait.
+    let sleepCalls = 0;
+    let stopFlag = false;
+    const deps = buildDeps({
+      clock: {
+        now: () => NOW,
+        sleep: () => {
+          sleepCalls += 1;
+          if (sleepCalls === 2) {
+            stopFlag = true;
+          }
+          return Promise.resolve();
+        },
+      },
+    });
+
+    await runDaemon(deps, 555, undefined, { shouldStop: () => stopFlag });
+    // 2 chunks spent waiting, then the 3rd check (before what would be the next chunk) sees the
+    // flag and returns early — nowhere near the 30 chunks a full, un-chunked wait would need.
+    expect(sleepCalls).toBe(2);
   });
 
   it('a poll that throws does not stop the loop (docs/PLANO-DE-ENTREGA.md: "o perigo que só existe em laço")', async () => {
