@@ -311,10 +311,12 @@ export interface SessionFacts {
    * something said to the human. Empty when none were found; never a placeholder claiming the
    * assistant said nothing (D-025).
    *
-   * **Feeds `buildLeanPrompt` only — deliberately NOT added to `handoffFactsSchema`/
-   * `serializeHandoff` (`adapters/storage/handoff-schema.ts`), so it never becomes a new persisted
-   * key in `Handoff` on disk.** That's a maintainer decision, not an oversight — see
-   * docs/QUESTOES.md Q-036 for the open question of whether it should also be persisted later.
+   * **Persisted as a real disk key since `HANDOFF_SCHEMA_VERSION` 3 (S4-T3c,
+   * `adapters/storage/handoff-schema.ts`).** Closing docs/QUESTOES.md Q-036: `understanding` is
+   * *derived* from this text, and without it on disk a handoff isn't auditable — there's no way to
+   * tell, rereading it later, whether the model read the evidence or invented it. A handoff
+   * migrated up from `HANDOFF_SCHEMA_VERSION` 2 comes back with `assistantMessages: []` — a v2
+   * document never measured this, so `[]` is the honest read (D-025), not a reconstruction.
    */
   readonly assistantMessages: readonly string[];
   /**
