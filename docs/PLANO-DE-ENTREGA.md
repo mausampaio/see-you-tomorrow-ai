@@ -2129,7 +2129,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       verificar:linux` verdes (medido nesta máquina, o segundo via Docker Desktop, container Linux
       real).
 
-- [ ] **S4-T3c — Persistir o `assistantMessages` no handoff.** Decisão do mantenedor ao fechar a
+- [~] **S4-T3c — Persistir o `assistantMessages` no handoff.** Decisão do mantenedor ao fechar a
       **Q-036**, em 2026-09-05.
 
       **Por que muda.** O `understanding` é **derivado** do texto do assistente. Sem ele em disco,
@@ -2165,6 +2165,53 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
       *Aceite:* handoff novo grava e relê o texto do assistente; **handoff v2 já em disco
       continua legível**, com `[]`. Os dois com teste.
+
+      **Implementado em 2026-09-06:** `HANDOFF_SCHEMA_VERSION` 2 → 3
+      (`src/adapters/storage/handoff-schema.ts`). `assistantMessages` entrou no
+      `handoffFactsSchema` (`z.array(z.string())`), `serializeHandoff` passou a escrevê-lo, e
+      `parseHandoffFacts` deixou de devolver `[]` fixo — lê `raw.assistantMessages` do documento já
+      migrado. `migrateHandoffV2ToV3` acrescenta `assistantMessages: []` a um documento v2
+      (que nunca escreveu essa chave), registrada em `HANDOFF_SCHEMA_MIGRATIONS[2]` — mesmo
+      mecanismo de `resolveSchemaVersion` que a D-032 já validou, encadeando 1→2→3 automaticamente
+      para um documento v1. `core/types.ts#SessionFacts.assistantMessages` teve o docstring
+      atualizado: a frase que dizia "deliberately NOT added to `handoffFactsSchema`" (verdadeira
+      até esta tarefa) foi substituída pela descrição do novo comportamento. Limites
+      (`MAX_ASSISTANT_MESSAGES`/`MAX_ASSISTANT_MESSAGE_CHARS`) e o teto do `lastPrompts`
+      **não foram tocados** (Q-051 segue fechada como estava).
+
+      **Diferença de padrão em relação à D-032, registrada e justificada (Q-055):** os campos de
+      D-032 (`filesOutsideRepository`/`reposNotVisited`) migram para `null`, para distinguir "não
+      medido" de "medido, deu zero" — são contagens. `assistantMessages` migra para `[]`, não
+      `null`, porque o **tipo** já era `readonly string[]` antes desta tarefa: "nenhuma mensagem
+      encontrada" sempre foi `[]`, medido ou não, e dar `null` ao campo exigiria mudar o tipo de
+      `SessionFacts` para acomodar uma distinção que ele nunca precisou fazer. Segui a letra da
+      tarefa (`[] é o valor honesto`) em vez do precedente de D-032 — os dois casos parecem iguais
+      e não são.
+
+      **Migração testada em dois níveis, como o aceite pede:**
+      1. `tests/integration/storage/handoff.test.ts`, novo describe "S4-T3c migration from
+         schemaVersion 2" — documento v2 **bruto** (JSON escrito à mão, nunca via
+         `serializeHandoff`) sem a chave `assistantMessages` é lido sem erro, como `[]`;
+         `filesOutsideRepository`/`reposNotVisited` já migrados de D-032 continuam corretos depois
+         do passo v2→v3; `listHandoffs` migra transparentemente; ler duas vezes não reescreve o
+         arquivo. Mais um teste no describe de D-032 provando que um documento v1 encadeia as duas
+         migrações (1→2→3) e chega em `assistantMessages: []`. E o teste antigo que provava a
+         **exclusão** de Q-036 foi invertido: agora prova que um handoff com texto real do
+         assistente é **persistido** e volta idêntico (round-trip).
+      2. **Verificação manual contra os handoffs reais do mantenedor**, pedida explicitamente no
+         despacho (mesma disciplina da D-032): script só-leitura com o `StorageAdapter` do build
+         novo contra `~/.seeya/days/` desta máquina. **Medido:** 8 diretórios de dia (incluindo
+         três backups de `2026-09-02` e um de `2026-09-05`), 12 handoffs, mistura real de
+         `schemaVersion` 1 (8 arquivos) e 2 (4 arquivos). Todos os 12 leram sem erro, zero
+         rejeitados, todos com `assistantMessages: []` (nenhum foi capturado com o código novo,
+         então nenhum tinha o campo — `[]` é o valor certo para os 12). Os campos de D-032
+         continuaram corretos (inclusive um `filesOutsideRepository: 14` real). Conferido por
+         `grep` depois que os 12 arquivos em disco **não mudaram** de `schemaVersion` — a leitura
+         não reescreve nada. Detalhe completo e a diferença de padrão registrados na Q-055.
+
+      `npm run verificar` e `npm run verificar:linux` verdes (medidos nesta máquina, o segundo via
+      Docker Desktop). Cobertura: `core/` 100%, `adapters/storage` 97,92% statements/90,29%
+      branches/98,03% funções/98,42% linhas — acima do piso de 80% do diretório.
 
 - [~] **S4-T3d — Quatro números para a config (D-035) e o agendamento vencido (D-036).**
       Saída da varredura de questões com o mantenedor, em 2026-09-05.
