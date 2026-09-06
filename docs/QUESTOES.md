@@ -4533,4 +4533,17 @@ mais que a resposta; (D) medir primeiro o custo de sessões com prompts longos, 
 
 **Inclinação:** (D) antes de qualquer corte. Truncar por simetria seria a analogia-em-vez-de-
 medição que este projeto já corrigiu duas vezes na D-011.
-**Resposta:** _(em aberto)_
+**Resposta:** **FECHADA na opção (D) — fica sem teto, e não se mede agora.** Confirmado pelo
+mantenedor em 2026-09-05.
+
+**O motivo de não truncar por simetria:** o prompt do usuário costuma **conter a instrução
+inteira** — requisito, exemplo, restrição — e cortar pode remover justamente o que define o que
+estava sendo feito. Resposta de assistente é mais redundante; o essencial se repete. Os dois
+campos parecem simétricos e **não são**.
+
+**E o motivo de não medir agora:** o caso que doeria — sessão com prompts enormes — nunca
+apareceu no uso real. Medir cenário inventado mede o cenário inventado. Truncar por simetria
+seria a analogia-em-vez-de-medição que a D-011 já corrigiu **duas** vezes.
+
+**Quando reabrir, com o gatilho escrito:** se uma captura estourar orçamento e o `modelUsage`
+apontar o prompt como responsável. Aí a evidência existe e o teto se justifica sozinho.

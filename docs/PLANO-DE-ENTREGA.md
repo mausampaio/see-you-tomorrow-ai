@@ -1964,6 +1964,43 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       lugar nenhum) e a legibilidade de `captureModel`/`budgetPerSessionUsd` ficarem presos ao
       valor do início do daemon (ao contrário de `relevanceHours`, que é relido a cada ciclo)
       estão registrados na Q-049 para o mantenedor decidir, não decididos aqui.
+- [ ] **S4-T3e — O `fake-claude.mjs` vaza processo, e isso envenena toda medição de tempo.**
+      Achado em 2026-09-05, investigando um vermelho do portão que não era do código.
+
+      **O sintoma.** Havia **365 processos node** vivos na máquina do mantenedor, acumulados por
+      semanas. Depois de matar os 334 antigos, o portão passou de primeira, 1218 testes, **sem
+      tocar em código**. Os 31 restantes eram **todos** do nosso próprio fixture:
+
+      ```
+      14  tests/fixtures/generation/fake-claude.mjs -p --...   (checkout principal)
+       7  .claude/worktrees/agent-.../tests/fixtures/...
+       5  ...                                                  (e outras worktrees)
+      ```
+
+      **O mecanismo, e ele explica por que ninguém percebeu.** O fixture lê stdin com
+      `readFileSync(0, 'utf8')` — leitura **síncrona e bloqueante**. Ela só retorna quando o
+      stdin fecha. Se quem spawnou some sem fechar o cano — e o `spawnClaude` aborta por
+      `AbortSignal.timeout`, além de haver testes que spawnam direto —, **o filho fica preso para
+      sempre**. Não é processo lento; é processo que nunca mais recebe EOF.
+
+      **E um cão de guarda não salvaria:** `readFileSync` trava o event loop, então nenhum
+      `setTimeout` dispara. O fixture **não tem como se autodestruir** enquanto ler assim.
+
+      *Escopo:* as duas pontas, provavelmente. **(a)** o fixture lê stdin de forma que permita um
+      limite próprio de vida; **(b)** quem spawna garante fechar o stdin do filho, inclusive no
+      caminho de abort. A (a) é local e defensiva; a (b) ataca a origem e depende de acertar
+      todos os pontos de chamada. **Meça qual caminho vaza antes de consertar os dois.**
+
+      *Aceite:* rodar a suíte inteira duas vezes seguidas e **a contagem de processos node não
+      cresce**. Esse é o teste — não uma asserção de unidade, mas a verificação que prova o
+      conserto. Diga a contagem antes e depois no relatório.
+
+      **Por que vale mesmo não sendo urgente para o produto:** processo acumulado **envenena toda
+      medição de tempo**. Já custou duas investigações — a Q-030a tratou como contenção e seguiu,
+      e a S4-T0g gastou uma tarefa inteira procurando regressão no CI que não existia, porque o
+      runner do GitHub nasce limpo e o problema era só local. Ver `docs/TESTES.md` § "Suíte lenta
+      ou instável".
+
 - [ ] **S4-T3b — O daemon precisa deixar rastro quando falha, e o lock precisa desempatar PID.**
       Saída da **Q-049**, respondida em 2026-09-05. **Antes da S4-T5**, que vai querer ler as duas
       coisas.
