@@ -53,7 +53,16 @@ export type CommandRunner = (command: string, args: readonly string[]) => Promis
  */
 export const spawnCommand: CommandRunner = (command, args) =>
   new Promise((resolve, reject) => {
-    const child = spawn(command, [...args], { stdio: ['ignore', 'pipe', 'pipe'], shell: false });
+    const child = spawn(command, [...args], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: false,
+      // S4-T6: the daemon (no console of its own, D-005) is a real caller of this, at every
+      // lead-time/end-of-day notice — without this, the WinRT toast helper pops a real, visible
+      // console window on Windows for the length of the call. Windows-only effect; doesn't change
+      // `exitCode`/`stdout`/`stderr` either way. Same option `console-signal.ts#runPowerShellScript`
+      // already carries for the identical reason.
+      windowsHide: true,
+    });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (chunk: Buffer) => (stdout += chunk.toString('utf8')));
