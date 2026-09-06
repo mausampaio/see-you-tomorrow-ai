@@ -5244,3 +5244,30 @@ para não regredir. O que sobra da retentativa não é mais o `EPERM` cru: é
 on disk is untouched — try again.`, com o erro original em `.cause`.
 
 **Cobertura e portão:** ver relatório da tarefa em `docs/PLANO-DE-ENTREGA.md` S4-T4b.
+
+**Resposta (mantenedor, 2026-09-06): opção A, fica como está.** Sem `Clock` em
+`adapters/storage/`, sem tocar os ~100 call sites de teste do `StorageAdapter`.
+
+**Ressalva do PO, verificada no código do próprio instrumento, e ela muda o texto, não a
+decisão.** Os dois lados da corrida medida são **duas rotinas assíncronas no mesmo processo** —
+`tests/integration/storage/state-concurrent-write.test.ts` roda `writeLoop` e `readLoop` sob um
+`Promise.all`, sem `fork` nem `spawn`. Isso importa porque é exatamente o que faz o `setImmediate`
+funcionar tão bem ali: ceder um turno do event loop **é** o que deixa o leitor concorrente terminar
+`open`+`read`+`close` e soltar o handle. **Em produção o leitor é o daemon, que é outro processo** —
+e o nosso event loop girar não tem relação nenhuma com o `close` dele.
+
+Consequências, e nenhuma delas desfaz o conserto:
+
+1. **A retentativa continua sendo melhora estrita.** Oito tentativas em rajada ainda cobrem
+   qualquer colisão que termine sozinha nesse intervalo, e a mensagem legível vale sempre.
+2. **O `~0,3-1,7%` é número do instrumento, não previsão de produção**, e não deve ser citado como
+   se fosse. O mecanismo que produziu a queda é mais favorável no teste do que na vida real.
+3. O argumento *"a corrida é de ordenação do event loop, não de tempo relógio"* é verdadeiro **do
+   teste**, não necessariamente do caso real — quem for reabrir isso deve começar por aqui.
+4. **O que reabriria a questão:** uma medição com escritor e leitor em processos separados. Se lá a
+   taxa não cair, a resposta certa passa a ser um atraso real (opção B, com o custo que ela tem) ou
+   assumir a mensagem legível como a entrega inteira (opção C) — não mais `setImmediate`.
+
+A frequência de colisão em produção também é diferente, e para melhor: o daemon lê a cada 30s, não
+em laço apertado. Isso reduz **quantas** colisões acontecem — é outra coisa do que **quão bem** cada
+colisão se resolve, e o relatório da tarefa só observou a primeira.
