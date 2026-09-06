@@ -1964,7 +1964,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       lugar nenhum) e a legibilidade de `captureModel`/`budgetPerSessionUsd` ficarem presos ao
       valor do início do daemon (ao contrário de `relevanceHours`, que é relido a cada ciclo)
       estão registrados na Q-049 para o mantenedor decidir, não decididos aqui.
-- [ ] **S4-T3e — O `fake-claude.mjs` vaza processo, e isso envenena toda medição de tempo.**
+- [~] **S4-T3e — O `fake-claude.mjs` vaza processo, e isso envenena toda medição de tempo.**
       Achado em 2026-09-05, investigando um vermelho do portão que não era do código.
 
       **O sintoma.** Havia **365 processos node** vivos na máquina do mantenedor, acumulados por
@@ -2000,6 +2000,34 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       e a S4-T0g gastou uma tarefa inteira procurando regressão no CI que não existia, porque o
       runner do GitHub nasce limpo e o problema era só local. Ver `docs/TESTES.md` § "Suíte lenta
       ou instável".
+
+      **Medido em 2026-09-05, e o mecanismo real não era o hipotetizado acima (Q-052 tem os
+      números completos).** `spawn-claude.ts` já fecha o stdin do filho de forma incondicional e
+      síncrona logo após o `spawn()`, em todo caminho — inclusive abort — então o `readFileSync(0)`
+      do fixture já recebia EOF quase de imediato mesmo no modo `'hang'`; o travamento eterno vinha
+      de **depois** disso, do `setInterval` que o próprio modo `'hang'` arma de propósito. Contando
+      `node.exe` desta worktree por `CommandLine` (`Get-CimInstance Win32_Process`, não
+      `Get-Process`, que não expõe o comando): baseline 0; só o teste `-t "hangs"` deixa **1**
+      processo; a suíte `tests/integration/generation` inteira (24 testes) deixa **exatamente 2** —
+      o mesmo número das duas únicas ocorrências de `FAKE_CLAUDE_MODE = 'hang'` em todo o
+      repositório. Nenhum teste spawna o fixture diretamente (grep confirmou); a frase "há testes
+      que spawnam direto" não se sustentou aqui. A causa real: no Windows,
+      `tests/integration/generation/_fixtures.ts` compila um `.exe` em C# como *launcher* (workaround
+      do EINVAL de `.cmd`/`.bat`, CVE-2024-27980) — dois saltos de processo
+      (`spawnClaude` → shim → `node fake-claude.mjs`). O `AbortSignal.timeout` mata só o PID
+      imediato (o shim); no Windows isso não afeta o neto, que fica órfão sem sinal nenhum. No
+      POSIX o launcher usa `exec`, que troca a imagem do processo mantendo o PID — aí matar o
+      imediato mata o real, sem órfão. **Só (a) foi implementado.** `spawn-claude.ts` não tem bug
+      de stdin para corrigir (medido), e a causa do órfão é específica do shim de teste do Windows,
+      não da produção — atacar (b) (ensinar o arnês a matar a árvore inteira) seria escopo maior
+      que o problema medido pede. `tests/fixtures/generation/fake-claude.mjs`: `readFileSync(0)`
+      síncrono virou leitura assíncrona por `process.stdin`, preservando o `captureFile` idêntico
+      (D-015/D-017 continuam provados pelo mesmo instrumento); um cão de guarda (`setTimeout` de
+      5000ms, 17x o menor timeout real usado com `'hang'`, 300ms) mata o processo sozinho se nada
+      mais o fizer. Contagem depois da correção: a suíte inteira de `generation` ainda deixa 2
+      processos no instante em que o `vitest` retorna (o cão de guarda ainda não disparou), e cai
+      para **0** dentro dos 6 segundos seguintes, medido por polling a cada 750ms — nunca mais
+      cresce. Detalhes completos, incluindo os números passo a passo, em Q-052.
 
 - [ ] **S4-T3b — O daemon precisa deixar rastro quando falha, e o lock precisa desempatar PID.**
       Saída da **Q-049**, respondida em 2026-09-05. **Antes da S4-T5**, que vai querer ler as duas
