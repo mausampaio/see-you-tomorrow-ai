@@ -2941,6 +2941,31 @@ disco nesta tarefa (ver item 6).
 
 ---
 
+**Resposta:** **FECHADA — as seis confirmadas. O mantenedor confirmou o comportamento de horário
+de verão como está, em 2026-09-05, sabendo o que ele custa.**
+
+**Itens 1 e 2 (horário de verão), medidos e reproduzidos duas vezes:**
+
+| dia | situação | comportamento |
+|---|---|---|
+| entrada | `"02:30"` **não existe** | normaliza **para frente** — dispara às 03:30 |
+| saída | `"01:30"` ocorre **duas vezes** | escolhe a **primeira** ocorrência |
+
+**O argumento que decide não é delegação, é ausência de informação:** um `"HH:MM"` puro **não
+contém** qual ocorrência a pessoa quis. Inventar regra ali seria afirmar mais do que a entrada
+sustenta — o mesmo D-025 que o projeto aplica ao modelo, aplicado ao próprio código.
+
+**O custo, dito antes de confirmar:** na entrada o encerramento acontece uma hora depois do que o
+relógio de parede sugere; na saída, na primeira passagem. **Duas vezes por ano.** A config que
+desambiguaria custaria chave em disco (D-027) para um horário que é aproximado por natureza —
+ninguém escolhe 19:30 porque 19:31 seria tarde demais.
+
+**Item 3 (`delayMs` bruto em vez de `late: boolean`):** confirmado. O núcleo não escolhe limiar
+que pertence a quem notifica — e a S4-T3 de fato escolheu o dela, o que só foi possível porque a
+informação chegou crua.
+
+**Itens 4 a 6** (ordem das antecedências vencidas, e as demais): confirmados como implementados.
+
 ## Q-038 — Sete escolhas feitas fazendo S4-T1 (`adapters/notification`), registradas para confirmação
 
 **Tarefa:** S4-T1
@@ -3063,6 +3088,34 @@ está certa). B) investigar se a intenção original era outra forma de mensagem
 **Resposta:** _(aguardando)_
 
 ---
+
+**Resposta:** **FECHADA — as sete confirmadas, e o item 1 virou a D-034.**
+
+**Item 1 (um backend por SO, sem ações): confirmado, e promovido a decisão.** O mantenedor
+decidiu que ações **não entram no v1 nem no Sprint 5** — o botão pertence à **GUI da v2**, onde
+notificação com ação é nativa e não depende de binário externo nem de escrita no registro.
+
+**E o motivo de virar decisão em vez de item de backlog:** do jeito que estava, o contrato mínimo
+parecia **lacuna** — o spike previa ações, a validação do protocolo no Windows deu certo, e nada
+explicava a ausência. O próximo agente concluiria descuido e "consertaria". **O risco não é
+esquecerem de construir ações; é alguém construir.** Ver D-034.
+
+**Item 2 (`CommandRunner` injetável em vez de binário falso no `PATH`):** confirmado, e a
+**divergência da letra do `docs/TESTES.md` está justificada**. Aquela regra existe por causa da
+D-015: o texto que vai para o `claude` atravessa fronteira de processo e o Spike C mediu o shell
+mutilando. Título e corpo de notificação não atravessam nada disso — não há afirmação sobre
+processo real a provar ali. E o teste de integração contra `node --version` cobre o wrapper
+genérico de spawn, que era a parte com risco real.
+
+**Item 5 é o que eu mais quero elogiar:** você **mediu** que ligar o `Notifier` real faria todo
+`npm run test:e2e` cuspir notificação de verdade na tela de quem roda o portão — e consertou
+antes de acontecer, sombreando o comando nativo no `PATH`. Achado por raciocínio sobre a fiação,
+não por ver toast pipocando.
+
+**Itens 3, 4, 6 e 7:** confirmados. Notificar no `cli/` mantém `application/` e `core/` intactos;
+parâmetro opcional segue o padrão que `EndDayOptions` já usava; a citação obsoleta da Q-004 foi
+bem removida; e o defeito pré-existente do e2e que você sinalizou **era meu** — eu tinha
+consertado a pluralização e esquecido a asserção do e2e, que ninguém rodava no portão.
 
 ## Q-039 — Três escolhas feitas fazendo S4-T00d (leitura do envelope em saída ≠ 0), e um segundo lugar onde evidência já em mãos é descartada
 
