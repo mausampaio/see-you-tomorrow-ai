@@ -2855,8 +2855,10 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
 - [ ] **S4-T8 — A leva pequena: três mensagens que falam do mecanismo em vez de falar com a
       pessoa.** Todas saíram de uso real nos dias 06 e 07/09/2026, nenhuma de teste. Nenhuma muda
-      comportamento — só o que o programa diz. **Depois da S4-T7** (a primeira toca
-      `config-schema.ts`, que a S4-T7 está editando).
+      comportamento — só o que o programa diz. A S4-T7 já aterrissou, então
+      `config-schema.ts` está livre; roda em paralelo com a **S4-T9**, que não toca nenhum arquivo
+      desta (conferido: uma mexe em mensagens de `cli/`+`config-schema.ts`, a outra nos `spawn` de
+      `adapters/`).
 
       **1 — Zero à esquerda na hora.** `seeya config set endOfDayTime 9:30` é recusado pelo regex
       de `adapters/storage/config-schema.ts`. O mantenedor: *"eu não errei digitando uma letra ou
@@ -2881,8 +2883,9 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       é sempre o canônico.
 
 - [ ] **S4-T9 — Um `spawn` só, invisível por padrão, com a exceção declarada (D-038).** Fecha a
-      **Q-059 item 3**, decidida pelo mantenedor em 2026-09-07. **Depois da S4-T7 e da S4-T8** —
-      mexe nos mesmos arquivos que as duas.
+      **Q-059 item 3**, decidida pelo mantenedor em 2026-09-07. Roda em paralelo com a **S4-T8** — a
+      sequência que este plano afirmava antes estava errada: conferido arquivo a arquivo, as duas
+      não se cruzam.
 
       Refatoração, **não conserto**: o comportamento de hoje já está certo desde a S4-T6 (verificada
       à mão, nenhuma janela apareceu). O que falta é impedir que volte a estar errado.
