@@ -2597,7 +2597,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
 ---
 
-- [~] **S4-T6 — O daemon abre janelas de terminal na cara do usuário.** Saída do **primeiro
+- [x] **S4-T6 — O daemon abre janelas de terminal na cara do usuário.** Saída do **primeiro
       ensaio real** (2026-09-06): daemon no ar, encerramento agendado para 14:30, sessões vivas de
       verdade. Disparou na hora, capturou as duas sessões e escreveu o `summary.md` — e revelou
       três defeitos que nenhum teste tinha como pegar.
@@ -2728,6 +2728,14 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       inferido do encadeamento).
 
       Cinco escolhas registradas em **Q-059**, nenhuma bloqueando o portão.
+
+      **Verificado à mão pelo mantenedor em 2026-09-07, no Windows, com o daemon de verdade —
+      a única prova que existe para a parte 1.** Ciclo de laço rodando desde ~09:06 e encerramento
+      completo às 09:30 (~1 min de captura, `summary.md` escrito às 09:31): **nenhuma janela
+      apareceu**, nem a piscada por sessão a cada 30s, nem a janela do modelo que antes ficava
+      visível pelo tempo inteiro da resposta. A parte 2 tem evidência própria, também de uso real:
+      às 09:06, com encerramento às 09:30, o toast disse `closing in 23 min` — no dia anterior, na
+      mesma situação, teria dito `30 min`.
 
 - [ ] **S4-T7 — Notificação não pode virar ruído: histerese por tipo, e alertas precoces num
       aviso só.** Saída da **Q-059 item 4**, refinada pelo mantenedor em 2026-09-07.
