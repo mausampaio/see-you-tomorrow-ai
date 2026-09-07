@@ -2808,6 +2808,30 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* as três falam com quem digitou. Nenhum comportamento muda; o valor gravado por (1)
       é sempre o canônico.
 
+- [ ] **S4-T9 — Um `spawn` só, invisível por padrão, com a exceção declarada (D-038).** Fecha a
+      **Q-059 item 3**, decidida pelo mantenedor em 2026-09-07. **Depois da S4-T7 e da S4-T8** —
+      mexe nos mesmos arquivos que as duas.
+
+      Refatoração, **não conserto**: o comportamento de hoje já está certo desde a S4-T6 (verificada
+      à mão, nenhuma janela apareceu). O que falta é impedir que volte a estar errado.
+
+      Um `spawn` interno do projeto que **sempre** passa `windowsHide: true`, aceitando as opções
+      que variam entre os call sites (`stdio` completo, `ignore` parcial, `AbortSignal.timeout`,
+      herança de `env`). Os seis `spawn` que hoje escondem passam por ele. Os três que não escondem
+      **declaram por quê no próprio call site**: `daemon-launch.ts` (`detached`, console nenhum —
+      mecanismo diferente, mesmo resultado), `termination-posix.ts` (POSIX, a opção é no-op) e
+      `resumption/spawn-interactive.ts` (**a exceção da D-038**: a janela é o produto).
+
+      **A guarda é a entrega, não o embrulho.** Importar `spawn` de `node:child_process` direto vira
+      erro de lint fora do embrulho e das exceções declaradas — mesma técnica que já banisce
+      `new Date()` fora de `adapters/clock/` (D-019). Sem isso, a próxima pessoa esquece de novo, que
+      é exatamente o que já aconteceu uma vez.
+
+      *Aceite:* nenhum comportamento muda (os testes de integração contra processo real continuam
+      verdes, sem alteração de stdout, código de saída ou erro); um `spawn` novo escrito fora do
+      embrulho **falha no portão**; e o `start-day` interativo continua abrindo a janela de verdade
+      — verificado à mão, porque é o único jeito.
+
 ## Sprint 5 — Entregar
 
 - [ ] **S5-T1 — Autostart do daemon** por SO (Task Scheduler, launchd, systemd user).
