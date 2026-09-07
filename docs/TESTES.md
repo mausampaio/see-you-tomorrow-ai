@@ -424,6 +424,50 @@ não editável" — `tests/unit/adapters/storage/config-schema.test.ts` e
 o texto que a de uma chave forjada contém, e que `get` devolve o valor real
 (`CONFIG_SCHEMA_VERSION`) em vez de recusar.
 
+**S4-T7 (2026-09-07): três partes — histerese por tipo, alertas precoces em um aviso só, e prazo
+novo devolve avisos. Cobertas em quatro faixas.**
+
+- **`core/lead-time-hysteresis.ts#shouldSuppressLeadTimeWarning` (pura), suíte própria em
+  `tests/unit/core/lead-time-hysteresis.test.ts`:** `lastFiredAt: null` nunca suprime (D-025, "o
+  primeiro aviso do dia nunca é engolido"); a fronteira `<` vs `<=` — um intervalo de EXATAMENTE
+  `minGapMinutes` NÃO é suprimido, só um estritamente menor; `minGapMinutes: 0` nunca suprime
+  (config aceita zero como "nunca suprimir", D-035).
+- **`core/schedule.ts` — Parte 3, `resolveFiredLeadTimes`/`decideAgainstDeadline`, em
+  `tests/unit/core/schedule.test.ts` (novo describe "S4-T7 Part 3"):** o caso medido do despacho
+  (avisos de 30/15 disparam para 14:30, `snooze` para 18:00, as regras voltam a valer para o NOVO
+  prazo); um prazo INALTERADO nunca redispara, mesmo relido várias vezes seguidas; um edit direto
+  em `endOfDayTime` (não só `snooze`) produz o mesmo efeito; e o caso de migração — um
+  `firedLeadTimesEffectiveEndOfDay: null` (a forma exata de um `estado.json` gravado antes desta
+  tarefa) NÃO força um re-disparo espúrio quando o prazo de fato não mudou.
+- **`scheduler/poll.ts`, composição ponta a ponta, em `tests/unit/scheduler/poll.test.ts` (três
+  describes novos):** o bug medido reproduzido de verdade através de `pollOnce` (daemon subindo
+  atrasado cruza dois limiares na mesma instância real — um aviso, não dois, e o segundo,
+  engolido, ainda fica marcado como disparado — cuidado (a)); um encerramento que acontece logo
+  depois de um aviso prévio recente CONTINUA notificando (histerese nunca se aplica à classe
+  `endOfDay`, porque `scheduler/poll.ts` só consulta o campo de histerese dentro do branch
+  `leadTimeWarning`); e a interação Parte 1 + Parte 3 pedida explicitamente no cuidado (b) da parte
+  3 — um `snooze` dado segundos antes de um limiar reabre a regra (parte 3) mas a histerese (parte
+  1) ainda impede a rajada imediata, e a notificação legítima seguinte só sai quando o prazo dela
+  chega de verdade E a janela de histerese já passou.
+- **`scheduler/notices.ts#buildEarlyWarningsNotice`, em `tests/unit/scheduler/notices.test.ts`:**
+  um warning único vira "1 early warning"; vários viram uma notificação só com a contagem certa;
+  um burst além do teto (`MAX_EARLY_WARNINGS_LISTED`, escolhido não medido — mesmo espírito de
+  `cli/format-end-day.ts#UNDERSTANDING_EXCERPT_CHARS`) declara o total real no título E quantos
+  ficaram de fora no corpo — nunca corta em silêncio (cuidado (e)).
+- **`adapters/storage/state-schema.ts`, migração/round-trip, em
+  `tests/integration/storage/state.test.ts`:** um `estado.json` sem os dois campos novos (a forma
+  exata de um arquivo real já em uso) lê ambos como `null`; um documento com os dois campos
+  preenchidos sobrevive round-trip completo.
+- **`adapters/storage/config-schema.ts` — `leadTimeHysteresisMinutes`, em
+  `tests/unit/adapters/storage/config-schema.test.ts`:** default 3; valor explícito honrado;
+  `0` aceito (não é "degenerado", é "nunca suprimir"); negativo e string rejeitados com erro
+  visível; coerção via `seeya config set`.
+
+Nenhuma tarefa e2e nova: as três partes são inteiramente de `core/`/`scheduler/`/`adapters/storage/`
+— o mesmo daemon real que a S4-T5 já exercita ponta a ponta (`tests/e2e/daemon.test.ts`) não ganhou
+cenário próprio aqui, e o aceite real de "o amontoado sumiu" é o mantenedor observando o daemon de
+verdade (ver o relatório da tarefa em `docs/PLANO-DE-ENTREGA.md`).
+
 ## Contrato — a faixa que protege contra o mundo mudar
 
 O app depende de estruturas internas e não documentadas do Claude Code
