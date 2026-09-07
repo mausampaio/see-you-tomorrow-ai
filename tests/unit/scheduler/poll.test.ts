@@ -105,7 +105,12 @@ describe('pollOnce — early warnings run every poll, independent of the schedul
     });
     await harness.poll(new Date(2026, 8, 5, 20, 0, 0));
     expect(harness.notifier.notices).toHaveLength(1);
-    expect(harness.notifier.notices[0]?.body).toBe(warning.message);
+    // S4-T7 Part 2: batched now, not the raw `warning.message` verbatim — the title declares the
+    // count and the body is built by `buildEarlyWarningsNotice` (covered on its own in
+    // `tests/unit/scheduler/notices.test.ts`); here it's enough to prove the poll actually reaches
+    // that builder with the new warning.
+    expect(harness.notifier.notices[0]?.title).toBe('seeya: 1 early warning');
+    expect(harness.notifier.notices[0]?.body).toContain('Session "x" has no transcript.');
   });
 });
 

@@ -250,6 +250,8 @@ describe('buildSnoozeContext', () => {
       skipped: true,
       snoozeMinutesTotal: 0,
       firedLeadTimesInMinutes: [],
+      firedLeadTimesEffectiveEndOfDay: null,
+      lastLeadTimeWarningNoticeAt: null,
       endOfDayFired: false,
       captureAttemptsToday: {},
       daemonHealth: { lastCycleError: null, consecutiveCycleFailures: 0 },

@@ -14,7 +14,7 @@ export type { DaemonDeps } from './types.js';
 export {
   buildLeadTimeNotice,
   buildDaemonEndOfDayNotice,
-  buildEarlyWarningNotice,
+  buildEarlyWarningsNotice,
   buildDaemonUnhealthyNotice,
 } from './notices.js';
 export { buildRetryFilter, nonModelSessionIds } from './capture-filter.js';

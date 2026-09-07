@@ -130,6 +130,11 @@ export function emptyDayState(day: Day): DayState {
     skipped: false,
     snoozeMinutesTotal: 0,
     firedLeadTimesInMinutes: [],
+    // S4-T7 Part 3: no deadline recorded yet for the (empty) fired list above.
+    firedLeadTimesEffectiveEndOfDay: null,
+    // S4-T7 Part 1: no leadTimeWarning notice has gone out today — D-025, never read as "one just
+    // fired".
+    lastLeadTimeWarningNoticeAt: null,
     endOfDayFired: false,
     captureAttemptsToday: {},
     daemonHealth: EMPTY_DAEMON_HEALTH,
@@ -261,6 +266,25 @@ export interface ScheduleDecisionResult {
 }
 
 /**
+ * S4-T7 Part 3: which of `leadTimesInMinutes` count as already fired FOR `effectiveEndOfDay`
+ * specifically — not just "fired today", the distinction `firedLeadTimesInMinutes` on its own
+ * could never make. `core/schedule.ts#findDueLeadTime` is untouched by this (docs/PLANO-DE-ENTREGA.md
+ * S4-T7 Part 3, cuidado (d)): this only decides what `alreadyFired` list that function gets called
+ * with, never how it decides a rule is "vencida".
+ *
+ * See `core/types.ts#DayState.firedLeadTimesEffectiveEndOfDay` for the full reasoning, including
+ * why `null` reads as "no evidence the deadline changed" rather than the reverse (D-025).
+ */
+function resolveFiredLeadTimes(current: DayState, effectiveEndOfDay: Date): readonly number[] {
+  if (current.firedLeadTimesEffectiveEndOfDay === null) {
+    return current.firedLeadTimesInMinutes;
+  }
+  const deadlineChanged =
+    current.firedLeadTimesEffectiveEndOfDay.getTime() !== effectiveEndOfDay.getTime();
+  return deadlineChanged ? [] : current.firedLeadTimesInMinutes;
+}
+
+/**
  * The `endOfDayFired`/`endOfDay`/`leadTimeWarning`/`waiting` half of `decideSchedule`, split out
  * once `disabled`/`skipped` are already ruled out and `effectiveEndOfDay` is known — kept separate
  * so neither function runs past AGENTS.md's ~20-line guideline (`decideSchedule` would otherwise
@@ -283,20 +307,25 @@ function decideAgainstDeadline(
     };
   }
 
-  const dueLeadTime = findDueLeadTime(
-    leadTimesInMinutes,
-    current.firedLeadTimesInMinutes,
-    effectiveEndOfDay,
-    now,
-  );
+  // S4-T7 Part 3: scoped to THIS effectiveEndOfDay — a prior snooze/config edit that moved the
+  // deadline since these were recorded makes them stale, not still-fired (see
+  // `resolveFiredLeadTimes` above).
+  const firedLeadTimes = resolveFiredLeadTimes(current, effectiveEndOfDay);
+  const dueLeadTime = findDueLeadTime(leadTimesInMinutes, firedLeadTimes, effectiveEndOfDay, now);
   if (dueLeadTime === null) {
+    // Nothing to persist: `current` unchanged, same as before S4-T7 Part 3 — `scheduler/poll.ts`
+    // never writes state for a `waiting` decision (D-006's "don't write estado.json every 30s for
+    // nothing"), so the next call that actually fires something will still see whatever
+    // `firedLeadTimesEffectiveEndOfDay` was last durably persisted and compare against that —
+    // no correctness lost by not staging the reset here too.
     return { decision: { kind: 'waiting', effectiveEndOfDay }, nextState: current };
   }
   return {
     decision: { kind: 'leadTimeWarning', leadTimeMinutes: dueLeadTime, effectiveEndOfDay },
     nextState: {
       ...current,
-      firedLeadTimesInMinutes: [...current.firedLeadTimesInMinutes, dueLeadTime],
+      firedLeadTimesInMinutes: [...firedLeadTimes, dueLeadTime],
+      firedLeadTimesEffectiveEndOfDay: effectiveEndOfDay,
     },
   };
 }

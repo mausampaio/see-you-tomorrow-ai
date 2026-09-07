@@ -24,6 +24,7 @@ import {
 } from '../core/schedule.js';
 import { localDayString } from '../core/day.js';
 import { recordCaptureAttempts } from '../core/capture-retry.js';
+import { shouldSuppressLeadTimeWarning } from '../core/lead-time-hysteresis.js';
 import type { Config, DayState } from '../core/types.js';
 import type { EndDayDeps, EndDayResult } from '../application/types.js';
 import { endDay } from '../application/end-day.js';
@@ -31,7 +32,7 @@ import type { DaemonDeps } from './types.js';
 import { buildRetryFilter, nonModelSessionIds } from './capture-filter.js';
 import {
   buildDaemonEndOfDayNotice,
-  buildEarlyWarningNotice,
+  buildEarlyWarningsNotice,
   buildLeadTimeNotice,
   buildMissedEndOfDayNotice,
 } from './notices.js';
@@ -158,11 +159,15 @@ export async function pollOnce(deps: DaemonDeps): Promise<void> {
   // D-018/Q-024: runs every poll, independent of the schedule decision below — discovery and
   // early-warning detection don't care whether today's closure is disabled, skipped, or hours
   // away. `discoverEarlyWarnings` already persists the "already warned" bookkeeping itself and
-  // returns only what's NEW, so there is nothing else to deduplicate here — one `Notice` per
-  // warning (`buildEarlyWarningNotice`), never batched.
+  // returns only what's NEW, so there is nothing else to deduplicate here.
+  // S4-T7 Part 2: one Notice for every NEW warning this cycle, never one per warning — a burst of
+  // N in the same 30s poll used to mean N toasts in a row (`buildEarlyWarningsNotice`'s own
+  // docstring). Hysteresis (Part 1) never applies here: silencing an early warning is losing
+  // information (D-025), not acceptable noise reduction, so this always fires when there's
+  // anything new — only how it's PRESENTED changed.
   const warnings = await deps.discoverEarlyWarnings(discovery.sessions);
-  for (const warning of warnings) {
-    await deps.notifier.notify(buildEarlyWarningNotice(warning));
+  if (warnings.length > 0) {
+    await deps.notifier.notify(buildEarlyWarningsNotice(warnings));
   }
 
   const now = deps.clock.now();
@@ -196,8 +201,23 @@ export async function pollOnce(deps: DaemonDeps): Promise<void> {
     // `decideSchedule`) still records `decision.leadTimeMinutes` unchanged — only the notice text
     // is derived from `now` via the injected `Clock` (D-019).
     const remaining = minutesRemaining(decision.effectiveEndOfDay, now);
-    await deps.notifier.notify(buildLeadTimeNotice(remaining, nextState.day));
-    await deps.storage.saveState(nextState);
+    // S4-T7 Part 1: `decideSchedule` only decides the rule is due — whether it actually reaches
+    // the person is this hysteresis check, against the state BEFORE this decision (`persisted`,
+    // not `nextState` — `decideSchedule` never touches `lastLeadTimeWarningNoticeAt`, so the two
+    // are the same value here, but `persisted` states the intent: "what was true before this poll
+    // decided anything").
+    const suppressed = shouldSuppressLeadTimeWarning(
+      persisted.lastLeadTimeWarningNoticeAt,
+      now,
+      config.leadTimeHysteresisMinutes,
+    );
+    if (!suppressed) {
+      await deps.notifier.notify(buildLeadTimeNotice(remaining, nextState.day));
+    }
+    // Stamped regardless of `suppressed` — a swallowed notice still "counts as data" (S4-T7
+    // cuidado (a)) and is never redelivered later; `firedLeadTimesInMinutes` above already marks
+    // the underlying rule fired unconditionally, the same way.
+    await deps.storage.saveState({ ...nextState, lastLeadTimeWarningNoticeAt: now });
     return;
   }
   if (decision.kind === 'endOfDay') {

@@ -65,6 +65,10 @@ const configFileSchema = z.object({
   // in minutes like idleMinutes above, so it keeps that field's shape (nonnegative, fractional
   // allowed) rather than forcing an integer nobody asked for.
   overdueFireThresholdMinutes: z.number().nonnegative().optional(),
+  // S4-T7 (D-035): nonnegative, not positive — 0 is a meaningful value here ("never suppress a
+  // second leadTimeWarning notice, no matter how close together"), not a mistake, the same
+  // reasoning maxBriefingScanDays above already applies to its own zero.
+  leadTimeHysteresisMinutes: z.number().nonnegative().optional(),
 });
 
 /**
@@ -110,6 +114,9 @@ const CONFIG_DEFAULTS: Config = {
   maxCaptureAttemptsPerSessionPerDay: 3,
   maxBriefingScanDays: 30,
   overdueFireThresholdMinutes: 5,
+  // S4-T7's own default (docs/PLANO-DE-ENTREGA.md: "config com padrão de 3 minutos") — not a prior
+  // hardcoded constant migrating over, this field and its default are new with this task.
+  leadTimeHysteresisMinutes: 3,
 };
 
 /** `parseConfigDocument({})` — every field at its default. Exported so callers (the adapter, on a
@@ -172,6 +179,7 @@ export const EDITABLE_CONFIG_KEYS = [
   'maxCaptureAttemptsPerSessionPerDay',
   'maxBriefingScanDays',
   'overdueFireThresholdMinutes',
+  'leadTimeHysteresisMinutes',
 ] as const;
 
 export type EditableConfigKey = (typeof EDITABLE_CONFIG_KEYS)[number];
@@ -326,6 +334,8 @@ export function applyConfigFieldUpdate(
       return { ...current, maxBriefingScanDays: value as number };
     case 'overdueFireThresholdMinutes':
       return { ...current, overdueFireThresholdMinutes: value as number };
+    case 'leadTimeHysteresisMinutes':
+      return { ...current, leadTimeHysteresisMinutes: value as number };
   }
 }
 
@@ -392,6 +402,7 @@ export function serializeConfigDocument(config: Config): Record<string, unknown>
     maxCaptureAttemptsPerSessionPerDay: config.maxCaptureAttemptsPerSessionPerDay,
     maxBriefingScanDays: config.maxBriefingScanDays,
     overdueFireThresholdMinutes: config.overdueFireThresholdMinutes,
+    leadTimeHysteresisMinutes: config.leadTimeHysteresisMinutes,
   };
 }
 
@@ -419,5 +430,7 @@ export function parseConfigDocument(raw: unknown): Config {
     maxBriefingScanDays: fields.maxBriefingScanDays ?? CONFIG_DEFAULTS.maxBriefingScanDays,
     overdueFireThresholdMinutes:
       fields.overdueFireThresholdMinutes ?? CONFIG_DEFAULTS.overdueFireThresholdMinutes,
+    leadTimeHysteresisMinutes:
+      fields.leadTimeHysteresisMinutes ?? CONFIG_DEFAULTS.leadTimeHysteresisMinutes,
   };
 }

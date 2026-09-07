@@ -36,6 +36,21 @@ export const STATE_SCHEMA_VERSION = 1;
  * existed lacks the whole key, and the honest read is "no failure known" (`EMPTY_DAEMON_HEALTH`,
  * D-025), not a rejected file. No `schemaVersion` bump for this addition, same precedent
  * `captureAttemptsToday` already set — an additive, optional field doesn't need one.
+ *
+ * `lastLeadTimeWarningNoticeAt` is `.optional().nullable()` for the identical reason (S4-T7): a
+ * real `estado.json` written before this field existed (the maintainer already has one running)
+ * simply lacks the key, and "no lead-time warning notice recorded yet" is EXACTLY what that field's
+ * own `null` already means (D-025's "ausência não vira afirmação", not "afirma que nunca vai
+ * ocorrer" either — it's just the honest read of a fact this project never measured before). No
+ * `schemaVersion` bump, no migration entry in `adapters/storage/schema-version.ts`: the same
+ * additive-optional precedent `captureAttemptsToday`/`daemonHealth` already set two fields in a
+ * row, decided the same way for the same reason.
+ *
+ * `firedLeadTimesEffectiveEndOfDay` is `.optional().nullable()` the same way (S4-T7 Part 3) — see
+ * `core/types.ts#DayState.firedLeadTimesEffectiveEndOfDay` for why a MISSING key here is read as
+ * "no evidence the deadline changed" rather than the reverse, and why that reading (not a
+ * migration) is what protects a real, already-populated `estado.json` from a one-time spurious
+ * re-fire the moment this code starts running.
  */
 const daemonHealthDocumentSchema = z.object({
   lastCycleError: z.object({ message: z.string(), at: z.iso.datetime() }).nullable(),
@@ -47,10 +62,20 @@ const stateDocumentSchema = z.object({
   skipped: z.boolean(),
   snoozeMinutesTotal: z.number().int().nonnegative(),
   firedLeadTimesInMinutes: z.array(z.number()),
+  firedLeadTimesEffectiveEndOfDay: z.iso.datetime().nullable().optional(),
+  lastLeadTimeWarningNoticeAt: z.iso.datetime().nullable().optional(),
   endOfDayFired: z.boolean(),
   captureAttemptsToday: z.record(z.string(), z.number().int().nonnegative()).optional(),
   daemonHealth: daemonHealthDocumentSchema.optional(),
 });
+
+/** Shared by every S4-T7 `Date | null` field below: a missing key (older `estado.json`) and an
+ * explicit `null` both read the same way — nothing recorded (D-025) — so both collapse to `null`
+ * here instead of each caller repeating the `undefined || null` check (AGENTS.md § "Nada de
+ * duplicação"). */
+function parseOptionalNullableIsoDate(raw: string | null | undefined): Date | null {
+  return raw === undefined || raw === null ? null : new Date(raw);
+}
 
 /** Parses `raw` (the document, already past `resolveSchemaVersion`) into `DayState`. */
 export function parseStateDocument(raw: unknown): DayState {
@@ -64,6 +89,12 @@ export function parseStateDocument(raw: unknown): DayState {
     skipped: result.data.skipped,
     snoozeMinutesTotal: result.data.snoozeMinutesTotal,
     firedLeadTimesInMinutes: result.data.firedLeadTimesInMinutes,
+    firedLeadTimesEffectiveEndOfDay: parseOptionalNullableIsoDate(
+      result.data.firedLeadTimesEffectiveEndOfDay,
+    ),
+    lastLeadTimeWarningNoticeAt: parseOptionalNullableIsoDate(
+      result.data.lastLeadTimeWarningNoticeAt,
+    ),
     endOfDayFired: result.data.endOfDayFired,
     captureAttemptsToday: result.data.captureAttemptsToday ?? {},
     daemonHealth:
@@ -90,6 +121,8 @@ export function serializeState(state: DayState): Record<string, unknown> {
     skipped: state.skipped,
     snoozeMinutesTotal: state.snoozeMinutesTotal,
     firedLeadTimesInMinutes: state.firedLeadTimesInMinutes,
+    firedLeadTimesEffectiveEndOfDay: state.firedLeadTimesEffectiveEndOfDay?.toISOString() ?? null,
+    lastLeadTimeWarningNoticeAt: state.lastLeadTimeWarningNoticeAt?.toISOString() ?? null,
     endOfDayFired: state.endOfDayFired,
     captureAttemptsToday: state.captureAttemptsToday,
     daemonHealth: {

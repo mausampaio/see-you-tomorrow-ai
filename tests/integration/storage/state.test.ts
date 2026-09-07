@@ -54,10 +54,32 @@ describe('StorageAdapter#readState', () => {
         skipped: false,
         snoozeMinutesTotal: 15,
         firedLeadTimesInMinutes: [30],
+        // S4-T7: this document is exactly the shape of a REAL, already-in-use estado.json written
+        // before Part 1/Part 3 added these two fields — no `schemaVersion` bump, no migration, so
+        // both simply come back `null` (D-025's "no evidence of X" reading, not a rejected file).
+        firedLeadTimesEffectiveEndOfDay: null,
+        lastLeadTimeWarningNoticeAt: null,
         endOfDayFired: false,
         captureAttemptsToday: { 'session-a': 2 },
         daemonHealth: EMPTY_DAEMON_HEALTH,
       });
+    } finally {
+      await rm(seeyaHome, { recursive: true, force: true });
+    }
+  });
+
+  it('S4-T7: round-trips firedLeadTimesEffectiveEndOfDay and lastLeadTimeWarningNoticeAt through a real file', async () => {
+    const seeyaHome = await makeTmpDir();
+    try {
+      const storage = new StorageAdapter(seeyaHome);
+      const state = {
+        ...emptyDayState('2026-09-05'),
+        firedLeadTimesInMinutes: [30],
+        firedLeadTimesEffectiveEndOfDay: new Date('2026-09-05T22:30:00.000Z'),
+        lastLeadTimeWarningNoticeAt: new Date('2026-09-05T22:00:00.000Z'),
+      };
+      await storage.saveState(state);
+      expect(await storage.readState()).toStrictEqual(state);
     } finally {
       await rm(seeyaHome, { recursive: true, force: true });
     }
