@@ -16,6 +16,10 @@
  * this call has no `cwd`-shaped argument at all (only fixed script args), for the same reason the
  * project bans `exec` everywhere, not just where a variable happens to be dangerous today.
  */
+// D-038 exception, declared here per the decision's own text: `detached: true` + `stdio: 'ignore'`
+// below IS the mechanism that gives this child no console at all (D-005) — a different mechanism
+// than `windowsHide` for the identical result, so there is nothing for `adapters/process/spawn.ts`'s
+// wrapper to add. Direct import, not `spawnHidden`.
 import { spawn } from 'node:child_process';
 
 /** What actually launches the detached worker — `process.execPath` (the same Node binary already

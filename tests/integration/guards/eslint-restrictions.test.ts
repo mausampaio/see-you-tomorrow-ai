@@ -1,5 +1,7 @@
+import path from 'node:path';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import {
+  PROJECT_ROOT,
   TEST_TIMEOUT_MS,
   deleteTempFile,
   guardFixturePath,
@@ -205,6 +207,117 @@ describe('guard: eslint rejects node:* in core/ and non-deterministic time sourc
       created.push(filePath);
 
       const result = runEslint([filePath]);
+
+      expect(result.exitCode, result.output).toBe(0);
+    },
+    TEST_TIMEOUT_MS,
+  );
+});
+
+/**
+ * D-038 (S4-T9, closing Q-059 item 3): every process the `seeya` launches is invisible by
+ * default, enforced by banning `spawn` imported straight from `node:child_process` outside
+ * `adapters/process/spawn.ts` (the `spawnHidden` wrapper) and its three declared exceptions —
+ * same `no-restricted-imports` technique as this file's "rejects node:* imported in src/core/"
+ * case above, this time scoped by `importNames` instead of a `node:*` group pattern.
+ *
+ * The rejection cases use temp fixtures under `_guard-eslint/`, same as the rest of this file.
+ * The approval cases for the wrapper and its three exceptions run eslint against the REAL
+ * production files instead of a fixture: the ignore list in eslint.config.js names those four
+ * files by their exact path (`src/adapters/process/spawn.ts`, etc — not a directory glob, on
+ * purpose, so a fixture placed in ANY `_guard-eslint/` subdirectory can never match it and no
+ * other file can borrow the exemption by being named `spawn.ts` somewhere else). Proving the
+ * exemption is real means pointing eslint at those literal paths, exactly the way `npm run
+ * verificar`'s real `eslint .` invocation would.
+ */
+describe('guard: eslint rejects spawn imported straight from node:child_process outside the D-038 wrapper and its exceptions', () => {
+  const created: string[] = [];
+
+  afterEach(() => {
+    for (const createdPath of created.splice(0)) {
+      deleteTempFile(createdPath);
+    }
+  });
+
+  afterAll(() => {
+    cleanUpGuardResidue(GUARD_NAME);
+  });
+
+  it(
+    'rejects spawn imported from node:child_process in an ordinary adapter, with a message pointing at spawnHidden',
+    () => {
+      const filePath = writeTempFile(
+        guardFixturePath(GUARD_NAME, 'adapters/generation', 'violation-test-spawn.ts'),
+        "import { spawn } from 'node:child_process';\nexport const child = spawn('echo', ['hi']);\n",
+      );
+      created.push(filePath);
+
+      const result = runEslint([filePath]);
+
+      expect(result.exitCode, result.output).not.toBe(0);
+      expect(result.output).toContain('no-restricted-imports');
+      expect(result.output).toContain('spawnHidden');
+      expect(result.output).toContain('D-038');
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'rejects an aliased spawn import (import { spawn as run }) the same way — importNames matches the original export name, not the local alias',
+    () => {
+      const filePath = writeTempFile(
+        guardFixturePath(GUARD_NAME, 'application', 'violation-test-spawn-alias.ts'),
+        "import { spawn as run } from 'node:child_process';\nexport const child = run('echo', ['hi']);\n",
+      );
+      created.push(filePath);
+
+      const result = runEslint([filePath]);
+
+      expect(result.exitCode, result.output).not.toBe(0);
+      expect(result.output).toContain('no-restricted-imports');
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'approves importing spawnHidden from adapters/process/spawn.ts elsewhere in src/ (control: the guard targets node:child_process, not the word "spawn")',
+    () => {
+      const filePath = writeTempFile(
+        guardFixturePath(GUARD_NAME, 'adapters/generation', 'control-test-spawn-hidden.ts'),
+        // Two levels up: this fixture lives in adapters/generation/_guard-eslint/, one directory
+        // deeper than the real call sites (e.g. spawn-claude.ts, which sits directly in
+        // adapters/generation/ and imports '../process/spawn.js').
+        "import { spawnHidden } from '../../process/spawn.js';\nexport const child = spawnHidden('echo', ['hi']);\n",
+      );
+      created.push(filePath);
+
+      const result = runEslint([filePath]);
+
+      expect(result.exitCode, result.output).toBe(0);
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'approves the real adapters/process/spawn.ts wrapper importing spawn directly (control for the exemption)',
+    () => {
+      const result = runEslint([path.join(PROJECT_ROOT, 'src/adapters/process/spawn.ts')]);
+
+      expect(result.exitCode, result.output).toBe(0);
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'approves the real daemon-launch.ts, termination-posix.ts and spawn-interactive.ts (the three declared D-038 exceptions)',
+    () => {
+      const result = runEslint(
+        [
+          'src/adapters/process/daemon-launch.ts',
+          'src/adapters/process/termination-posix.ts',
+          'src/adapters/resumption/spawn-interactive.ts',
+        ].map((relativePath) => path.join(PROJECT_ROOT, relativePath)),
+      );
 
       expect(result.exitCode, result.output).toBe(0);
     },

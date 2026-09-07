@@ -12,6 +12,10 @@
  * stderr — they go straight to the same screen the user is already looking at — so it can only
  * ever report an exit code, never a message.
  */
+// The D-038 exception itself: this is `seeya start-day`'s interactive session, `stdio: 'inherit'`
+// below on purpose (docs/spikes/H-retomada-interativa.md) — the window IS the product here.
+// Hiding it would hide the very session the command exists to open. Direct import, not
+// `spawnHidden`.
 import { spawn } from 'node:child_process';
 
 export interface SpawnInteractiveOptions {

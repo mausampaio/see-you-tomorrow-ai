@@ -1,7 +1,7 @@
 /**
- * Runs `git <args>` inside `workingDir` (`spawn` with an array and `shell: false` — AGENTS.md §
- * "Processos": never build a command by string interpolation; `cwd` values in this project
- * routinely carry spaces and accents that a shell would mangle).
+ * Runs `git <args>` inside `workingDir` (array + `shell: false` — AGENTS.md § "Processos": never
+ * build a command by string interpolation; `cwd` values in this project routinely carry spaces
+ * and accents that a shell would mangle), through `adapters/process/spawn.ts#spawnHidden` (D-038).
  *
  * A separate, small implementation rather than reusing `adapters/process/spawn-stdout.ts`'s
  * `runForStdout`: that helper has no `cwd` option (its two callers, both in `proc-start.ts`, only
@@ -9,7 +9,7 @@
  * main `cwd` and, per worktree, for that worktree's own directory. Adding `cwd` there would touch
  * a file `adapters/process` owns for a caller `adapters/git` doesn't share.
  */
-import { spawn } from 'node:child_process';
+import { spawnHidden } from '../process/spawn.js';
 
 /**
  * Discriminated on `ran`, not a bare exit code with a magic sentinel (D-024's reasoning applied
@@ -28,14 +28,14 @@ export type GitCommandResult =
 /** Never rejects — every failure mode above is reported through the return value. */
 export function runGit(workingDir: string, args: string[]): Promise<GitCommandResult> {
   return new Promise((resolve) => {
-    const child = spawn('git', args, {
+    // S4-T6: the daemon calls this once per repository at end-of-day, with no console of its own
+    // (D-005) — without `windowsHide`, each `git` invocation pops a real, visible window on
+    // Windows. `spawnHidden` (D-038) forces that flag now; doesn't change `ran`/`stdout`/`exitCode`
+    // either way.
+    const child = spawnHidden('git', args, {
       cwd: workingDir,
       stdio: ['ignore', 'pipe', 'ignore'],
       shell: false,
-      // S4-T6: the daemon calls this once per repository at end-of-day, with no console of its own
-      // (D-005) — without this, each `git` invocation pops a real, visible window on Windows.
-      // Windows-only effect; doesn't change `ran`/`stdout`/`exitCode` either way.
-      windowsHide: true,
     });
     let stdout = '';
     child.stdout.on('data', (chunk: Buffer) => {

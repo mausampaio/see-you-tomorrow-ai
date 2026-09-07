@@ -25,7 +25,7 @@
  * asset to lose track of after a build. The only characters this file has to get right are
  * PowerShell's own (backtick, `@'...'@`), never `cmd.exe`'s or `spawn`'s.
  */
-import { spawn } from 'node:child_process';
+import { spawnHidden } from './spawn.js';
 
 /** 1 = `CTRL_BREAK_EVENT`. **Never** `CTRL_C_EVENT` (0): measured accepted by the Win32 call but
  * silently ignored by the target — see the table in docs/spikes/G-ctrl-break-no-windows.md § 1. */
@@ -146,10 +146,12 @@ function runPowerShellScript(script: string): Promise<PowerShellRunResult> {
   const encoded = Buffer.from(script, 'utf16le').toString('base64');
   const args = ['-NoProfile', '-NonInteractive', '-NoLogo', '-EncodedCommand', encoded];
   return new Promise((resolve, reject) => {
-    const child = spawn('powershell.exe', args, {
+    // D-038: `windowsHide` now comes from `spawnHidden` itself, not a per-call-site option — this
+    // file was the one place in the repo that already had the technique (see the module comment)
+    // before the wrapper generalized it.
+    const child = spawnHidden('powershell.exe', args, {
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: false,
-      windowsHide: true,
     });
     let stdout = '';
     let stderr = '';
@@ -202,10 +204,10 @@ function runSendScript(script: string): Promise<{
   const encoded = Buffer.from(script, 'utf16le').toString('base64');
   const args = ['-NoProfile', '-NonInteractive', '-NoLogo', '-EncodedCommand', encoded];
   return new Promise((resolve, reject) => {
-    const child = spawn('powershell.exe', args, {
+    // D-038: see runPowerShellScript's comment above — same reason, same wrapper.
+    const child = spawnHidden('powershell.exe', args, {
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: false,
-      windowsHide: true,
     });
     let stdout = '';
     let stderr = '';
