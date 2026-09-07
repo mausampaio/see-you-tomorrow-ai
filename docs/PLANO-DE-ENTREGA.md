@@ -2781,6 +2781,33 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* N alertas no mesmo ciclo produzem **uma** notificação que declara os N; nenhum
       achado desaparece do texto sem estar contado.
 
+- [ ] **S4-T8 — A leva pequena: três mensagens que falam do mecanismo em vez de falar com a
+      pessoa.** Todas saíram de uso real nos dias 06 e 07/09/2026, nenhuma de teste. Nenhuma muda
+      comportamento — só o que o programa diz. **Depois da S4-T7** (a primeira toca
+      `config-schema.ts`, que a S4-T7 está editando).
+
+      **1 — Zero à esquerda na hora.** `seeya config set endOfDayTime 9:30` é recusado pelo regex
+      de `adapters/storage/config-schema.ts`. O mantenedor: *"eu não errei digitando uma letra ou
+      algo inválido de verdade, 09 e 9 é basicamente a mesma coisa"*. Aceitar hora de um dígito e
+      **normalizar na gravação** (`9:30` → `09:30` no arquivo), mantendo o minuto com dois dígitos
+      — `9:5` ninguém escreve, e ali a ambiguidade seria real. O que fica no disco continua num
+      formato só. E a mensagem de valor inválido de verdade deve trazer **exemplo**, sem o `✖` que
+      hoje vaza a formatação da biblioteca de validação para a tela.
+
+      **2 — `seeya daemon --stop` explica o mecanismo em vez de responder a pergunta.** Hoje
+      devolve um parágrafo sobre por que o Windows não permite parada graciosa. Quem digitou
+      `--stop` quer saber **"parou mesmo, e eu perdi alguma coisa?"** — e a resposta é "sim, parou"
+      e "não perdeu nada", porque o daemon grava o estado a cada volta do laço. A explicação
+      técnica fica no código, onde já mora.
+
+      **3 — `projectPolicy` também é chamada de chave desconhecida.** Mesmo defeito que a S4-T6
+      corrigiu para `schemaVersion`, e sobrou: a mensagem diz `unknown config key "projectPolicy"`
+      e, na mesma frase, ensina a usar `seeya config policy <cwd>`. Dizer que não conhece e
+      explicar como usar, no mesmo texto, é o programa se contradizendo.
+
+      *Aceite:* as três falam com quem digitou. Nenhum comportamento muda; o valor gravado por (1)
+      é sempre o canônico.
+
 ## Sprint 5 — Entregar
 
 - [ ] **S5-T1 — Autostart do daemon** por SO (Task Scheduler, launchd, systemd user).
