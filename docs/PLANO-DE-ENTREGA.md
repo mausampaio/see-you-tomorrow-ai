@@ -2729,6 +2729,50 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
       Cinco escolhas registradas em **Q-059**, nenhuma bloqueando o portão.
 
+- [ ] **S4-T7 — Notificação não pode virar ruído: histerese por tipo, e alertas precoces num
+      aviso só.** Saída da **Q-059 item 4**, refinada pelo mantenedor em 2026-09-07.
+
+      **Parte 1 — histerese por tipo de notificação.** Medido no uso real: o aviso prévio dispara
+      **uma regra por volta do laço**, e as regras vencem por ordem, não por distância real ao fim
+      do dia. Daemon subindo às 14:20 com encerramento às 14:30 e regras `[30, 15]` manda dois
+      avisos com **30 segundos** de intervalo ("10 min" e depois "9 min").
+
+      **A primeira proposta do PO — colapsar as regras vencidas — não cobria o caso, e o
+      mantenedor achou o furo:** subindo às 14:14, a regra de 30 vence e dispara ("16 min"), e um
+      minuto depois a regra de 15 dispara **legitimamente**, sem atraso nenhum. Colapsar vencidas
+      não impede esse par. O que resolve os dois casos é medir **a distância entre avisos**, não o
+      atraso da regra.
+
+      **A regra:** um aviso não sai se **outro do mesmo tipo** saiu há menos de N minutos. O
+      "mesmo tipo" é do mantenedor e é o que impede o efeito colateral grave: o resultado do
+      encerramento ("2 sessions captured"), o aviso de encerramento perdido e os alertas precoces
+      **nunca** podem ser calados por um aviso prévio recente — são classes diferentes, e o
+      resultado é justamente o que não se pode perder.
+
+      **Três definições, já decididas:** (a) o aviso engolido **não volta depois** — ele conta como
+      dado e é marcado como disparado; entregar mais tarde só empurra o amontoado para frente, e o
+      anterior já disse "vai encerrar logo" com o tempo real (S4-T6); (b) guardar **um carimbo de
+      hora por tipo** no estado do dia, que já vai para o disco e já reseta na virada — **não** uma
+      fila de entregas pendentes; (c) o número é **config com padrão de 3 minutos** (D-035:
+      depende de quanto ruído a pessoa tolera, não de fato técnico).
+
+      **Não mude quando as regras vencem.** `core/schedule.ts#decideSchedule` e
+      `firedLeadTimesInMinutes` ficam como estão — isto decide se o aviso **sai**, não quando a
+      regra vence.
+
+      *Aceite:* daemon subindo atrasado manda **um** aviso, não dois; o primeiro aviso do dia nunca
+      é engolido; e um encerramento que termina logo depois de um aviso prévio **continua
+      notificando**.
+
+      **Parte 2 — alertas precoces viram um aviso só.** `scheduler/poll.ts` hoje faz
+      `for (const warning of warnings) notify(...)`: um toast por achado, em sequência, no mesmo
+      ciclo. Histerese não serve aqui — calar alerta é **perder informação**. O certo é **juntar
+      num aviso só**, dizendo quantos são e o suficiente para a pessoa agir, sem inventar o que não
+      se sabe (D-025) e sem estourar o que o toast mostra.
+
+      *Aceite:* N alertas no mesmo ciclo produzem **uma** notificação que declara os N; nenhum
+      achado desaparece do texto sem estar contado.
+
 ## Sprint 5 — Entregar
 
 - [ ] **S5-T1 — Autostart do daemon** por SO (Task Scheduler, launchd, systemd user).
