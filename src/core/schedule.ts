@@ -290,23 +290,19 @@ function resolveFiredLeadTimes(current: DayState, effectiveEndOfDay: Date): read
  * so neither function runs past AGENTS.md's ~20-line guideline (`decideSchedule` would otherwise
  * mix "is there a schedule active at all today" with "where are we against it").
  */
-function decideAgainstDeadline(
+/**
+ * The `leadTimeWarning`/`waiting` half of `decideAgainstDeadline`, split out once
+ * `alreadyEnded`/`endOfDay` are already ruled out — split for the same reason
+ * `decideAgainstDeadline` itself was already split out of `decideSchedule` in S4-T2: keeps each
+ * function under AGENTS.md's ~20-line guideline instead of mixing three unrelated questions in one
+ * body.
+ */
+function decideLeadTimeOrWait(
   leadTimesInMinutes: readonly number[],
   current: DayState,
   effectiveEndOfDay: Date,
   now: Date,
 ): ScheduleDecisionResult {
-  if (current.endOfDayFired) {
-    return { decision: { kind: 'alreadyEnded', effectiveEndOfDay }, nextState: current };
-  }
-  if (now.getTime() >= effectiveEndOfDay.getTime()) {
-    const delayMs = now.getTime() - effectiveEndOfDay.getTime();
-    return {
-      decision: { kind: 'endOfDay', effectiveEndOfDay, delayMs },
-      nextState: { ...current, endOfDayFired: true },
-    };
-  }
-
   // S4-T7 Part 3: scoped to THIS effectiveEndOfDay — a prior snooze/config edit that moved the
   // deadline since these were recorded makes them stale, not still-fired (see
   // `resolveFiredLeadTimes` above).
@@ -328,6 +324,25 @@ function decideAgainstDeadline(
       firedLeadTimesEffectiveEndOfDay: effectiveEndOfDay,
     },
   };
+}
+
+function decideAgainstDeadline(
+  leadTimesInMinutes: readonly number[],
+  current: DayState,
+  effectiveEndOfDay: Date,
+  now: Date,
+): ScheduleDecisionResult {
+  if (current.endOfDayFired) {
+    return { decision: { kind: 'alreadyEnded', effectiveEndOfDay }, nextState: current };
+  }
+  if (now.getTime() >= effectiveEndOfDay.getTime()) {
+    const delayMs = now.getTime() - effectiveEndOfDay.getTime();
+    return {
+      decision: { kind: 'endOfDay', effectiveEndOfDay, delayMs },
+      nextState: { ...current, endOfDayFired: true },
+    };
+  }
+  return decideLeadTimeOrWait(leadTimesInMinutes, current, effectiveEndOfDay, now);
 }
 
 /**
