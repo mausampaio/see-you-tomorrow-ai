@@ -2955,6 +2955,13 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       problema de volta pela porta dos fundos.
       *Critério para existir:* necessidade real de uso, não simetria de API. Se ninguém sentir
       falta, esta entrada some sem custo — que é o melhor destino possível para ela.
+- [ ] **S5-T8 (candidato, NÃO agendado) — Briefing agrupado por projeto.** Direção aprovada pelo
+      mantenedor em 2026-09-07 (**D-039**), sem tarefa disparada e sem prazo. O `summary.md` hoje é
+      lista plana de sessões; a D-032 já descobre os repositórios de cada sessão pelos arquivos
+      tocados, então o agrupamento sai de evidência que já existe. Ataca a metade **de leitura** do
+      "estou perdido entre vinte sessões" — a metade de **decidir** o que fazer com cada uma é a
+      tela do v2. Interessa agora porque é a base que essa tela vai consumir.
+
 ## Definição de pronto (vale para toda tarefa)
 
 1. Código implementa exatamente a spec; divergência virou questão, não improviso.
