@@ -428,4 +428,5 @@ export const DEFAULT_TEST_CONFIG: Config = {
   maxCaptureAttemptsPerSessionPerDay: 3,
   maxBriefingScanDays: 30,
   overdueFireThresholdMinutes: 5,
+  leadTimeHysteresisMinutes: 3,
 };

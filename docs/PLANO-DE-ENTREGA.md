@@ -2737,7 +2737,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       às 09:06, com encerramento às 09:30, o toast disse `closing in 23 min` — no dia anterior, na
       mesma situação, teria dito `30 min`.
 
-- [ ] **S4-T7 — Notificação não pode virar ruído: histerese por tipo, e alertas precoces num
+- [~] **S4-T7 — Notificação não pode virar ruído: histerese por tipo, e alertas precoces num
       aviso só.** Saída da **Q-059 item 4**, refinada pelo mantenedor em 2026-09-07.
 
       **Parte 1 — histerese por tipo de notificação.** Medido no uso real: o aviso prévio dispara
@@ -2780,6 +2780,78 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
       *Aceite:* N alertas no mesmo ciclo produzem **uma** notificação que declara os N; nenhum
       achado desaparece do texto sem estar contado.
+
+      **Acréscimo à tarefa, aprovado pelo mantenedor em 2026-09-07, mesma área — Parte 3: prazo
+      novo devolve os avisos daquele prazo.** `core/schedule.ts#findDueLeadTime` pula regras em
+      `DayState.firedLeadTimesInMinutes`, que guardava só o número da regra, nunca o prazo a que
+      ela se referia — um `snooze` ou uma mudança de `endOfDayTime` que move o prazo efetivo
+      deixava a regra antiga marcada disparada para sempre, e a captura seguinte acontecia sem
+      aviso nenhum. **A regra: "o aviso não é sobre a regra, é sobre o prazo. Prazo novo, aviso
+      novo."** *Aceite:* depois de um `snooze` (ou de uma mudança de `endOfDayTime`), as regras
+      voltam a poder disparar para o **novo** prazo; um prazo que não mudou não redispara nada.
+
+      **Relatório (dev).**
+
+      **Medido, contra o commit final (depois de dois refactors de tamanho de função — ver
+      abaixo):** 133 arquivos de teste, 1424 testes passaram + 3 pulados (1427), `npm run
+      verificar` verde (`format:check`, `tsc --noEmit`, `lint`, `dependencias` — 149 módulos/450
+      dependências sem violação —, `build`, `cobertura`), medido nas duas máquinas separadamente
+      (`npm run cobertura` no Windows, `npm run verificar:linux` no container
+      `node:22-bookworm`), as duas rodando em segundo plano por passar de 120s, código de saída
+      lido do arquivo de saída dedicado, nunca do encadeamento (mesma disciplina da S4-T5/S4-T6).
+      Cobertura, Windows: geral 97,04%/92,77%/98,19%/97,28% (statements/branches/funcs/lines);
+      `core/` 100/99,08/100/100 (piso 95%); `scheduler/` 98,54/100/93,93/100 (piso 80% — o único
+      gap de função é `loop.ts#sleepUntilNextPollOrStop`, já registrado desde a S4-T5, não tocado
+      aqui); `adapters/storage/` 94,53/88,23/98,52/94,86 (piso 80%; `config-schema.ts` sozinho
+      fica em 85,48% — o switch de `applyConfigFieldUpdate` tem 13 ramos quase idênticos e só um
+      é exercitado por teste desde antes desta tarefa, `leadTimeHysteresisMinutes` só herdou o
+      mesmo padrão, não é regressão nova); `cli/` 95,28/94,01/95,45/95,71 (piso 80%). Cobertura,
+      Linux (mesmo commit, `npm run verificar:linux`): geral 96,98%/92,83%/97,99%/97,19%; `core/`
+      100/99,08/100/100 (idêntico ao Windows); `scheduler/` 98,54/100/93,93/100 (idêntico);
+      `adapters/storage/` 93,35/87,16/95,58/93,67 (piso 80%, alguns pontos abaixo do Windows — a
+      mesma faixa de diferença que a S4-T6 já registrou entre as duas máquinas, nunca diferença de
+      comportamento); `cli/` 95,47/94,35/95,45/95,9 (piso 80%). As duas rodadas: 133 arquivos de
+      teste, 1424 testes passaram + 3 pulados (1427), idêntico nas duas máquinas.
+
+      **Dois refactors de limpeza, sem mudança de comportamento (cobertos pela suíte já
+      existente):** `core/schedule.ts#decideAgainstDeadline` e `scheduler/poll.ts#pollOnce`
+      passaram do piso de ~20 linhas (AGENTS.md § "Estilo de código") ao ganhar a parte 3/parte 1
+      respectivamente — `decideLeadTimeOrWait` e `handleLeadTimeWarning` foram extraídas do mesmo
+      jeito que `decideAgainstDeadline`/`runEndOfDay` já tinham sido extraídas antes, mesma razão.
+
+      As três partes, mais o achado de reuso, medidos com testes que reproduzem os casos reais
+      citados no despacho: o `daemon subindo atrasado às 14:20 com [30,15]` da parte 1
+      (`tests/unit/scheduler/poll.test.ts`, "one notice, not two"); o `snooze de 14:30 para 18:00`
+      da parte 3 (`tests/unit/core/schedule.test.ts`, "the measured bug: a snooze that moves the
+      deadline..."); e a interação das duas, pedida explicitamente no cuidado (b) da parte 3
+      (`tests/unit/scheduler/poll.test.ts`, "S4-T7 Part 1 + Part 3 interaction") — um `snooze`
+      dado 15 segundos depois do primeiro aviso reabre a regra para o novo prazo mas NÃO gera um
+      segundo aviso imediato, porque as duas partes vivem em campos independentes de `DayState` e
+      a histerese (parte 1) nunca lê o carimbo de prazo (parte 3).
+
+      **Inferido:** que o comportamento acima é exatamente o que o mantenedor vai observar rodando
+      o daemon de verdade amanhã — não posso confirmar isso a partir daqui, só a lógica isolada.
+      Também inferido: que `MAX_EARLY_WARNINGS_LISTED = 5` (parte 2, escolhido não medido, mesmo
+      espírito do precedente de `UNDERSTANDING_EXCERPT_CHARS`) é um tamanho razoável para o corpo
+      de um toast — não tenho como medir altura real de toast a partir daqui.
+
+      **O que o mantenedor precisa ver à mão:** rodando o daemon de verdade, confirmar que **não
+      aparecem mais dois avisos prévios em sequência rápida** (o "amontoado" original) e que um
+      `seeya snooze` dado perto do fim ainda entrega o aviso seguinte, sem rajada — os dois só se
+      provam com o relógio real e o SO real, do jeito que a S4-T6 já registrou para a supressão de
+      janela de console.
+
+      **Decisões registradas em Q-060:** a representação do "tipo" (campo dedicado
+      `lastLeadTimeWarningNoticeAt` em `DayState`, não um campo genérico em `Notice` nem uma
+      chave solta — cuidado (a)); onde mora a decisão pura (`core/lead-time-hysteresis.ts`, novo
+      módulo, para não misturar com `decideSchedule`/`findDueLeadTime`, que ficam intocados —
+      cuidado (b) e (d) das duas partes); os dois campos novos em `DayState`/`estado.json` sem
+      migração, ausência lida como "nunca disparou"/"sem evidência de mudança de prazo" (D-025 —
+      cuidado (d)/(e)); o desenho de `resolveFiredLeadTimes` e a alternativa descartada (forçar
+      reset quando o carimbo de prazo é desconhecido, rejeitada por poder redisparar avisos já
+      corretos contra o `estado.json` real do mantenedor); e os três nomes novos no glossário de
+      `AGENTS.md` (`leadTimeHysteresisMinutes`, `lastLeadTimeWarningNoticeAt`,
+      `firedLeadTimesEffectiveEndOfDay`).
 
 - [ ] **S4-T8 — A leva pequena: três mensagens que falam do mecanismo em vez de falar com a
       pessoa.** Todas saíram de uso real nos dias 06 e 07/09/2026, nenhuma de teste. Nenhuma muda

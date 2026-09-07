@@ -21,6 +21,7 @@ function config(overrides: Partial<Config> = {}): Config {
     maxCaptureAttemptsPerSessionPerDay: 3,
     maxBriefingScanDays: 30,
     overdueFireThresholdMinutes: 5,
+    leadTimeHysteresisMinutes: 3,
     ...overrides,
   };
 }

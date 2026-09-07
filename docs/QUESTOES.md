@@ -5367,3 +5367,135 @@ config-schema.test.ts` e `tests/unit/cli/config-command.test.ts`, provando que a
 contém o texto que a de uma chave forjada contém, nos dois sentidos (`get` e `set`).
 
 **Cobertura e portão:** ver relatório da tarefa em `docs/PLANO-DE-ENTREGA.md` S4-T6.
+
+---
+
+## Q-060 — S4-T7 (histerese por tipo, alertas precoces num aviso só, e prazo novo devolve avisos): como o "tipo" é representado, onde mora a decisão pura, e o desenho da parte 3
+
+**Tarefa:** S4-T7, três partes. Saída da Q-059 item 4, refinada pelo mantenedor em 2026-09-07, com
+a parte 3 aprovada e acrescentada em seguida, na mesma tarefa.
+**Bloqueia:** não — `npm run verificar` e `npm run verificar:linux` verdes (números na seção de
+cobertura abaixo).
+
+**1) Cuidado (a) — como o "tipo" de notificação é representado, e por que não virou campo no
+`Notice` nem chave passada por quem notifica.** Considerei três formas antes de escolher:
+
+- **Campo `kind` em `Notice`** (`core/ports.ts`) — rejeitado. Isso obrigaria TODO `Notice` do
+  projeto (o resultado do encerramento, o aviso de encerramento perdido, os alertas precoces, o
+  daemon travado) a declarar um `kind`, mesmo os que nunca participam de histerese — e um campo que
+  92% dos construtores preenchem só para nunca ser lido é ruído, não estrutura. Pior: um `kind`
+  genérico É EXATAMENTE o convite para alguém, no futuro, escrever
+  `if (shouldSuppress(notice.kind, ...))` num lugar genérico e sem querer incluir uma classe que
+  precisa sempre passar.
+- **Chave (`string`) passada por quem notifica** (ex.: `notify(notice, { hysteresisKey:
+  'leadTimeWarning' })`) — rejeitado. Uma `string` solta não impede um segundo call site de
+  inventar `'lead-time-warning'` ou `'leadtime'` e silenciosamente nunca colidir com a primeira —
+  o typo vira uma segunda classe de histerese que ninguém pediu, sem erro de compilação.
+- **Campo dedicado e nomeado em `DayState`** (`lastLeadTimeWarningNoticeAt: Date | null`) —
+  escolhido. `core/types.ts` documenta exatamente isso: só existe UM campo, com um nome que já diz
+  para qual classe ele serve, e `scheduler/poll.ts` só o consulta dentro do `if (decision.kind ===
+  'leadTimeWarning')`. Quem olha o tipo `DayState` vê, sem ler `poll.ts`, que só uma classe
+  participa — a estrutura deixa "quem participa e quem não" óbvio por construção (D-024), sem
+  precisar de convenção que alguém tem que lembrar. O preço: se uma segunda classe algum dia
+  precisar de histerese, é um campo novo, não uma entrada num mapa — decidi que esse preço é baixo
+  (ainda não existe candidato) e o ganho de segurança vale mais.
+
+**2) Cuidado (b) — onde mora a decisão pura.** `core/lead-time-hysteresis.ts#shouldSuppressLeadTimeWarning`,
+novo módulo em `core/`, não dentro de `core/schedule.ts`. Motivo de ser arquivo próprio e não uma
+função a mais em `schedule.ts`: o despacho foi explícito que "não mude quando as regras vencem" —
+`decideSchedule`/`findDueLeadTime` continuam sem saber que histerese existe. Colocar a checagem no
+mesmo arquivo correria o risco de alguém, numa tarefa futura, misturar as duas responsabilidades
+(vencimento de regra vs. supressão de aviso) só porque estão fisicamente próximas. Testes cobrem a
+fronteira `<` vs `<=`: um intervalo de EXATAMENTE `minGapMinutes` não é suprimido (o config é
+documentado como um mínimo — atingir o mínimo já é suficiente), só um intervalo estritamente menor
+é.
+
+**3) Cuidado (c) — primeiro aviso do dia nunca engolido, testado explicitamente em duas faixas.**
+`tests/unit/core/lead-time-hysteresis.test.ts` prova a função pura isolada
+(`lastFiredAt: null` → nunca suprime); `tests/unit/scheduler/poll.test.ts` prova a composição
+(nenhum teste de "primeiro aviso" pré-existente quebrou, e o teste do "measured bug" começa
+exatamente de um dia vazio). A virada de meia-noite (`core/schedule.ts#resetIfNewDay`) já zera o
+campo para `null` junto com o resto — coberto pelos dois testes de `tests/unit/core/schedule.test.ts`
+"midnight rollover" que já existiam e que atualizei para incluir os dois campos novos no
+`toStrictEqual`.
+
+**4) Cuidado (d) — migração do `DayState`: decidi que NÃO exige migração, ausência lida como
+"nunca disparou".** Os dois campos novos (`lastLeadTimeWarningNoticeAt` da parte 1,
+`firedLeadTimesEffectiveEndOfDay` da parte 3) são `.optional().nullable()` no zod de
+`adapters/storage/state-schema.ts`, sem bump de `STATE_SCHEMA_VERSION` e sem entrada em
+`adapters/storage/schema-version.ts`. Segui o precedente que `captureAttemptsToday`/`daemonHealth`
+(S4-T3/S4-T3b) já estabeleceram para o mesmo arquivo: um campo aditivo e opcional não precisa de
+migração, porque a leitura honesta de "chave ausente" já é exatamente o estado inicial que o campo
+representa (D-025). Testei os dois sentidos: `tests/integration/storage/state.test.ts` tem um caso
+que escreve um `estado.json` SEM os dois campos novos (a forma exata do arquivo real do
+mantenedor hoje) e confere que ambos voltam `null`; e um teste de ida-e-volta com os dois campos
+preenchidos. O caso mais importante, coberto em `tests/unit/core/schedule.test.ts`, é o de
+`firedLeadTimesEffectiveEndOfDay: null` NÃO forçar um reset espúrio de `firedLeadTimesInMinutes` —
+ver item 6.
+
+**5) Parte 2 — por que reusei `core/consolidated-plan.ts#renderItemList` em vez de inventar
+formatação nova, e por que só a primeira linha da mensagem.** O despacho pediu isso
+explicitamente ("veja como `format-end-day.ts` e `consolidated-plan.ts` já resolvem listas
+parecidas"). `renderItemList` já tinha exatamente a forma "declarar o rótulo, um item por linha" —
+reusar em vez de escrever uma segunda função com a mesma forma (AGENTS.md: "nada de duplicação").
+Para o conteúdo de cada linha, usei a PRIMEIRA linha de `EarlyWarning.message` (`firstLine`, nova
+função pequena em `scheduler/notices.ts`) em vez de fazer `core/early-warnings.ts` crescer um
+campo "resumo curto" só para isto — as duas mensagens já abrem com uma frase autocontida antes da
+explicação de várias linhas, e extrair a primeira linha não duplica lógica nem exige mudar o tipo
+`EarlyWarning`. `MAX_EARLY_WARNINGS_LISTED = 5` é **escolhido, não medido** — mesmo espírito que
+`cli/format-end-day.ts#UNDERSTANDING_EXCERPT_CHARS` já registrou como precedente ("não há 'certo'
+para altura de toast"). Quando corta, o texto declara quantos ficaram de fora
+(`"N more warnings not shown"`) — nunca corta em silêncio (cuidado (e)). Não citei um comando de
+recuperação específico (cheguei a escrever "run seeya sessions for the rest" e removi) porque
+`seeya sessions` hoje não mostra as duas classes de alerta precoce — teria sido inventar uma
+promessa que o D-025 não deixa fazer.
+
+**6) Parte 3 — o desenho de `firedLeadTimesEffectiveEndOfDay` e a alternativa que descartei.**
+Nova função pura `core/schedule.ts#resolveFiredLeadTimes(current, effectiveEndOfDay)`, chamada
+dentro de `decideAgainstDeadline` ANTES de `findDueLeadTime` — decide qual lista de "já disparadas"
+entregar a `findDueLeadTime`, nunca como essa função decide vencimento (cuidado (d) da parte 3
+respeitado: `findDueLeadTime` não mudou uma linha). A regra: se `firedLeadTimesEffectiveEndOfDay`
+armazenado é `null` OU igual ao `effectiveEndOfDay` computado agora, a lista antiga vale como está;
+se é DIFERENTE, a lista vira `[]` para esta chamada (prazo novo, aviso novo).
+
+**A leitura de `null` foi a escolha mais deliberada aqui, e é o inverso do que pareceria óbvio à
+primeira vista.** Cheguei a considerar tratar `null` como "prazo desconhecido → tratar como
+mudou, resetar por segurança" — mas isso forçaria um re-disparo espúrio no PRIMEIRO poll depois
+desta tarefa entrar em produção, contra um `estado.json` real que já tem avisos corretamente
+disparados hoje sob um prazo que não mudou (o `estado.json` do mantenedor, mencionado no despacho).
+Isso violaria diretamente o cuidado (c) da parte 3 ("não redisparar por nada"). A leitura escolhida
+— `null` como "sem evidência de mudança, não força reset" — é a leitura menos disruptiva que a
+ausência sustenta (D-025 aplicado aqui: ausência não vira afirmação de MUDANÇA, também não vira
+afirmação do contrário; escolhi a ação menos específica/menos disruptiva das duas). Testei
+explicitamente esse caso (`tests/unit/core/schedule.test.ts`, "estado.json migrado... não força
+re-disparo espúrio").
+
+**Onde NÃO persisto o novo carimbo: o branch `waiting`.** Cheguei a escrever uma versão que também
+gravava `firedLeadTimesEffectiveEndOfDay` no `nextState` do branch `waiting` (para "adiantar" a
+marcação mesmo sem nada disparar) — reverti porque isso quebrava a igualdade estrutural
+`nextState === current` que testes existentes já assumiam para um dia novo sem nada disparado
+(`toStrictEqual(emptyDayState(...))`), e não trazia benefício real: `scheduler/poll.ts` já não
+persiste nada no branch `waiting` (comentário original do arquivo: "nada disso pode virar...
+enxurrada... de gasto"), então o carimbo só precisa ficar correto no momento em que algo REALMENTE
+dispara — o próximo `decideSchedule` que importa vai comparar contra o que foi persistido por
+último de qualquer forma, então polls "waiting" no meio não mudam o resultado final.
+
+**7) Interação Parte 1 + Parte 3 (cuidado (b) da parte 3), verificada com teste dedicado.** As duas
+partes vivem em campos INDEPENDENTES de `DayState` (`firedLeadTimesInMinutes`/
+`firedLeadTimesEffectiveEndOfDay` para a parte 3; `lastLeadTimeWarningNoticeAt` para a parte 1) e
+`applySnooze`/`applyConfigFieldUpdate` nunca tocam o segundo. Resultado observado (não suposto):
+um `snooze` que reabre uma regra para o prazo novo (parte 3) ainda passa pelo filtro de histerese
+(parte 1) antes de qualquer notificação sair — `tests/unit/scheduler/poll.test.ts`, descrição
+"S4-T7 Part 1 + Part 3 interaction", prova que um snooze dado 15 segundos depois do primeiro aviso
+NÃO produz um segundo aviso imediato (a regra reaberta é decidida mas suprimida), e que a regra
+seguinte só sai quando o próprio prazo dela chega de verdade E a janela de histerese já passou. As
+duas partes compõem sem nenhum código especial de integração — cada uma só lê o campo que é seu.
+
+**8) Nomes escolhidos, para registro.** Config novo: `leadTimeHysteresisMinutes` (default 3,
+D-035 — depende de quanto ruído a pessoa tolera). Campos novos em `DayState`/`estado.json`:
+`lastLeadTimeWarningNoticeAt` (parte 1) e `firedLeadTimesEffectiveEndOfDay` (parte 3). Os três
+foram acrescentados ao glossário de `AGENTS.md` § "Identificadores que vão para disco" antes de
+entrar no código, como o próprio glossário pede.
+
+**Cobertura e portão:** `npm run verificar` e `npm run verificar:linux`, números no relatório da
+tarefa em `docs/PLANO-DE-ENTREGA.md` S4-T7.

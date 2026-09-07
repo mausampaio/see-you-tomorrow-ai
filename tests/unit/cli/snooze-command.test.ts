@@ -36,6 +36,7 @@ function config(overrides: Partial<Config> = {}): Config {
     maxCaptureAttemptsPerSessionPerDay: 3,
     maxBriefingScanDays: 30,
     overdueFireThresholdMinutes: 5,
+    leadTimeHysteresisMinutes: 3,
     ...overrides,
   };
 }
@@ -149,6 +150,8 @@ describe('runSnoozeCommand', () => {
       skipped: false,
       snoozeMinutesTotal: 0,
       firedLeadTimesInMinutes: [30, 15],
+      firedLeadTimesEffectiveEndOfDay: null,
+      lastLeadTimeWarningNoticeAt: null,
       endOfDayFired: true,
       captureAttemptsToday: {},
       daemonHealth: EMPTY_DAEMON_HEALTH,
@@ -202,6 +205,8 @@ describe('midnight rollover (docs/TESTES.md: "virada de meia-noite zerando o est
       skipped: true,
       snoozeMinutesTotal: 999,
       firedLeadTimesInMinutes: [30, 15],
+      firedLeadTimesEffectiveEndOfDay: null,
+      lastLeadTimeWarningNoticeAt: null,
       endOfDayFired: true,
       captureAttemptsToday: { 'some-session': 3 },
       daemonHealth: {

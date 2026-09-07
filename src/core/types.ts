@@ -252,6 +252,24 @@ export interface Config {
    * matter how small this threshold is set.
    */
   readonly overdueFireThresholdMinutes: number;
+  /**
+   * Minimum minutes between two `leadTimeWarning` notices before the second one is swallowed
+   * (S4-T7, `core/lead-time-hysteresis.ts#shouldSuppressLeadTimeWarning`) — measured in real use: a
+   * daemon that starts polling late enough to have already crossed two configured
+   * `leadTimesInMinutes` thresholds fires them about 30 seconds apart, both saying "closing soon"
+   * with almost the same number.
+   *
+   * **Config, not a constant (D-035).** How much of that near-duplicate noise a person tolerates is
+   * a preference — nothing here measures disk, CPU, or any other fact about the machine, the same
+   * distinction D-035 already draws for `overdueFireThresholdMinutes` above.
+   *
+   * **Only the `leadTimeWarning` class is gated by this number.** The end-of-day result, the
+   * D-036 missed-closure notice, and early warnings are never suppressed by a recent lead-time
+   * warning (docs/PLANO-DE-ENTREGA.md S4-T7: "nunca podem ser calados por um aviso prévio recente"
+   * — that's the whole reason the daemon must never lose the day's actual outcome). Default **3**
+   * minutes.
+   */
+  readonly leadTimeHysteresisMinutes: number;
 }
 
 /**
@@ -654,6 +672,59 @@ export interface DayState {
    * memory a stateless daemon poll (every 30s, docs/ESPECIFICACAO.md) needs so the same lead-time
    * warning doesn't fire on every tick it's crossed on. */
   readonly firedLeadTimesInMinutes: readonly number[];
+  /**
+   * S4-T7 Part 3: the `effectiveEndOfDay` (`core/schedule.ts#computeEffectiveEndOfDay`) that
+   * `firedLeadTimesInMinutes` above was computed against. Measured bug this field exists to fix:
+   * `firedLeadTimesInMinutes` only ever remembered WHICH configured rule fired, never for WHAT
+   * deadline — so a `seeya snooze` or a `config set endOfDayTime` that moves the effective deadline
+   * left the old rule permanently marked fired, and the daemon capture ran at the NEW deadline with
+   * no warning at all (docs/PLANO-DE-ENTREGA.md S4-T7 Part 3's own case: warnings for 14:30 fire,
+   * the person snoozes to 18:00, and 17:30/17:45 pass in silence).
+   *
+   * **The rule (maintainer's own words): "o aviso não é sobre a regra, é sobre o prazo. Prazo novo,
+   * aviso novo."** `core/schedule.ts#decideAgainstDeadline` compares this field against the
+   * CURRENTLY effective deadline on every call; when they differ, `firedLeadTimesInMinutes` is
+   * treated as reset for that call, so the configured rules become due again for the new deadline.
+   * `core/schedule.ts#findDueLeadTime` itself is untouched (docs/PLANO-DE-ENTREGA.md S4-T7 Part 3,
+   * cuidado (d)) — this only changes what `alreadyFired` list that function is handed, never how it
+   * decides "vencida".
+   *
+   * **`null` (a day that never recorded one, or an `estado.json` migrated from before this field
+   * existed) is read as "no evidence the deadline changed" — deliberately the LESS disruptive of
+   * the two readings absence could support (D-025).** The alternative — treating unknown as
+   * "changed" — would force a one-time reset on every pre-existing `estado.json` the moment this
+   * code runs, re-firing a lead time that had already correctly gone out earlier today under an
+   * UNCHANGED deadline, which is exactly what cuidado (c) rules out ("não redisparar por nada").
+   * No `schemaVersion` migration for this reading — same additive-optional precedent
+   * `captureAttemptsToday`/`daemonHealth`/`lastLeadTimeWarningNoticeAt` above already set.
+   *
+   * Resets to `null` at local midnight with the rest of `DayState` (`resetIfNewDay`), same as
+   * `firedLeadTimesInMinutes` itself — a new day has no deadline history to compare against yet.
+   */
+  readonly firedLeadTimesEffectiveEndOfDay: Date | null;
+  /**
+   * S4-T7: when the last `leadTimeWarning` notice actually reached the person, OR was
+   * deliberately swallowed by the hysteresis check below — either way this is stamped, because a
+   * swallowed notice still "counts as data" (docs/PLANO-DE-ENTREGA.md S4-T7, cuidado (a)): it is
+   * never redelivered later, so the timestamp has to move forward regardless of whether
+   * `Notifier.notify` was actually called for it.
+   *
+   * `null` is the ordinary start-of-day case — no `leadTimeWarning` has been decided yet today
+   * (D-025: absence here is never read as "one just went out") — which is exactly what makes the
+   * FIRST lead-time warning of the day immune to this field's own check
+   * (`core/lead-time-hysteresis.ts#shouldSuppressLeadTimeWarning`).
+   *
+   * **Only this one notice class is gated at all.** `endOfDay`'s result, the D-036 missed-closure
+   * notice, and early warnings never read this field. A dedicated, named field for exactly the one
+   * class that participates — rather than a generic `Record<NoticeKind, Date>` any future notice
+   * builder could plausibly reach into — is what makes "who participates in hysteresis" a fact the
+   * type itself states, not a convention a future caller has to remember (AGENTS.md § "Tipos",
+   * D-024's own reasoning applied to a bookkeeping field instead of a domain enum).
+   *
+   * Resets to `null` at local midnight like every other per-day field here (`resetIfNewDay`,
+   * `emptyDayState`) — the gap this field measures never spans two different local days.
+   */
+  readonly lastLeadTimeWarningNoticeAt: Date | null;
   /** Whether today's end-of-day closure has already been produced. Sticky for the rest of the
    * local day once `true` — a day that already closed doesn't reopen because of a later snooze
    * (there is nothing left to delay). */

@@ -24,6 +24,7 @@ import {
 } from '../core/schedule.js';
 import { localDayString } from '../core/day.js';
 import { recordCaptureAttempts } from '../core/capture-retry.js';
+import { shouldSuppressLeadTimeWarning } from '../core/lead-time-hysteresis.js';
 import type { Config, DayState } from '../core/types.js';
 import type { EndDayDeps, EndDayResult } from '../application/types.js';
 import { endDay } from '../application/end-day.js';
@@ -31,7 +32,7 @@ import type { DaemonDeps } from './types.js';
 import { buildRetryFilter, nonModelSessionIds } from './capture-filter.js';
 import {
   buildDaemonEndOfDayNotice,
-  buildEarlyWarningNotice,
+  buildEarlyWarningsNotice,
   buildLeadTimeNotice,
   buildMissedEndOfDayNotice,
 } from './notices.js';
@@ -135,6 +136,44 @@ async function runEndOfDay(
 }
 
 /**
+ * S4-T7 Part 1: the `leadTimeWarning` half of one poll cycle — split out of `pollOnce` the same
+ * way `runEndOfDay` already is (AGENTS.md's ~20-line guideline), and for the identical reason: one
+ * `decision.kind` branch is its own self-contained question.
+ *
+ * `decideSchedule` only decides the rule is due; whether it actually reaches the person is this
+ * hysteresis check, against the state BEFORE this decision (`persisted`, not `nextState` —
+ * `decideSchedule` never touches `lastLeadTimeWarningNoticeAt`, so the two are the same value
+ * here, but `persisted` states the intent: "what was true before this poll decided anything").
+ * The swallowed-or-not timestamp is stamped regardless of `suppressed` — a swallowed notice still
+ * "counts as data" (S4-T7 cuidado (a)) and is never redelivered later, the same way
+ * `firedLeadTimesInMinutes` (inside `nextState`) already marks the underlying rule fired
+ * unconditionally.
+ */
+async function handleLeadTimeWarning(
+  deps: DaemonDeps,
+  persisted: DayState,
+  nextState: DayState,
+  effectiveEndOfDay: Date,
+  now: Date,
+  leadTimeHysteresisMinutes: number,
+): Promise<void> {
+  // S4-T6: the notice reports the REAL gap to the deadline, not the configured rule's own name —
+  // the two only match when the poll lands inside the same 30s window the threshold was crossed
+  // in. `firedLeadTimesInMinutes` still records the CONFIGURED lead time unchanged; only the
+  // notice text is derived from `now` via the injected `Clock` (D-019).
+  const remaining = minutesRemaining(effectiveEndOfDay, now);
+  const suppressed = shouldSuppressLeadTimeWarning(
+    persisted.lastLeadTimeWarningNoticeAt,
+    now,
+    leadTimeHysteresisMinutes,
+  );
+  if (!suppressed) {
+    await deps.notifier.notify(buildLeadTimeNotice(remaining, nextState.day));
+  }
+  await deps.storage.saveState({ ...nextState, lastLeadTimeWarningNoticeAt: now });
+}
+
+/**
  * D-036's "dia local diferente" case: `stored` is whatever `estado.json` held onto BEFORE
  * `core/schedule.ts#resetIfNewDay` runs against it. A missed closure is real only when there was
  * something scheduled to miss — `config.endOfDayTime !== null` — and it genuinely never happened:
@@ -158,11 +197,15 @@ export async function pollOnce(deps: DaemonDeps): Promise<void> {
   // D-018/Q-024: runs every poll, independent of the schedule decision below — discovery and
   // early-warning detection don't care whether today's closure is disabled, skipped, or hours
   // away. `discoverEarlyWarnings` already persists the "already warned" bookkeeping itself and
-  // returns only what's NEW, so there is nothing else to deduplicate here — one `Notice` per
-  // warning (`buildEarlyWarningNotice`), never batched.
+  // returns only what's NEW, so there is nothing else to deduplicate here.
+  // S4-T7 Part 2: one Notice for every NEW warning this cycle, never one per warning — a burst of
+  // N in the same 30s poll used to mean N toasts in a row (`buildEarlyWarningsNotice`'s own
+  // docstring). Hysteresis (Part 1) never applies here: silencing an early warning is losing
+  // information (D-025), not acceptable noise reduction, so this always fires when there's
+  // anything new — only how it's PRESENTED changed.
   const warnings = await deps.discoverEarlyWarnings(discovery.sessions);
-  for (const warning of warnings) {
-    await deps.notifier.notify(buildEarlyWarningNotice(warning));
+  if (warnings.length > 0) {
+    await deps.notifier.notify(buildEarlyWarningsNotice(warnings));
   }
 
   const now = deps.clock.now();
@@ -190,14 +233,14 @@ export async function pollOnce(deps: DaemonDeps): Promise<void> {
   const { decision, nextState } = decideSchedule(config, persisted, now);
 
   if (decision.kind === 'leadTimeWarning') {
-    // S4-T6: the notice reports the REAL gap to the deadline, not the configured rule's own name
-    // (`decision.leadTimeMinutes`) — the two only match when the poll lands inside the same 30s
-    // window the threshold was crossed in. `firedLeadTimesInMinutes` (inside `nextState`, from
-    // `decideSchedule`) still records `decision.leadTimeMinutes` unchanged — only the notice text
-    // is derived from `now` via the injected `Clock` (D-019).
-    const remaining = minutesRemaining(decision.effectiveEndOfDay, now);
-    await deps.notifier.notify(buildLeadTimeNotice(remaining, nextState.day));
-    await deps.storage.saveState(nextState);
+    await handleLeadTimeWarning(
+      deps,
+      persisted,
+      nextState,
+      decision.effectiveEndOfDay,
+      now,
+      config.leadTimeHysteresisMinutes,
+    );
     return;
   }
   if (decision.kind === 'endOfDay') {

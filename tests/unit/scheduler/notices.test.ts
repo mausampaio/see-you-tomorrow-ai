@@ -5,10 +5,11 @@ import { describe, expect, it } from 'vitest';
 import {
   buildDaemonEndOfDayNotice,
   buildDaemonUnhealthyNotice,
-  buildEarlyWarningNotice,
+  buildEarlyWarningsNotice,
   buildLeadTimeNotice,
   buildMissedEndOfDayNotice,
 } from '../../../src/scheduler/notices.js';
+import type { EarlyWarning } from '../../../src/core/early-warnings.js';
 import type { EndDayResult } from '../../../src/application/types.js';
 
 function emptyEndDayResult(overrides: Partial<EndDayResult> = {}): EndDayResult {
@@ -124,25 +125,45 @@ describe('buildMissedEndOfDayNotice (D-036, "dia local diferente")', () => {
   });
 });
 
-describe('buildEarlyWarningNotice', () => {
-  it('missingTranscript gets its own title and passes the message through unchanged', () => {
-    const notice = buildEarlyWarningNotice({
-      kind: 'missingTranscript',
-      sessionId: 'session-a',
-      message: 'Session "x" has no transcript.',
-    });
-    expect(notice.title).toContain('no transcript');
-    expect(notice.body).toBe('Session "x" has no transcript.');
+describe('buildEarlyWarningsNotice (S4-T7 Part 2: one notice per poll cycle, not one per warning)', () => {
+  const missingTranscript: EarlyWarning = {
+    kind: 'missingTranscript',
+    sessionId: 'session-a',
+    message: 'Session "x" has no transcript.\nLikely cause: ...',
+  };
+  const uninspectable: EarlyWarning = {
+    kind: 'uninspectableSession',
+    keyFileName: '4242.abc.key',
+    message: 'seeya found a session it cannot inspect: "4242.abc.key".\nNo matching record...',
+  };
+
+  it('a single warning: title says "1", body is just its first line', () => {
+    const notice = buildEarlyWarningsNotice([missingTranscript]);
+    expect(notice.title).toBe('seeya: 1 early warning');
+    expect(notice.body).toContain('Session "x" has no transcript.');
+    // Only the first line — never the multi-line explanation past it.
+    expect(notice.body).not.toContain('Likely cause');
   });
 
-  it('uninspectableSession gets a different title', () => {
-    const notice = buildEarlyWarningNotice({
-      kind: 'uninspectableSession',
-      keyFileName: '4242.abc.key',
-      message: 'seeya found a session it cannot inspect: "4242.abc.key".',
-    });
-    expect(notice.title).toContain('uninspectable');
-    expect(notice.body).toContain('4242.abc.key');
+  it('several warnings in the same cycle: title declares the count, body lists each one', () => {
+    const notice = buildEarlyWarningsNotice([missingTranscript, uninspectable]);
+    expect(notice.title).toBe('seeya: 2 early warnings');
+    expect(notice.body).toContain('Session "x" has no transcript.');
+    expect(notice.body).toContain('seeya found a session it cannot inspect: "4242.abc.key".');
+  });
+
+  it('never drops a warning silently: a burst past the shown cap still declares the true total and how many were left out', () => {
+    const burst: EarlyWarning[] = Array.from({ length: 8 }, (_, i) => ({
+      kind: 'missingTranscript',
+      sessionId: `session-${i}`,
+      message: `Session "s${i}" has no transcript.`,
+    }));
+    const notice = buildEarlyWarningsNotice(burst);
+    expect(notice.title).toBe('seeya: 8 early warnings'); // the TRUE total, not just what's shown
+    expect(notice.body).toContain('Session "s0" has no transcript.');
+    expect(notice.body).toContain('Session "s4" has no transcript.'); // 5th shown item (index 4)
+    expect(notice.body).not.toContain('Session "s5" has no transcript.'); // past the cap
+    expect(notice.body).toContain('3 more warnings not shown'); // declared, never silently cut
   });
 });
 

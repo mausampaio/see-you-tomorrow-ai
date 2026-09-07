@@ -16,6 +16,7 @@ import type { EndDayResult } from '../application/types.js';
 import type { EarlyWarning } from '../core/early-warnings.js';
 import type { DaemonHealth } from '../core/types.js';
 import type { Notice } from '../core/ports.js';
+import { renderItemList } from '../core/consolidated-plan.js';
 
 function pluralize(count: number, singular: string, plural: string): string {
   return `${count} ${count === 1 ? singular : plural}`;
@@ -105,17 +106,55 @@ export function buildMissedEndOfDayNotice(missedDay: string): Notice {
   };
 }
 
-/** D-018/Q-024: the daemon is the only thing that sees sessions continuously, so it's where an
- * `EarlyWarning`'s `message` finally becomes a real `Notice` — the two S1-T7 producers of these
- * warnings were built before `Notifier` existed at all. One notice per warning, not batched: each
- * already names one specific session or key file, and batching would bury that under a summary
- * line nobody asked for. */
-export function buildEarlyWarningNotice(warning: EarlyWarning): Notice {
-  const title =
-    warning.kind === 'missingTranscript'
-      ? 'seeya: session has no transcript'
-      : 'seeya: found an uninspectable session';
-  return { title, body: warning.message };
+/**
+ * S4-T7 Part 2: how many of a poll cycle's `EarlyWarning`s get their own line before the notice
+ * just declares a count instead. Chosen, not measured — same spirit as
+ * `cli/format-end-day.ts#UNDERSTANDING_EXCERPT_CHARS`: there's no "right" toast height, but a
+ * one-line-per-warning body has to stay short enough to read at a glance even on a burst day, and 5
+ * items is long enough to be useful without turning into the wall of text this task exists to stop.
+ */
+const MAX_EARLY_WARNINGS_LISTED = 5;
+
+/** The first line of an `EarlyWarning.message` — both builders in `core/early-warnings.ts` already
+ * open with a single self-contained sentence naming what was found (`Session "x" (...) has no
+ * transcript.` / `seeya found a session it cannot inspect: "...".`) before their multi-line
+ * explanation. Reused here instead of a second, shorter message the detection layer would have to
+ * grow just for this batched view (AGENTS.md § "Nada de duplicação"). */
+function firstLine(message: string): string {
+  const newlineIndex = message.indexOf('\n');
+  return newlineIndex === -1 ? message : message.slice(0, newlineIndex);
+}
+
+/**
+ * D-018/Q-024: the daemon is the only thing that sees sessions continuously, so it's where every
+ * `EarlyWarning` from one poll cycle finally becomes a real `Notice`.
+ *
+ * **One notice for the whole cycle, not one per warning (S4-T7 Part 2).** `scheduler/poll.ts` used
+ * to call a per-warning builder in a loop — a burst of N new warnings in the same 30s poll (a
+ * project-wide config change, a batch of sessions opened at once) meant N toasts in a row, the same
+ * "amontoado" this whole task exists to stop, just for a different notice class than Part 1's
+ * hysteresis. Histerese doesn't fit HERE, though: silencing an early warning is losing information
+ * (D-025), never acceptable noise reduction — so this always fires, and instead **declares the
+ * count and shows what fits** (docs/PLANO-DE-ENTREGA.md S4-T7: "sem estourar o que o toast mostra",
+ * "nenhum achado desaparece do texto sem estar contado"). Reuses
+ * `core/consolidated-plan.ts#renderItemList` for the per-line layout — the exact "declare the total,
+ * one item per line, never a silent cut" shape `cli/format-end-day.ts`/`consolidated-plan.ts`
+ * already established for a captured session's own pending list, not reinvented here.
+ *
+ * @example
+ * buildEarlyWarningsNotice([w1]).title       // "seeya: 1 early warning"
+ * buildEarlyWarningsNotice([w1, w2, w3]).title // "seeya: 3 early warnings"
+ */
+export function buildEarlyWarningsNotice(warnings: readonly EarlyWarning[]): Notice {
+  const shown = warnings.slice(0, MAX_EARLY_WARNINGS_LISTED);
+  const omitted = warnings.length - shown.length;
+  const lines = shown.map((warning) => firstLine(warning.message));
+  const omittedNote =
+    omitted > 0 ? `\n(${pluralize(omitted, 'more warning', 'more warnings')} not shown.)` : '';
+  return {
+    title: `seeya: ${pluralize(warnings.length, 'early warning', 'early warnings')}`,
+    body: `${renderItemList('found', lines)}${omittedNote}`,
+  };
 }
 
 /**

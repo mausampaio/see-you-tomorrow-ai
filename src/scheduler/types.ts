@@ -38,8 +38,8 @@ export interface DaemonDeps {
    * Runs S1-T7's early-warning detection for real (`adapters/discovery/early-warnings.ts#discoverEarlyWarnings`)
    * against this poll's freshly-discovered `sessions`, returning only what's NEW since last time —
    * that function already persists the updated "already warned" bookkeeping itself, so this
-   * callback's only remaining job, from `scheduler/`'s side, is turning each one into a `Notice`
-   * (`scheduler/notices.ts#buildEarlyWarningNotice`).
+   * callback's only remaining job, from `scheduler/`'s side, is turning the whole batch into ONE
+   * `Notice` (`scheduler/notices.ts#buildEarlyWarningsNotice`, S4-T7 Part 2).
    *
    * A plain callback, not a `core/ports.ts` port: `scheduler/` cannot import `adapters/` at all
    * (docs/ARQUITETURA.md's layer matrix), so `cli/` (D-020) closes over its own `claudeHome`/

@@ -21,3 +21,4 @@ export * from './schedule.js';
 export * from './capture-retry.js';
 export * from './daemon-lock.js';
 export * from './daemon-health.js';
+export * from './lead-time-hysteresis.js';
