@@ -28,6 +28,7 @@ import {
   formatConfigValue,
   isEditableConfigKey,
   parseConfigFieldUpdate,
+  projectPolicyNotEditableMessage,
   schemaVersionNotEditableMessage,
   unknownConfigKeyMessage,
 } from '../adapters/storage/config-schema.js';
@@ -96,6 +97,13 @@ export async function runConfigSetCommand(
   // doesn't exist — it does, it's just not settable.
   if (key === 'schemaVersion') {
     return `seeya config set: ${schemaVersionNotEditableMessage()}`;
+  }
+  // S4-T8 item 3: identical reasoning, for the other name `isEditableConfigKey` also refuses.
+  // `projectPolicy` exists (`runConfigGetCommand` above already reads it) — it just needs
+  // `seeya config policy <cwd>`, not this command, so it gets the same "exists, wrong tool" message
+  // instead of falling into `parseConfigFieldUpdate`'s generic "unknown key" branch.
+  if (key === 'projectPolicy') {
+    return `seeya config set: ${projectPolicyNotEditableMessage()}`;
   }
   const parsed = parseConfigFieldUpdate(key, rawValue);
   if (!parsed.ok) {

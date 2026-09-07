@@ -121,9 +121,16 @@ describe('runConfigSetCommand', () => {
     expect(storage.savedConfigs).toHaveLength(0);
   });
 
-  it('refuses projectPolicy through `set` — it has its own sub-action', async () => {
+  // S4-T8 item 3: before this, `projectPolicy` fell through to `unknownConfigKeyMessage`, which
+  // said "unknown config key \"projectPolicy\"" in the same breath as "for \"projectPolicy\", use
+  // seeya config policy <cwd> instead" — the program contradicting itself about a key it very much
+  // recognizes (`runConfigGetCommand` above already reads it). Same distinction S4-T6 already drew
+  // for `schemaVersion`: "exists, wrong tool" is not "unknown".
+  it('refuses projectPolicy through `set` — it has its own sub-action, and is never called "unknown"', async () => {
     const storage = new InMemoryScheduleStorage(config());
     const message = await runConfigSetCommand({ storage }, 'projectPolicy', '{}');
+    expect(message).toContain('projectPolicy');
+    expect(message).not.toContain('unknown');
     expect(message).toContain('seeya config policy');
     expect(storage.savedConfigs).toHaveLength(0);
   });
@@ -154,6 +161,16 @@ describe('runConfigSetCommand', () => {
 
     expect(message).toContain('"25:99"');
     expect(storage.savedConfigs).toHaveLength(0);
+  });
+
+  // S4-T8 item 1, end to end through the CLI layer: `seeya config set endOfDayTime 9:30` writes
+  // the canonical two-digit form, not the single-digit spelling the person typed.
+  it('normalizes a single-digit hour to two digits before persisting (S4-T8 item 1)', async () => {
+    const storage = new InMemoryScheduleStorage(config());
+    const message = await runConfigSetCommand({ storage }, 'endOfDayTime', '9:30');
+
+    expect(message).toBe('endOfDayTime set to 09:30.');
+    expect(storage.savedConfigs[0]?.endOfDayTime).toBe('09:30');
   });
 
   it('refuses captureConcurrency: 0 — the schema requires at least 1', async () => {

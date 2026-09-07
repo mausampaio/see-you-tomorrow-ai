@@ -294,6 +294,26 @@ async function attemptAbruptStop(
 }
 
 /**
+ * S4-T8 item 2. Answers the two things whoever typed `--stop` actually wants to know — "did it
+ * really stop" and "did I lose anything" — instead of the mechanism of HOW it stopped. Verified,
+ * not assumed (the brief's own "confira antes de escrever"): `scheduler/poll.ts#pollOnce` re-reads
+ * `Config`/`DayState` from `Storage` at the top of every cycle and writes back whatever it decided
+ * (`handleLeadTimeWarning`'s `saveState`, `runEndOfDay`'s `saveState`, the day-rollover `saveState`)
+ * BEFORE that cycle returns — `scheduler/loop.ts#runDaemon` never holds a decision only in memory
+ * across two poll iterations. So a stop landing between polls loses nothing, by construction: the
+ * next `seeya daemon` starts from the exact same `estado.json` this one would have. The one thing
+ * this sentence does NOT cover is a stop landing INSIDE an in-flight poll (e.g. mid-capture) that
+ * gets killed before that poll's own `saveState` runs — nothing is corrupted then either (the write
+ * simply never happened), but that specific capture attempt is not counted
+ * (`core/capture-retry.ts#recordCaptureAttempts` only runs after `endDay` resolves) and is retried
+ * by the next daemon rather than skipped, which is the honest reading of "nothing was lost": at
+ * worst something in progress restarts, nothing already decided disappears.
+ */
+const DAEMON_STOP_NOTHING_LOST =
+  'Nothing was lost: it saves its state after every poll cycle, so the next "seeya daemon" picks ' +
+  'up exactly where this one left off.';
+
+/**
  * The lock is cleared exactly when there is POSITIVE evidence `pid` is dead — never on a mere
  * "the kill was sent" assumption (D-025). If the forced stop couldn't even be sent, or the pid is
  * still observed alive afterward, the lock is left in place: a stray lock that blocks the next
@@ -301,11 +321,7 @@ async function attemptAbruptStop(
  * hand); silently clearing a lock whose pid might still be running risks a live SECOND daemon
  * starting alongside it, which the whole rest of D-005 exists to prevent.
  */
-async function finishAbruptStop(
-  deps: DaemonControlDeps,
-  pid: number,
-  reasonSuffix: string,
-): Promise<string> {
+async function finishAbruptStop(deps: DaemonControlDeps, pid: number): Promise<string> {
   const { dead, sendError } = await attemptAbruptStop(deps, pid);
   if (sendError !== null) {
     return `Could not send a forced stop to pid ${pid}: ${sendError}. Nothing was cleared — check manually.`;
@@ -318,22 +334,8 @@ async function finishAbruptStop(
     );
   }
   await deps.storage.clearDaemonLock().catch(() => undefined);
-  return `Stopped the daemon (pid ${pid}) — ${reasonSuffix}.`;
+  return `Stopped the daemon (pid ${pid}) forcibly. ${DAEMON_STOP_NOTHING_LOST}`;
 }
-
-/**
- * Windows has no graceful mechanism that reaches this process at all: it runs detached with no
- * console (D-005), so `CTRL_BREAK_EVENT` can never be delivered (`AttachConsole` fails with error 6
- * — docs/spikes/G-ctrl-break-no-windows.md's own "what was not proven": a console-less target), and
- * a cross-process `SIGTERM` there calls `TerminateProcess` immediately without ever running the
- * target's own JS handler (measured building S4-T3b, `tests/integration/process/
- * daemon-launch.test.ts`'s own comment on that exact call). There is nothing graceful to try first,
- * so this does not pretend symmetry with the POSIX path below by attempting one anyway.
- */
-const WINDOWS_ABRUPT_REASON =
-  'stopped abruptly: Windows has no way to ask a console-less, detached process (D-005) to shut ' +
-  'down on its own, and a cross-process signal there terminates immediately without running its ' +
-  'own shutdown code';
 
 /**
  * `seeya daemon --stop`. `platform` defaults to `process.platform`, injectable for tests — same
@@ -344,11 +346,16 @@ const WINDOWS_ABRUPT_REASON =
  * clean stop (`scheduler/loop.ts#runDaemon`'s own best-effort `clearDaemonLock()`), and that stays
  * valuable defense-in-depth for a stop this command never triggered (someone else's bare `kill
  * -TERM`, a Ctrl+C reaching an attached shell). But `--stop` never RELIES on that alone, because it
- * provably cannot on Windows (no graceful path exists there at all, `WINDOWS_ABRUPT_REASON` above)
- * and is not guaranteed on POSIX either (a crash between the signal and the daemon's own cleanup
- * write). This function always confirms death itself before declaring success, and always clears
- * the lock itself once it has that confirmation — covering exactly the case the brief names: "o
- * processo morre sem limpar".
+ * provably cannot on Windows (no graceful path exists there at all — see the comment on the
+ * `platform === 'win32'` branch below) and is not guaranteed on POSIX either (a crash between the
+ * signal and the daemon's own cleanup write). This function always confirms death itself before
+ * declaring success, and always clears the lock itself once it has that confirmation — covering
+ * exactly the case the brief names: "o processo morre sem limpar".
+ *
+ * **S4-T8 item 2, cuidado (d): the on-screen text no longer explains the Windows mechanism.** That
+ * explanation is real and stays valuable — it just moved to the comment on the branch below, where
+ * a future maintainer reads it. Whoever typed `--stop` gets `DAEMON_STOP_NOTHING_LOST`'s answer to
+ * the two questions that actually matter, not a paragraph on `AttachConsole`/`TerminateProcess`.
  */
 export async function runDaemonStop(
   deps: DaemonControlDeps,
@@ -373,8 +380,16 @@ export async function runDaemonStop(
   }
 
   // check.kind === 'alive' from here — an actual live daemon to stop.
+  //
+  // Windows has no graceful mechanism that reaches this process at all: it runs detached with no
+  // console (D-005), so `CTRL_BREAK_EVENT` can never be delivered (`AttachConsole` fails with
+  // error 6 — docs/spikes/G-ctrl-break-no-windows.md's own "what was not proven": a console-less
+  // target), and a cross-process `SIGTERM` there calls `TerminateProcess` immediately without ever
+  // running the target's own JS handler (measured building S4-T3b, `tests/integration/process/
+  // daemon-launch.test.ts`'s own comment on that exact call). There is nothing graceful to try
+  // first, so this does not pretend symmetry with the POSIX path below by attempting one anyway.
   if (platform === 'win32') {
-    return finishAbruptStop(deps, check.lock.pid, WINDOWS_ABRUPT_REASON);
+    return finishAbruptStop(deps, check.lock.pid);
   }
   const stoppedGracefully = await deps.processControl.terminateGracefully(
     check.lock.pid,
@@ -382,12 +397,10 @@ export async function runDaemonStop(
   );
   if (stoppedGracefully) {
     await deps.storage.clearDaemonLock().catch(() => undefined);
-    return `Stopped the daemon (pid ${check.lock.pid}) gracefully.`;
+    return `Stopped the daemon (pid ${check.lock.pid}) gracefully. ${DAEMON_STOP_NOTHING_LOST}`;
   }
-  return finishAbruptStop(
-    deps,
-    check.lock.pid,
-    `did not exit within ${Math.round(GRACEFUL_STOP_DEADLINE_MS / 1000)}s of a graceful SIGTERM, ` +
-      'so it was stopped forcibly instead',
-  );
+  // Did not exit within GRACEFUL_STOP_DEADLINE_MS of the SIGTERM above — escalate to the same
+  // forced path Windows always takes. Why a graceful signal alone isn't sufficient here belongs in
+  // `attemptAbruptStop`'s own docstring, not on this screen either.
+  return finishAbruptStop(deps, check.lock.pid);
 }
