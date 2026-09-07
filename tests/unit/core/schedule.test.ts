@@ -352,6 +352,81 @@ describe('decideSchedule — waiting, lead-time warnings, end of day', () => {
   });
 });
 
+describe('decideSchedule — S4-T7 Part 3: fired lead times are scoped to the deadline they fired for', () => {
+  it('the measured bug: a snooze that moves the deadline makes an already-fired rule due again for the NEW deadline', () => {
+    const config = createConfig({ endOfDayTime: '14:30', leadTimesInMinutes: [30, 15] });
+    // Both warnings fire for the original 14:30 deadline.
+    const at30 = decideSchedule(
+      config,
+      emptyDayState('2026-08-16'),
+      new Date(2026, 7, 16, 14, 0, 0),
+    );
+    expect(at30.decision).toMatchObject({ kind: 'leadTimeWarning', leadTimeMinutes: 30 });
+    const at15 = decideSchedule(config, at30.nextState, new Date(2026, 7, 16, 14, 15, 0));
+    expect(at15.decision).toMatchObject({ kind: 'leadTimeWarning', leadTimeMinutes: 15 });
+
+    // The person wasn't ready and snoozes by 3.5 hours (to 18:00) — well past the OLD deadline.
+    const snoozed = applySnooze(at15.nextState, '2026-08-16', 210);
+
+    // Without S4-T7 Part 3, both rules would stay marked fired forever and 17:30/17:45 would pass
+    // in silence (the exact case docs/PLANO-DE-ENTREGA.md S4-T7 Part 3 measured). With it, the
+    // rules are due again for the new 18:00 deadline.
+    const newAt30 = decideSchedule(config, snoozed, new Date(2026, 7, 16, 17, 30, 0));
+    expect(newAt30.decision).toMatchObject({ kind: 'leadTimeWarning', leadTimeMinutes: 30 });
+    const newAt15 = decideSchedule(config, newAt30.nextState, new Date(2026, 7, 16, 17, 45, 0));
+    expect(newAt15.decision).toMatchObject({ kind: 'leadTimeWarning', leadTimeMinutes: 15 });
+  });
+
+  it('cuidado (c): an UNCHANGED deadline never re-fires, no matter how many times the schedule is re-read', () => {
+    const config = createConfig({ endOfDayTime: '19:30', leadTimesInMinutes: [30, 15] });
+    const fired = decideSchedule(
+      config,
+      emptyDayState('2026-08-16'),
+      new Date(2026, 7, 16, 19, 0, 0),
+    );
+    expect(fired.decision).toMatchObject({ kind: 'leadTimeWarning', leadTimeMinutes: 30 });
+
+    // Re-reading config/state repeatedly at the same instant, deadline unchanged (D-006-style
+    // 30s-poll simulation) — must stay "waiting", never re-fire 30.
+    const second = decideSchedule(config, fired.nextState, new Date(2026, 7, 16, 19, 0, 5));
+    const third = decideSchedule(config, second.nextState, new Date(2026, 7, 16, 19, 0, 10));
+    expect(second.decision.kind).toBe('waiting');
+    expect(third.decision.kind).toBe('waiting');
+  });
+
+  it('a config edit to endOfDayTime (not just a snooze) moves the deadline and has the same effect', () => {
+    const configOriginal = createConfig({ endOfDayTime: '19:30', leadTimesInMinutes: [30] });
+    const fired = decideSchedule(
+      configOriginal,
+      emptyDayState('2026-08-16'),
+      new Date(2026, 7, 16, 19, 0, 0),
+    );
+    expect(fired.decision).toMatchObject({ kind: 'leadTimeWarning', leadTimeMinutes: 30 });
+
+    const configEdited = createConfig({ endOfDayTime: '21:00', leadTimesInMinutes: [30] });
+    const afterEdit = decideSchedule(
+      configEdited,
+      fired.nextState,
+      new Date(2026, 7, 16, 20, 30, 0),
+    );
+    expect(afterEdit.decision).toMatchObject({ kind: 'leadTimeWarning', leadTimeMinutes: 30 });
+  });
+
+  it('D-025: an estado.json migrated from before this field existed (firedLeadTimesEffectiveEndOfDay: null) does NOT force a spurious re-fire when the deadline is actually unchanged', () => {
+    const config = createConfig({ endOfDayTime: '19:30', leadTimesInMinutes: [30, 15] });
+    // Exactly what a real pre-S4-T7 estado.json reads back as (adapters/storage/state-schema.ts):
+    // firedLeadTimesInMinutes populated, firedLeadTimesEffectiveEndOfDay unknown (null).
+    const migrated = {
+      ...emptyDayState('2026-08-16'),
+      firedLeadTimesInMinutes: [30],
+      firedLeadTimesEffectiveEndOfDay: null,
+    };
+    // Same instant, same still-effective 19:30 deadline — must NOT re-fire 30.
+    const { decision } = decideSchedule(config, migrated, new Date(2026, 7, 16, 19, 0, 5));
+    expect(decision.kind).toBe('waiting');
+  });
+});
+
 describe('decideSchedule — midnight rollover (docs/TESTES.md)', () => {
   it("yesterday's skipped/snoozed/fired state does not leak into a new local day", () => {
     const config = createConfig({ endOfDayTime: '19:30', leadTimesInMinutes: [30, 15] });

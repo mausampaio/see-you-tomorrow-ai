@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { pollOnce } from '../../../src/scheduler/poll.js';
-import { emptyDayState } from '../../../src/core/schedule.js';
+import { applySnooze, emptyDayState } from '../../../src/core/schedule.js';
 import { createConfig, createSessionWithPid } from '../core/_fixtures.js';
 import {
   FakeForkCleanup,
@@ -149,6 +149,96 @@ describe('pollOnce — leadTimeWarning', () => {
     // The bookkeeping still records the CONFIGURED rule that fired — only the notice text changed.
     const state = await harness.storage.readState();
     expect(state?.firedLeadTimesInMinutes).toStrictEqual([30]);
+  });
+});
+
+describe('pollOnce — S4-T7 Part 1: hysteresis suppresses a near-duplicate leadTimeWarning', () => {
+  it('the measured bug, end to end: daemon starting late crosses two thresholds at once — one notice, not two', async () => {
+    // Both the 30- and 15-minute marks are already crossed the instant the daemon starts (10 real
+    // minutes left before 14:30) — docs/PLANO-DE-ENTREGA.md S4-T7's own measured case.
+    const harness = buildHarness(
+      createConfig({ endOfDayTime: '14:30', leadTimesInMinutes: [30, 15] }),
+    );
+    const startedLate = new Date(2026, 8, 5, 14, 20, 0);
+    await harness.poll(startedLate, { sessions: [] });
+    expect(harness.notifier.notices).toHaveLength(1);
+    expect(harness.notifier.notices[0]?.title).toContain('10 min');
+
+    // 30s later (the real daemon's own poll cadence) rule 15 becomes the next unfired rule —
+    // decideSchedule still proposes it (core/schedule.ts is unchanged, cuidado (d)) but hysteresis
+    // swallows the actual notification: the previous one went out 30s ago, well under the 3-minute
+    // default gap.
+    await harness.poll(new Date(startedLate.getTime() + 30_000), { sessions: [] });
+    expect(harness.notifier.notices).toHaveLength(1); // still just the one
+
+    // The swallowed notice still "counts as data" (cuidado (a)): the rule is marked fired AND the
+    // hysteresis clock moved forward, so it never gets redelivered later.
+    const state = await harness.storage.readState();
+    expect(state?.firedLeadTimesInMinutes).toStrictEqual([30, 15]);
+    expect(state?.lastLeadTimeWarningNoticeAt).toStrictEqual(
+      new Date(startedLate.getTime() + 30_000),
+    );
+  });
+
+  it('a gap past the configured hysteresis window is NOT suppressed — two genuinely spaced-out warnings both notify', async () => {
+    const harness = buildHarness(
+      createConfig({
+        endOfDayTime: '19:30',
+        leadTimesInMinutes: [30, 15],
+        leadTimeHysteresisMinutes: 3,
+      }),
+    );
+    await harness.poll(new Date(2026, 8, 5, 19, 0, 0), { sessions: [] }); // 30 fires
+    expect(harness.notifier.notices).toHaveLength(1);
+
+    // 15 minutes later — well past the 3-minute hysteresis gap.
+    await harness.poll(new Date(2026, 8, 5, 19, 15, 0), { sessions: [] });
+    expect(harness.notifier.notices).toHaveLength(2);
+    expect(harness.notifier.notices[1]?.title).toContain('15 min');
+  });
+});
+
+describe('pollOnce — S4-T7 cuidado (a): an endOfDay result is NEVER silenced by a recent leadTimeWarning', () => {
+  it('a closure that lands moments after a lead-time warning still notifies', async () => {
+    const harness = buildHarness(createConfig({ endOfDayTime: '19:30', leadTimesInMinutes: [1] }));
+    await harness.poll(new Date(2026, 8, 5, 19, 29, 0), { sessions: [] }); // 1-min warning fires
+    expect(harness.notifier.notices).toHaveLength(1);
+    expect(harness.notifier.notices[0]?.title).toContain('1 min');
+
+    // Only 65 seconds later — well inside the 3-minute default hysteresis window — but this is an
+    // `endOfDay` notice, a different class entirely: hysteresis (leadTimeWarning-only, S4-T7's own
+    // structure) never even runs for it.
+    await harness.poll(new Date(2026, 8, 5, 19, 30, 5), { sessions: [] });
+    expect(harness.notifier.notices).toHaveLength(2);
+    expect(harness.notifier.notices[1]?.body).toContain('captured');
+  });
+});
+
+describe('pollOnce — S4-T7 Part 1 + Part 3 interaction (cuidado (b))', () => {
+  it('a snooze given seconds before a threshold does not cause an immediate burst — hysteresis still gates the re-fired rule', async () => {
+    const harness = buildHarness(
+      createConfig({ endOfDayTime: '14:30', leadTimesInMinutes: [30, 15] }),
+    );
+    const firstFire = new Date(2026, 8, 5, 14, 20, 0); // both 30/15 already overdue for 14:30
+    await harness.poll(firstFire, { sessions: [] });
+    expect(harness.notifier.notices).toHaveLength(1); // rule 30 — first of the day
+
+    // Snooze +15m moments later: the effective deadline moves from 14:30 to 14:45. S4-T7 Part 3
+    // makes both configured rules due again for the NEW deadline.
+    const beforeSnooze = await harness.storage.readState();
+    const snoozed = applySnooze(beforeSnooze!, '2026-09-05', 15);
+    await harness.storage.saveState(snoozed);
+
+    // 15s after the snooze — rule 30 is due again for 14:45 (warnAt 14:15), but the hysteresis
+    // clock (from the ORIGINAL notice) is untouched by the snooze: only 15s have passed.
+    await harness.poll(new Date(firstFire.getTime() + 15_000), { sessions: [] });
+    expect(harness.notifier.notices).toHaveLength(1); // no burst — still just the one
+
+    // Once the 15-minute rule's OWN threshold for the new 14:45 deadline genuinely arrives
+    // (14:30) — and the hysteresis window has long since cleared — it notifies normally.
+    await harness.poll(new Date(2026, 8, 5, 14, 30, 0), { sessions: [] });
+    expect(harness.notifier.notices).toHaveLength(2);
+    expect(harness.notifier.notices[1]?.title).toContain('15 min');
   });
 });
 

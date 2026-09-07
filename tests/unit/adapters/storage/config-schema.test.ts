@@ -75,6 +75,8 @@ describe('parseConfigDocument', () => {
     ['maxBriefingScanDays as negative', { maxBriefingScanDays: -1 }],
     ['overdueFireThresholdMinutes as negative', { overdueFireThresholdMinutes: -1 }],
     ['overdueFireThresholdMinutes as a string', { overdueFireThresholdMinutes: '5' }],
+    ['leadTimeHysteresisMinutes as negative', { leadTimeHysteresisMinutes: -1 }],
+    ['leadTimeHysteresisMinutes as a string', { leadTimeHysteresisMinutes: '3' }],
   ])('throws a visible error on %s, never silently falling back to defaults', (_label, raw) => {
     expect(() => parseConfigDocument(raw)).toThrow();
   });
@@ -104,6 +106,23 @@ describe('parseConfigDocument — D-035 four config numbers (each defaults to th
 
   it('maxBriefingScanDays: 0 ("only look at today") is accepted, not rejected as degenerate', () => {
     expect(() => parseConfigDocument({ maxBriefingScanDays: 0 })).not.toThrow();
+  });
+});
+
+describe('parseConfigDocument — leadTimeHysteresisMinutes (S4-T7)', () => {
+  it('defaults to 3 minutes when the document says nothing about it', () => {
+    expect(parseConfigDocument({}).leadTimeHysteresisMinutes).toBe(3);
+  });
+
+  it('honors an explicit value', () => {
+    expect(parseConfigDocument({ leadTimeHysteresisMinutes: 10 }).leadTimeHysteresisMinutes).toBe(
+      10,
+    );
+  });
+
+  it('0 ("never suppress a second leadTimeWarning") is accepted, not rejected as degenerate', () => {
+    expect(() => parseConfigDocument({ leadTimeHysteresisMinutes: 0 })).not.toThrow();
+    expect(parseConfigDocument({ leadTimeHysteresisMinutes: 0 }).leadTimeHysteresisMinutes).toBe(0);
   });
 });
 
@@ -169,6 +188,7 @@ describe('parseConfigFieldUpdate (S4-T4)', () => {
     ['maxCaptureAttemptsPerSessionPerDay', '5', 5],
     ['maxBriefingScanDays', '0', 0],
     ['overdueFireThresholdMinutes', '2.5', 2.5],
+    ['leadTimeHysteresisMinutes', '5', 5],
     ['captureModel', 'opus', 'opus'],
   ])('coerces and validates a scalar field: %s', (key, raw, expected) => {
     const result = parseConfigFieldUpdate(key, raw);
