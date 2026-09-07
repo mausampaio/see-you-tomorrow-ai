@@ -5499,3 +5499,117 @@ entrar no código, como o próprio glossário pede.
 
 **Cobertura e portão:** `npm run verificar` e `npm run verificar:linux`, números no relatório da
 tarefa em `docs/PLANO-DE-ENTREGA.md` S4-T7.
+
+---
+
+## Q-061 — S4-T8 (as três mensagens que falam do mecanismo): onde mora a normalização, o que a
+## checagem do item 2 provou, e por que o `✖` saiu de um lugar só
+
+**Tarefa:** S4-T8, três itens de texto (zero à esquerda em `endOfDayTime`, `seeya daemon --stop`
+menos técnico, `projectPolicy` com o mesmo tratamento do `schemaVersion`). Nenhum muda
+comportamento.
+**Bloqueia:** não — `npm run verificar` e `npm run verificar:linux` estão verdes (números na seção
+de cobertura abaixo).
+
+**1) Cuidado (a) — onde a normalização de `endOfDayTime` mora, e por quê.** Escolhi dentro do
+próprio `configFileSchema.endOfDayTime` (`adapters/storage/config-schema.ts`), via
+`.regex(...).transform(normalizeEndOfDayTime)`, em vez de normalizar no comando (`cli/
+config-command.ts`). Razão: `parseConfigFieldUpdate` (o caminho de `seeya config set`) já reusa
+`configFileSchema.shape.endOfDayTime` DIRETAMENTE — é o comentário do próprio arquivo que explica
+por quê ("uma mudança de regex nunca sai de sincronia com o que `set` aceita"). Colocar a
+normalização ali dentro faz as duas entradas (`parseConfigDocument`, lendo `config.json` do disco;
+`parseConfigFieldUpdate`, validando o valor de `set`) convergirem no mesmo resultado canônico sem
+duplicar a transformação em dois lugares. Efeito colateral aceito, não escondido: como
+`serializeConfigDocument` sempre grava o documento inteiro a partir do `Config` em memória (nunca
+um patch parcial), um `config.json` editado à mão com `"9:30"` se autocorrige para `"09:30"` na
+PRÓXIMA escrita de QUALQUER campo — não só quando alguém mexe em `endOfDayTime` especificamente.
+
+**Regex nova:** `^([01]?\d|2[0-3]):[0-5]\d$` — a hora aceita um OU dois dígitos (`9` e `09` viram a
+mesma coisa); o minuto continua exigindo exatamente dois dígitos, sem afrouxar (cuidado (b)):
+`25:00`, `9:75`, `abc` e vazio continuam recusados, e `9:5` (minuto de um dígito) também — testado
+explicitamente, porque era o caso que o próprio cuidado (b) avisou para não deixar passar por
+engano junto com a hora.
+
+**2) O `✖` não estava só na mensagem de `endOfDayTime` — estava em TODA mensagem de
+`parseConfigFieldUpdate`.** `z.prettifyError` é usado ali para qualquer campo, não só a hora; o
+`✖`/`→ at path` é formatação da própria biblioteca zod, não texto que este projeto escreveu.
+Troquei por `result.error.issues.map(i => i.message).join('; ')` — cada mensagem de campo do
+schema (já escritas à mão, como `END_OF_DAY_TIME_MESSAGE`) continua sendo exatamente o texto que
+aparece, sem o prefixo da biblioteca. Isso corrige o vazamento para TODOS os campos editáveis, não
+só `endOfDayTime` — não vi motivo para deixar os outros com o mesmo defeito só porque o despacho
+citou um caso só. `parseConfigDocument`'s próprio erro (`config.json is malformed: ...`, usado ao
+LER o arquivo, não ao `set`) não foi tocado — está fora do escopo dos três itens, e é uma
+mensagem de corrupção de arquivo, não algo que a pessoa "digitou".
+
+**3) Cuidado (c) — conferi a alegação "não perdeu nada" antes de escrever, não repeti o que o
+despacho disse.** Segui `scheduler/loop.ts#runDaemon` e `scheduler/poll.ts#pollOnce`: cada poll
+lê `Config`/`DayState` do zero no início (`Storage`, nunca memória entre iterações) e persiste
+qualquer decisão (aviso prévio, fim de dia, virada de dia) com `saveState` ANTES daquele poll
+retornar — nunca depois de dormir para o próximo. Ou seja, entre duas iterações do laço não existe
+nada "só em memória" que uma parada possa apagar; a próxima `seeya daemon` sempre parte do mesmo
+`estado.json` que este processo produziu.
+
+**O que essa checagem NÃO cobre, e registrei honestamente no comentário do código** (não escondi):
+uma parada que cai NO MEIO de um poll em andamento (ex.: captura de fim de dia em curso) e é morta
+antes daquele poll salvar (`GRACEFUL_STOP_DEADLINE_MS` de 15s estourado, ou o caminho sempre-abrupto
+do Windows). Nesse caso nada é corrompido — a escrita simplesmente não aconteceu — mas a tentativa
+de captura em curso não é contada (`core/capture-retry.ts#recordCaptureAttempts` só roda depois que
+`endDay` retorna) e é retentada do zero pelo próximo daemon, em vez de perdida de vez. É a leitura
+honesta de "não perdeu nada": na pior hipótese algo em andamento reinicia; nada que já tinha sido
+decidido desaparece. A frase final (`DAEMON_STOP_NOTHING_LOST`) foi escolhida para ficar verdadeira
+nos dois casos, sem prometer mais do que o que medi.
+
+**4) Cuidado (d) — a explicação de por que o Windows não tem parada graciosa não foi apagada, só
+saiu da tela.** Ela continua inteira, como comentário, agora colada no branch
+`platform === 'win32'` de `runDaemonStop` (antes vivia numa constante `WINDOWS_ABRUPT_REASON` cujo
+VALOR era literalmente impresso na tela). A tela agora diz só duas coisas: "parou (gracefully ou
+forcibly)" e a frase de "nada foi perdido" — igual nos dois sistemas operacionais, porque a
+pergunta que a pessoa faz é a mesma nos dois.
+
+**5) Cuidado (e) — `projectPolicy` ganhou função dedicada (`projectPolicyNotEditableMessage`),
+não uma generalização de `unknownConfigKeyMessage`.** Mesma decisão que a Q-059 item 5 já registrou
+para `schemaVersion`, pelo mesmo motivo: "existe, mas a ferramenta errada" é uma afirmação diferente
+de "não existe". A interceptação fica em `cli/config-command.ts#runConfigSetCommand`, checada antes
+de `parseConfigFieldUpdate`, no mesmo lugar e na mesma ordem que a checagem de `schemaVersion` já
+usa — não generalizei as duas em uma função só porque as mensagens dizem coisas diferentes
+("é fixo pelo build" vs. "tem comando próprio", a mesma distinção que já vale para
+`schemaVersionNotEditableMessage`). `seeya config get projectPolicy` já funcionava antes desta
+tarefa (mostra a seção via `renderProjectPolicySection`) — o defeito era só em `set`; não toquei em
+`get`. `unknownConfigKeyMessage`'s nota fixa sobre `projectPolicy` (para quem digitou uma chave
+DIFERENTE, tipo "bogus") continua como estava — serve um leitor diferente, que Q-059 item 5 já
+tinha decidido não misturar.
+
+**6) Cuidado (f) — nenhuma asserção de teste existente foi apagada para a suíte passar.** O único
+caso em que um teste precisou mudar de sentido (não só de texto) foi
+`tests/unit/adapters/storage/config-schema.test.ts`'s `it.each` de valores inválidos, que tinha
+`['endOfDayTime missing the leading zero', { endOfDayTime: '9:30' }]` — esse CASO deixou de ser
+inválido por definição da própria tarefa (é exatamente o que o item 1 pede para aceitar), então a
+entrada foi trocada por dois casos que continuam genuinamente inválidos
+(`endOfDayTime with a single-digit minute` = `9:5`, `endOfDayTime with an out-of-range hour` =
+`24:00`) — a suíte perdeu uma asserção sobre um comportamento que mudou de propósito e ganhou
+cobertura nova no lugar, não ficou mais fraca. Os textos exatos de `Stopped the daemon (pid X)
+gracefully.` (unit + integration) e `stopped abruptly` (integration) foram atualizados para os
+textos novos, com asserções adicionais (`not.toContain('Windows')`, `not.toContain('console')`,
+`toContain('Nothing was lost')`) provando a ausência do mecanismo, não só a presença do texto novo.
+
+**7) Uma prova que decidi NÃO escrever, e por quê.** Cheguei a tentar exercitar o caminho de parada
+forçada (`finishAbruptStop`) num teste de unidade novo, com `platform: 'win32'` e um PID inventado.
+Percebi a tempo que `finishAbruptStop` chama `adapters/process/termination.ts#terminateAbruptly`
+DIRETO — não é algo que `DaemonControlDeps` injeta — então esse teste mandaria um sinal real de
+morte de processo (`TerminateProcess`/`SIGKILL`) para o que quer que estivesse com aquele PID nesta
+máquina, no momento do teste. Removi o teste e deixei um comentário no lugar explicando por quê;
+o caminho já é coberto com segurança em
+`tests/integration/cli/daemon-command.test.ts`'s `runDaemonStop — real abrupt stop`, que spawna um
+processo fixture de verdade antes de matá-lo.
+
+**Nomes escolhidos, para registro:** `END_OF_DAY_TIME_PATTERN`/`END_OF_DAY_TIME_MESSAGE`/
+`normalizeEndOfDayTime` (internos a `config-schema.ts`, não exportados — nada de disco novo),
+`projectPolicyNotEditableMessage` (exportado, mesmo padrão de `schemaVersionNotEditableMessage`),
+`DAEMON_STOP_NOTHING_LOST` (interno a `cli/daemon-command.ts`). Nenhuma chave nova em disco; nenhum
+nome novo no glossário de `AGENTS.md` é necessário.
+
+**Cobertura e portão:** `npm run verificar` — 133 arquivos de teste, 1434 passaram (3 skipped),
+`core/` 100% linhas/branches, `adapters/storage` 94,98% linhas / 87,43% branches, `cli` 95,73%
+linhas / 94,05% branches (ambos acima do piso de 80% por diretório); `npm run verificar:linux` —
+mesmos 133 arquivos, 1434 passaram (3 skipped), portão verde. Os dois códigos de saída lidos
+separadamente do `tail`, não do pipe.

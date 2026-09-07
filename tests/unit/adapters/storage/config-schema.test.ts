@@ -9,6 +9,7 @@ import {
   isEditableConfigKey,
   parseConfigDocument,
   parseConfigFieldUpdate,
+  projectPolicyNotEditableMessage,
   schemaVersionNotEditableMessage,
   serializeConfigDocument,
   unknownConfigKeyMessage,
@@ -54,6 +55,24 @@ describe('parseConfigDocument', () => {
     expect(parseConfigDocument({ endOfDayTime: '19:30' }).endOfDayTime).toBe('19:30');
   });
 
+  // S4-T8 item 1: the mantenedor's own case — "eu não errei digitando... 09 e 9 é basicamente a
+  // mesma coisa". Accepting a single-digit hour is only half of it; the other half is that what
+  // lands on disk is always the canonical two-digit form, so config.json never grows two spellings
+  // of the same hour (this task's own cuidado (a)).
+  it('accepts a single-digit hour and normalizes it to two digits', () => {
+    expect(parseConfigDocument({ endOfDayTime: '9:30' }).endOfDayTime).toBe('09:30');
+  });
+
+  it('a single-digit hour at the top of the range normalizes the same way', () => {
+    expect(parseConfigDocument({ endOfDayTime: '0:05' }).endOfDayTime).toBe('00:05');
+  });
+
+  // The minute half did NOT get the same leniency — "9:5" is genuinely ambiguous (five minutes, or
+  // a typo for ":50"?) in a way "9:30" never was, so it keeps requiring exactly two digits.
+  it('still rejects a single-digit minute — only the hour got more lenient', () => {
+    expect(() => parseConfigDocument({ endOfDayTime: '9:5' })).toThrow();
+  });
+
   it('ignores unknown top-level keys without failing (tolerant of the unfamiliar, like every other schema in this project)', () => {
     expect(() => parseConfigDocument({ somethingFuture: 'x' })).not.toThrow();
     expect(parseConfigDocument({ somethingFuture: 'x' })).toEqual(DEFAULT_CONFIG);
@@ -62,7 +81,11 @@ describe('parseConfigDocument', () => {
   it.each([
     ['relevanceHours as a string', { relevanceHours: '12' }],
     ['endOfDayTime not matching "HH:MM"', { endOfDayTime: '25:99' }],
-    ['endOfDayTime missing the leading zero', { endOfDayTime: '9:30' }],
+    // S4-T8 item 1: a single-digit HOUR ("9:30") is now accepted and normalized (see the dedicated
+    // describe block above) — this leaves the still-rejected shapes explicit: out-of-range hour
+    // (25), out-of-range minute (99, and the single-digit-minute case below), and non-numeric input.
+    ['endOfDayTime with a single-digit minute', { endOfDayTime: '9:5' }],
+    ['endOfDayTime with an out-of-range hour', { endOfDayTime: '24:00' }],
     ['leadTimesInMinutes with a non-number entry', { leadTimesInMinutes: [30, 'x'] }],
     ['captureConcurrency as zero', { captureConcurrency: 0 }],
     ['captureConcurrency as a negative number', { captureConcurrency: -1 }],
@@ -167,6 +190,23 @@ describe('schemaVersionNotEditableMessage (S4-T6)', () => {
   });
 });
 
+// S4-T8 item 3: the same shape of fix as schemaVersionNotEditableMessage above, for the other name
+// `seeya config set` was contradicting itself about ("unknown config key \"projectPolicy\"" next to
+// "for \"projectPolicy\", use..." in the same sentence).
+describe('projectPolicyNotEditableMessage (S4-T8)', () => {
+  it('is not among EDITABLE_CONFIG_KEYS (it is a known key, just not a flat settable one)', () => {
+    expect(isEditableConfigKey('projectPolicy')).toBe(false);
+  });
+
+  it('names projectPolicy, says it exists (not "unknown"), and names both alternatives', () => {
+    const message = projectPolicyNotEditableMessage();
+    expect(message).toContain('projectPolicy');
+    expect(message).not.toContain('unknown');
+    expect(message).toContain('seeya config policy');
+    expect(message).toContain('seeya config get projectPolicy');
+  });
+});
+
 describe('parseConfigFieldUpdate (S4-T4)', () => {
   it('rejects an unknown key without ever constructing a value', () => {
     const result = parseConfigFieldUpdate('bogus', '5');
@@ -226,12 +266,24 @@ describe('parseConfigFieldUpdate (S4-T4)', () => {
     });
   });
 
+  // S4-T8 item 1: `seeya config set endOfDayTime 9:30` — the mantenedor's own case — is accepted
+  // AND normalized to the canonical two-digit form before it ever reaches `applyConfigFieldUpdate`
+  // (and therefore `saveConfig`), so disk never ends up with two spellings of the same hour.
+  it('a single-digit hour for endOfDayTime is accepted and normalized to two digits', () => {
+    expect(parseConfigFieldUpdate('endOfDayTime', '9:30')).toEqual({
+      ok: true,
+      key: 'endOfDayTime',
+      value: '09:30',
+    });
+  });
+
   it.each([
     ['relevanceHours', 'not-a-number'],
     ['relevanceHours', '0'],
     ['captureConcurrency', '0'],
     ['captureConcurrency', '1.5'],
     ['endOfDayTime', '25:99'],
+    ['endOfDayTime', '9:5'], // S4-T8 item 1: minute still needs exactly two digits
     ['captureModel', ''],
     ['leadTimesInMinutes', '30,-1'],
     ['leadTimesInMinutes', '30,abc'],
@@ -246,6 +298,18 @@ describe('parseConfigFieldUpdate (S4-T4)', () => {
       }
     },
   );
+
+  // S4-T8 item 1: the "✖" in the message before this fix was `z.prettifyError`'s own formatting
+  // leaking onto the screen, not something this project chose to print (AGENTS.md § "Registro e
+  // saída"). The message now names the expected shape WITH an example instead.
+  it('an invalid endOfDayTime names an example of what is accepted, without the validation library\'s own "✖" formatting', () => {
+    const result = parseConfigFieldUpdate('endOfDayTime', '25:99');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).not.toContain('✖');
+      expect(result.error).toContain('09:30');
+    }
+  });
 });
 
 describe('applyConfigFieldUpdate (S4-T4)', () => {

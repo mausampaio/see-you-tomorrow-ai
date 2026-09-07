@@ -2853,7 +2853,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       `AGENTS.md` (`leadTimeHysteresisMinutes`, `lastLeadTimeWarningNoticeAt`,
       `firedLeadTimesEffectiveEndOfDay`).
 
-- [ ] **S4-T8 — A leva pequena: três mensagens que falam do mecanismo em vez de falar com a
+- [~] **S4-T8 — A leva pequena: três mensagens que falam do mecanismo em vez de falar com a
       pessoa.** Todas saíram de uso real nos dias 06 e 07/09/2026, nenhuma de teste. Nenhuma muda
       comportamento — só o que o programa diz. A S4-T7 já aterrissou, então
       `config-schema.ts` está livre; roda em paralelo com a **S4-T9**, que não toca nenhum arquivo
@@ -2881,6 +2881,87 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
       *Aceite:* as três falam com quem digitou. Nenhum comportamento muda; o valor gravado por (1)
       é sempre o canônico.
+
+      **Implementado em 2026-09-07.**
+
+      **Item 1.** `adapters/storage/config-schema.ts#configFileSchema.endOfDayTime` — regex
+      `^([01]?\d|2[0-3]):[0-5]\d$` (hora de um ou dois dígitos; minuto sempre dois, sem afrouxar:
+      `25:00`, `9:75`, `9:5`, `abc`, vazio continuam recusados) seguido de `.transform(normalizeEndOfDayTime)`.
+      A normalização mora no SCHEMA, não no comando — `parseConfigFieldUpdate` (`seeya config set`)
+      já reusa `configFileSchema.shape.endOfDayTime` diretamente, então colocá-la ali faz leitura de
+      disco e escrita via CLI convergirem para o mesmo canônico num lugar só (justificativa completa
+      em Q-061 item 1). Mensagem nova, com exemplo:
+      `expected 24h local time "HH:MM" (e.g. "09:30" or "9:30")`. O `✖` saiu de
+      `parseConfigFieldUpdate` inteiro (todo campo, não só a hora — Q-061 item 2), trocando
+      `z.prettifyError` por `result.error.issues.map(i => i.message).join('; ')`.
+
+      **Antes:** `seeya config set endOfDayTime 9:30` → `seeya config set: invalid value "9:30" for
+      "endOfDayTime": ✖ expected 24h local time "HH:MM"`.
+      **Depois:** `seeya config set endOfDayTime 9:30` → `endOfDayTime set to 09:30.` (grava
+      `"09:30"` em `config.json`). Um valor de verdade inválido agora diz, por exemplo:
+      `seeya config set: invalid value "9:75" for "endOfDayTime": expected 24h local time "HH:MM"
+      (e.g. "09:30" or "9:30")` — sem `✖`.
+
+      **Item 2.** `cli/daemon-command.ts#runDaemonStop`. Conferido em `scheduler/loop.ts#runDaemon`
+      e `scheduler/poll.ts#pollOnce` (não só repetido do despacho, Q-061 item 3): cada poll lê
+      `Config`/`DayState` do zero e persiste qualquer decisão antes de retornar — nada fica só em
+      memória entre duas voltas do laço. Uma parada que caia NO MEIO de um poll em andamento (fim de
+      dia em curso, `GRACEFUL_STOP_DEADLINE_MS` de 15s estourado ou o caminho sempre-abrupto do
+      Windows) não corrompe nada, mas aquela tentativa específica não é contada e é retentada do
+      zero pelo próximo daemon — registrado honestamente no comentário do código, não escondido.
+      `WINDOWS_ABRUPT_REASON` (a explicação de por que o Windows não tem parada graciosa) deixou de
+      ser impressa na tela; o texto inteiro continua como comentário, agora colado ao branch
+      `platform === 'win32'` de `runDaemonStop` (cuidado (d): a informação mudou de lugar, não
+      sumiu).
+
+      **Antes (Windows/forçado):** `Stopped the daemon (pid 4242) — stopped abruptly: Windows has
+      no way to ask a console-less, detached process (D-005) to shut down on its own, and a
+      cross-process signal there terminates immediately without running its own shutdown code.`
+      **Depois (Windows/forçado):** `Stopped the daemon (pid 4242) forcibly. Nothing was lost: it
+      saves its state after every poll cycle, so the next "seeya daemon" picks up exactly where
+      this one left off.`
+      **Antes (POSIX gracioso):** `Stopped the daemon (pid 4242) gracefully.`
+      **Depois (POSIX gracioso):** `Stopped the daemon (pid 4242) gracefully. Nothing was lost: it
+      saves its state after every poll cycle, so the next "seeya daemon" picks up exactly where
+      this one left off.`
+
+      **Item 3.** `projectPolicyNotEditableMessage()` nova em `adapters/storage/config-schema.ts`,
+      mesmo padrão de `schemaVersionNotEditableMessage` (S4-T6/Q-059 item 5) — função dedicada, não
+      generalização de `unknownConfigKeyMessage`. Interceptada em
+      `cli/config-command.ts#runConfigSetCommand`, antes de `parseConfigFieldUpdate`, no mesmo lugar
+      e ordem da checagem de `schemaVersion`. `seeya config get projectPolicy` já funcionava antes
+      desta tarefa; o defeito era só em `set` (Q-061 item 5). `projectPolicy` **não** virou editável
+      por `config set` — continua fora de `EDITABLE_CONFIG_KEYS`, só com comando próprio.
+
+      **Antes:** `seeya config set projectPolicy '{}'` → `seeya config set: unknown config key
+      "projectPolicy". Expected one of: ... (for "projectPolicy", use "seeya config policy <cwd>"
+      instead).`
+      **Depois:** `seeya config set projectPolicy '{}'` → `seeya config set: "projectPolicy"
+      exists, but "seeya config set" cannot write it — it is keyed by project (cwd), not a single
+      scalar value, so it has its own sub-action: "seeya config policy <cwd>" to set it, or "seeya
+      config get projectPolicy" to read it.`
+
+      **Cuidado (f):** nenhuma asserção existente foi apagada para a suíte passar. O único teste
+      que mudou de SENTIDO (não só de texto) foi o caso `endOfDayTime` de um dígito no `it.each` de
+      valores inválidos de `config-schema.test.ts` — deixou de ser inválido por definição da própria
+      tarefa, então foi trocado por dois casos que continuam genuinamente inválidos (minuto de um
+      dígito, hora fora do intervalo). Os textos de `runDaemonStop` que os testes fixavam foram
+      atualizados com asserções adicionais provando a ausência do mecanismo na tela
+      (`not.toContain('Windows')`/`not.toContain('console')`), não só a presença do texto novo.
+      Um teste de unidade planejado para o caminho de parada forçada foi descartado a tempo (Q-061
+      item 7): `finishAbruptStop` chama `terminateAbruptly` direto, fora de `DaemonControlDeps`, e
+      um PID inventado mandaria um sinal real de morte de processo na máquina do teste — o caminho
+      já é coberto com segurança em `tests/integration/cli/daemon-command.test.ts`, contra um
+      processo fixture real.
+
+      **Cobertura e portão:** `npm run verificar` (Windows) — 133 arquivos de teste, 1434 passaram
+      (3 skipped), `core/` 100%, `adapters/storage` 94,98% linhas / 87,43% branches, `cli` 95,73%
+      linhas / 94,05% branches (piso de 80% por diretório respeitado, números batem os do S4-T7).
+      `npm run verificar:linux` — mesmos 133 arquivos, 1434 passaram (3 skipped), `adapters/storage`
+      94,98% linhas / 87,43% branches, `cli` 95,91% linhas / 94,38% branches (pequena variação de
+      cobertura entre plataformas, já vista em tarefas anteriores, sem cair abaixo do piso nos
+      dois). Os dois códigos de saída lidos separadamente do `tail`, nunca encadeados com o commit.
+      Detalhes completos, incluindo os cuidados (a)-(f) um a um, em `docs/QUESTOES.md` **Q-061**.
 
 - [ ] **S4-T9 — Um `spawn` só, invisível por padrão, com a exceção declarada (D-038).** Fecha a
       **Q-059 item 3**, decidida pelo mantenedor em 2026-09-07. Roda em paralelo com a **S4-T8** — a

@@ -190,7 +190,11 @@ describe.skipIf(process.platform === 'win32')(
         try {
           const report = await runDaemonStop(fixture.deps, 'linux');
 
-          expect(report).toBe(`Stopped the daemon (pid ${fixture.pid}) gracefully.`);
+          expect(report).toBe(
+            `Stopped the daemon (pid ${fixture.pid}) gracefully. Nothing was lost: it saves its ` +
+              'state after every poll cycle, so the next "seeya daemon" picks up exactly where ' +
+              'this one left off.',
+          );
           expect(await markerExists(fixture.shutdownMarker)).toBe(true); // ran its own handler
           expect(await fixture.storage.readDaemonLock()).toBeNull();
           const nextStart = await checkDaemonLock(fixture.storage, processControl);
@@ -219,8 +223,13 @@ describe('runDaemonStop — real abrupt stop (forced platform: win32)', () => {
         // and therefore unverified on this host).
         const report = await runDaemonStop(fixture.deps, 'win32');
 
-        expect(report).toContain(`Stopped the daemon (pid ${fixture.pid})`);
-        expect(report).toContain('stopped abruptly');
+        expect(report).toContain(`Stopped the daemon (pid ${fixture.pid}) forcibly.`);
+        // S4-T8 item 2: answers "parou mesmo, e perdi alguma coisa", not the Windows mechanism —
+        // the explanation of WHY there is no graceful path here lives in the code comment on
+        // `runDaemonStop`'s `platform === 'win32'` branch, not on this screen.
+        expect(report).toContain('Nothing was lost');
+        expect(report).not.toContain('Windows');
+        expect(report).not.toContain('console');
         expect(await markerExists(fixture.shutdownMarker)).toBe(false); // handler never ran
         expect(await fixture.storage.readDaemonLock()).toBeNull();
         await expect(processControl.isAlive(fixture.pid)).resolves.toBe(false);

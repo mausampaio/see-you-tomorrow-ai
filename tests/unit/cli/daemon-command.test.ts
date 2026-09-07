@@ -345,7 +345,18 @@ describe('runDaemonStop — states that never touch a real process', () => {
 
     const report = await runDaemonStop(deps, 'linux');
 
-    expect(report).toBe('Stopped the daemon (pid 4242) gracefully.');
+    expect(report).toBe(
+      'Stopped the daemon (pid 4242) gracefully. Nothing was lost: it saves its state after ' +
+        'every poll cycle, so the next "seeya daemon" picks up exactly where this one left off.',
+    );
     expect(await storage.readDaemonLock()).toBeNull();
   });
+
+  // The forced-stop path ("forcibly" + the nothing-was-lost sentence, and no Windows-mechanism
+  // explanation on screen) is NOT re-tested here: `finishAbruptStop` calls the real
+  // `adapters/process/termination.ts#terminateAbruptly` directly (not something `DaemonControlDeps`
+  // injects), so exercising it against a made-up pid like this file's own `LOCK` would send a real
+  // OS-level kill signal to whatever process happens to hold that pid on the machine running the
+  // test — exactly what `tests/integration/cli/daemon-command.test.ts`'s "real abrupt stop" describe
+  // block exists to do safely, against a real fixture process it spawned itself.
 });

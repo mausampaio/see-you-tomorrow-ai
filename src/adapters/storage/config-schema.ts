@@ -26,6 +26,38 @@ const projectPolicySchema = z.object({
 });
 
 /**
+ * S4-T8 item 1. The mantenedor's own words on why `9:30` used to be refused: "eu não errei
+ * digitando uma letra ou algo inválido de verdade, 09 e 9 é basicamente a mesma coisa" — so the
+ * hour half of "HH:MM" now accepts one OR two digits (`9` and `09` both mean the same hour). The
+ * minute half does NOT get the same leniency: `9:5` is genuinely ambiguous in a way `9:30` never
+ * was (five minutes, or a typo for `:50`?), so it still requires exactly two digits. `25:00`,
+ * `9:75`, `abc` and `""` all keep failing this regex exactly as before — nothing about what's
+ * REJECTED changed, only what's accepted grew by one shape.
+ */
+const END_OF_DAY_TIME_PATTERN = /^([01]?\d|2[0-3]):[0-5]\d$/;
+
+/** AGENTS.md § "Mensagens de erro": names the expected shape with a concrete example — no longer
+ * relies on `z.prettifyError`'s own "✖ …" prefix to reach the screen (`parseConfigFieldUpdate`
+ * below stopped using it for exactly this reason: that prefix is the validation LIBRARY's own
+ * formatting leaking into the CLI's text, not something this project chose to print). */
+const END_OF_DAY_TIME_MESSAGE = 'expected 24h local time "HH:MM" (e.g. "09:30" or "9:30")';
+
+/**
+ * The other half of accepting `9:30`: what's WRITTEN to disk is always the two-digit form. Without
+ * this, `config.json` would end up with two spellings of the same hour depending on which one
+ * whoever last ran `seeya config set endOfDayTime` happened to type — and every future reader
+ * (`parseConfigDocument` itself, a person opening the file by hand) would inherit having to
+ * recognize both. Normalizing HERE, inside the schema both `parseConfigDocument` (reading the file)
+ * and `parseConfigFieldUpdate` (validating a `config set` value, via `configFileSchema.shape` reuse
+ * below) already share, means there is exactly one place that decides the canonical spelling — not
+ * a second normalization step bolted onto the CLI layer that could drift from this one.
+ */
+function normalizeEndOfDayTime(raw: string): string {
+  const [hour, minute] = raw.split(':');
+  return `${(hour ?? '').padStart(2, '0')}:${minute ?? ''}`;
+}
+
+/**
  * Validates everything BUT `schemaVersion` — by the time this runs, `resolveSchemaVersion` has
  * already confirmed the document is at `CONFIG_SCHEMA_VERSION` and stripped that concern out.
  * No `.strict()`: an unrecognized top-level key (a future field, a typo) is ignored rather than
@@ -35,7 +67,8 @@ const projectPolicySchema = z.object({
 const configFileSchema = z.object({
   endOfDayTime: z
     .string()
-    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'expected 24h local time "HH:MM"')
+    .regex(END_OF_DAY_TIME_PATTERN, END_OF_DAY_TIME_MESSAGE)
+    .transform(normalizeEndOfDayTime)
     .nullable()
     .optional(),
   leadTimesInMinutes: z.array(z.number().int().nonnegative()).optional(),
@@ -226,6 +259,30 @@ export function schemaVersionNotEditableMessage(): string {
 }
 
 /**
+ * S4-T8 item 3: the same shape of defect `schemaVersionNotEditableMessage` above already fixed for
+ * `schemaVersion`, now applied to the other name it was left in — `seeya config set projectPolicy
+ * ...` fell through to `unknownConfigKeyMessage`, which produced a message contradicting itself in
+ * one sentence: `unknown config key "projectPolicy"` right next to `(for "projectPolicy", use
+ * "seeya config policy <cwd>" instead)`. `projectPolicy` is not unknown — `runConfigGetCommand`
+ * already reads it fine (`renderProjectPolicySection`) — it just isn't a flat scalar `set` can
+ * address with one `key=value` pair, the same "exists, wrong shape for this command" fact
+ * `schemaVersion`'s message states about itself.
+ *
+ * Kept separate rather than folded into `unknownConfigKeyMessage` for the identical reason
+ * `schemaVersionNotEditableMessage`'s own docstring gives: "not editable this way, and here is the
+ * right way" is a fact about a key that DOES exist, not a suffix tacked onto "doesn't exist".
+ * `unknownConfigKeyMessage`'s own projectPolicy note stays untouched — it still serves a real,
+ * different reader: someone who typed a TRULY unknown key and might be looking for this one.
+ */
+export function projectPolicyNotEditableMessage(): string {
+  return (
+    '"projectPolicy" exists, but "seeya config set" cannot write it — it is keyed by project ' +
+    '(cwd), not a single scalar value, so it has its own sub-action: "seeya config policy <cwd>" ' +
+    'to set it, or "seeya config get projectPolicy" to read it.'
+  );
+}
+
+/**
  * Splits a comma-separated CLI argument into trimmed, non-empty parts — shared by every
  * list-shaped field (`leadTimesInMinutes`, `ignore`). An empty/whitespace-only `raw` (e.g. `""`)
  * resolves to `[]`, which is how a person clears a list back to empty, not a parse error.
@@ -288,7 +345,13 @@ export function parseConfigFieldUpdate(
   if (!result.success) {
     return {
       ok: false,
-      error: `invalid value "${rawValue}" for "${key}": ${z.prettifyError(result.error)}`,
+      // S4-T8 item 1: NOT `z.prettifyError` — its own "✖ …" prefix and "→ at path" lines are the
+      // validation LIBRARY's formatting, not text this project chose to put on a person's screen
+      // (AGENTS.md § "Registro e saída"). Every per-field message in `configFileSchema` already
+      // names the expected shape on its own (e.g. `END_OF_DAY_TIME_MESSAGE` above) — joining the
+      // raw issue messages says the same thing prettifyError would, without the library chrome
+      // around it.
+      error: `invalid value "${rawValue}" for "${key}": ${result.error.issues.map((issue) => issue.message).join('; ')}`,
     };
   }
   return { ok: true, key, value: result.data };
