@@ -46,6 +46,39 @@ const WINDOWS_ONLY_SOURCE = [
 const POSIX_ONLY_SOURCE = ['src/adapters/process/termination-posix.ts'];
 
 /**
+ * These five integration files launch a REAL `powershell.exe` (`adapters/process/proc-start.ts`'s
+ * `captureWindows`, `adapters/process/console-signal.ts`'s `sendCtrlBreak`) rather than touching an
+ * isolated tmpdir like the rest of `integration/` — they contend for the SAME scarce resource: the
+ * OS's capacity to launch a process, measured as 500-880ms per `powershell.exe` launch even WARM
+ * (`proc-start.ts`'s own docstring). Under `integration`'s default parallelism every file gets its
+ * own concurrent worker; when several of THESE FIVE land in the same batch, their real launches
+ * queue behind each other and blow straight through the fixed 5s/8s deadlines the tests carry —
+ * not a hang, a resource fight the deadline was never sized to survive.
+ *
+ * Measured (S4-T10, 2026-09-08, this machine, `git rev-parse HEAD` = the commit right before this
+ * task): `npm run verificar` red with 2-3 of these five timing out, a DIFFERENT subset each run,
+ * while every other integration file (isolated tmpdir, never launches a real process) stayed green
+ * across the same runs. `composition.test.ts` belongs in this group for the identical reason even
+ * though an earlier pass at isolating this only named the other four — it calls
+ * `captureObservedProcStart` too (see its own `buildCliContext` test) and failed the same way in
+ * the baseline run that diagnosed this. See docs/TESTES.md for the full measurement and the
+ * before/after total.
+ *
+ * The OLD comment on the `integration` project below claimed "the rest of integration/ ... doesn't
+ * contend for any resource, so it keeps Vitest's default parallelism" — true for 37 of 42 files,
+ * false for these five, and that false generality is what sent this investigation looking at the
+ * wrong layer first. Corrected in place rather than left to mislead the next reader (AGENTS.md: a
+ * comment that asserts beyond its evidence is the same defect D-025 names for data).
+ */
+const PROCESS_HEAVY_INTEGRATION_FILES = [
+  'tests/integration/cli/composition.test.ts',
+  'tests/integration/cli/daemon-command.test.ts',
+  'tests/integration/process/liveness.test.ts',
+  'tests/integration/process/termination.test.ts',
+  'tests/integration/scheduler/lock.test.ts',
+];
+
+/**
  * Per-directory coverage (docs/TESTES.md): `core/` 95%, every other production directory 80%.
  * One glob key PER directory, not a catch-all `'src/**'` for "everything but core" (S1-T12): a
  * catch-all glob matches every instrumented file, so it computes the exact same number as the
@@ -122,16 +155,41 @@ export default defineConfig({
           name: 'integration',
           include: ['tests/integration/**/*.test.ts'],
           // guards/ has its own project (see below) because it writes fixtures into the real
-          // src/ tree; the rest of integration/ (discovery/, storage/, git/, process/,
-          // notification/ starting at Sprint 1) uses a per-test isolated tmpdir and doesn't
-          // contend for any resource, so it keeps Vitest's default parallelism.
-          exclude: [...configDefaults.exclude, 'tests/integration/guards/**'],
+          // src/ tree. `PROCESS_HEAVY_INTEGRATION_FILES` (S4-T10) has its own project too, for a
+          // different reason: those five launch a real `powershell.exe` and contend with each
+          // other for the OS's process-launch capacity under parallelism, at fixed 5s/8s test
+          // deadlines the measured 500-880ms warm cost doesn't leave enough room for once more
+          // than one is in flight at once. Every OTHER file left in `integration` (discovery/,
+          // storage/, git/, notification/, the rest of process/ and cli/, starting at Sprint 1)
+          // uses a per-test isolated tmpdir and never launches a real process, so it genuinely
+          // doesn't contend for anything and keeps Vitest's default parallelism.
+          exclude: [
+            ...configDefaults.exclude,
+            'tests/integration/guards/**',
+            ...PROCESS_HEAVY_INTEGRATION_FILES,
+          ],
           // S2-T8: pays the `csc.exe` shim compilation exactly ONCE for the whole project run,
           // instead of leaving it to whichever test file's worker hits it first (see that global
           // setup's own comment). Stays here, project-scoped, while its `powershell.exe` sibling
           // moved to the root (Q-025): this one costs seconds rather than milliseconds, and its
           // only consumer is a fixture that is structurally integration-only. No-op on POSIX.
           globalSetup: ['tests/integration/generation/_windows-shim-global-setup.ts'],
+        },
+      },
+      {
+        test: {
+          // S4-T10: the five files in `PROCESS_HEAVY_INTEGRATION_FILES` (see that const's own
+          // docstring for the measurement). `fileParallelism: false` here — and ONLY here — makes
+          // these five run one after another, so none of their real `powershell.exe` launches ever
+          // overlaps a sibling's. This is not the same move S1-T0 rejected for `guards/`: that
+          // serialization would have HIDDEN a real race in shared fixture state (the bug was the
+          // race, not the timing); this one REMOVES real contention for a real, measured, scarce
+          // resource that the tests' own fixed deadlines were never sized to share. The other 37
+          // integration files never touch `powershell.exe`, so they pay none of this cost and keep
+          // full default parallelism in the `integration` project above.
+          name: 'integration-process',
+          include: PROCESS_HEAVY_INTEGRATION_FILES,
+          fileParallelism: false,
         },
       },
       {

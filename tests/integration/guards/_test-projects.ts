@@ -50,6 +50,10 @@ export const DECLARED_PROJECTS: readonly DeclaredProject[] = [
   { name: 'unit', expectation: { kind: 'has-tests' } },
   // S1-T2 filled this in (tests/integration/process/): the exemption below no longer applies.
   { name: 'integration', expectation: { kind: 'has-tests' } },
+  // S4-T10: split out of `integration` — the five files that launch a real `powershell.exe` and
+  // need `fileParallelism: false` to stop contending with each other (vitest.config.ts's own
+  // `PROCESS_HEAVY_INTEGRATION_FILES` docstring has the measurement).
+  { name: 'integration-process', expectation: { kind: 'has-tests' } },
   { name: 'guards', expectation: { kind: 'has-tests' } },
   // S1-T6 filled this in (tests/e2e/sessions.test.ts, the compiled binary against `seeya
   // sessions`): the exemption that used to live here no longer applies.
