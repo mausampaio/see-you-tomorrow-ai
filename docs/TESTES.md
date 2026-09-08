@@ -286,6 +286,62 @@ que só acontece na máquina de quem desenvolve e some no CI é o sintoma exato 
 **Cuidado ao limpar:** a sessão do Claude Code **é** um processo node. Filtre por data
 (`$_.StartTime -lt (Get-Date).Date`) em vez de matar tudo, e use **aspas simples** no Git Bash —
 aspas duplas expandem o `$_`, que é variável do próprio bash.
+
+## Contagem de processos deu pouco e o portão ainda estoura tempo? Cheque disputa por lançar processo, não só carga acumulada
+
+**S4-T10, 2026-09-08.** A seção acima ("Conte os processos antes de investigar o código") cobre
+**restos acumulados** de execuções antigas — dezenas ou centenas de `node` vivos, sintoma de dias
+de agentes rodando sem limpeza. Esta seção cobre um sintoma parecido, mas com causa diferente: a
+contagem de `node` estava **baixa** (1 processo, a própria sessão) e o portão ainda estourava
+tempo, sempre nos mesmos testes de processo real, com o conjunto de arquivos que falha mudando a
+cada rodada.
+
+**Como reconhecer isto, antes de reabrir a investigação do zero:**
+
+1. Conte `node` primeiro (seção acima). Se o número já estiver baixo, a causa não é acúmulo —
+   siga para o passo 2 em vez de procurar processos para matar.
+2. Os testes que estouram **lançam um processo do sistema operacional de verdade**? No Windows
+   deste projeto, isso é quase sempre `powershell.exe` (`adapters/process/proc-start.ts#captureWindows`,
+   `adapters/process/console-signal.ts#sendCtrlBreak`) — grep por `captureObservedProcStart(` ou
+   `powershell.exe` nos arquivos que falharam. Um teste que só toca um `tmpdir` isolado não é isto.
+3. Esses arquivos estão no mesmo projeto vitest (`vitest.config.ts`), sob o paralelismo padrão
+   (todo arquivo em seu próprio worker, ao mesmo tempo)? Se sim, e mais de um desses arquivos
+   pode cair no mesmo lote, a causa provável é **disputa pela capacidade do SO de lançar
+   processo**, cujo custo este projeto já mediu como variável mesmo "quente" (500-880ms por
+   `powershell.exe`, `proc-start.ts`) — contra prazos de teste **fixos** (5s/8s). Quando vários
+   desses lançamentos caem juntos, o tempo real ultrapassa o prazo sem que nada tenha travado.
+
+**Por que isto muda de arquivo a cada rodada, e some sob carga baixa isolada.** Qual subconjunto
+de arquivos "pesados" cai no mesmo lote de workers depende do agendamento do runner naquela
+rodada — não é determinístico. E rodando só os arquivos pesados, isolados do resto da suíte, a
+disputa ENTRE ELES sozinhos pode não ser grande o bastante para estourar (medido: 5 arquivos, só
+entre si, 11s, verde) — é a carga do conjunto inteiro competindo pelas CPUs da máquina que empurra
+o lançamento do processo pesado para fora do orçamento. Isolar só os arquivos suspeitos "porque
+passam quando rodados sozinhos" pode enganar por este motivo exato.
+
+**A correção, e por que não é a mesma coisa que a `guards/` recusou (comentário em
+`vitest.config.ts`, S1-T0).** `guards/` recusou `fileParallelism: false` porque a serialização
+naquele caso **escondia** uma corrida real em estado mutável compartilhado — o bug era a corrida.
+Aqui a disputa é por um recurso do SO real e medido, não uma fixture mal isolada: separar os
+arquivos que realmente lançam processo pesado num projeto vitest à parte
+(`integration-process`), com `fileParallelism: false` **só nele**, remove a disputa entre eles sem
+impor custo ao resto da suíte (que continua no paralelismo padrão de sempre). Não é serializar
+"para não investigar" — é remover a causa real da contenção, deixando o resto do sinal (paralelismo
+expõe corrida) intacto em todo o resto do projeto.
+
+**O que NÃO fazer:** alargar os prazos de 5s/8s até "caber". Esses prazos já somam o orçamento
+interno da operação **mais** uma folga fixa (3s, ver o comentário em
+`tests/integration/process/termination.test.ts`) — a folga é o que ainda pega um travamento real
+(um alvo que nunca reage ao sinal enviado). Alargar o prazo para acomodar disputa de recurso
+alarga essa mesma folga sobre travamento de verdade, e o próximo travamento real passa
+despercebido até alguém notar em produção.
+
+**Medido antes/depois (S4-T10, esta máquina):** portão vermelho, uma rodada, 128s de parede, 3
+arquivos estourando prazo. Depois da separação de projeto: portão verde, cinco rodadas seguidas,
+126–140s de parede (média 131s) — mesma ordem de grandeza, sem regressão perceptível. Números
+completos e o quinto arquivo que a investigação original não tinha nomeado:
+`docs/PLANO-DE-ENTREGA.md` S4-T10, `docs/QUESTOES.md` Q-063.
+
 ## Medir custo de chamada real: controle o calor do cache
 
 **Três medições de custo neste projeto já foram confundidas pela mesma coisa**, e a terceira só
