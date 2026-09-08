@@ -3148,7 +3148,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       "estou perdido entre vinte sessões" — a metade de **decidir** o que fazer com cada uma é a
       tela do v2. Interessa agora porque é a base que essa tela vai consumir.
 
-- [ ] **S4-T10 — O portão fica vermelho sem defeito nenhum: prazo fixo contra operação de custo
+- [~] **S4-T10 — O portão fica vermelho sem defeito nenhum: prazo fixo contra operação de custo
       variável.** Bloqueia a publicação da **S4-T9**, que está mesclada e **não publicada** por
       causa disto.
 
@@ -3174,6 +3174,89 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       apenas aumentar prazo — prazo generoso demais deixa de pegar travamento de verdade, que é
       exatamente o que esses testes existem para pegar. Medir antes e depois, e dizer o custo em
       tempo total do conjunto.
+
+      **Implementado em 2026-09-08.** Reproduzido antes de mexer em qualquer arquivo: contagem de
+      processos node primeiro (`docs/TESTES.md` § "Suíte lenta ou instável"), **1** processo vivo
+      nesta máquina — não é o caso das centenas acumuladas que aquela seção cobre, então a causa
+      tinha que ser outra, e era a que a entrada da tarefa já apontava. Rodei `npm run verificar`
+      uma vez no estado herdado (commit `da2ebfc`, antes de qualquer edição minha) para ter um
+      "antes" medido, não só citado: **vermelho**, 128s de parede (`date` antes/depois), 3 arquivos
+      falharam por timeout — `cli/composition.test.ts`, `cli/daemon-command.test.ts` (2 casos) e
+      `process/termination.test.ts`. **`composition.test.ts` não estava na lista de "testes
+      envolvidos" do despacho** (que citava só `termination`, `liveness`, `daemon-command`, `lock`),
+      mas grepar por `captureObservedProcStart(` em `tests/` mostra que ele chama a mesma função
+      real (`buildCliContext`'s teste "the real ProcessControl reports this test process itself as
+      alive") — e foi exatamente esse o que estourou no meu "antes". Cinco arquivos, não quatro;
+      registrado em **Q-063** e incluído na correção, porque a evidência (o próprio log de falha)
+      é mais forte que a lista original.
+
+      **A correção: separar os cinco num projeto vitest novo, serializado só entre eles.** Novo
+      projeto `integration-process` (`vitest.config.ts`) com `include` explícito dos cinco arquivos
+      e `fileParallelism: false` — só dentro dele, não no resto de `integration`. Os outros 36
+      arquivos de `integration/` (isolados por tmpdir, nunca lançam processo real) continuam com o
+      paralelismo padrão de sempre. O comentário falso no `integration` ("não disputa nenhum
+      recurso") foi reescrito para dizer a verdade parcial que era: verdade para 37 de 42 arquivos,
+      falsa para estes cinco.
+
+      **Por que não foi só alargar o prazo (cuidado a do despacho).** Os prazos de
+      `terminateGracefully` (5s Windows-console, 2s sem console) já carregam o orçamento interno da
+      operação **mais** 3s de folga (comentário original de `termination.test.ts`, preservado) — se
+      o processo alvo nunca reagir ao `CTRL_BREAK_EVENT` (travamento real, não custo de lançar
+      `powershell.exe`), o teste ainda estoura essa folga e falha, porque a folga continua fixa e
+      pequena. Alargar esses 5s/8s para "caber" a contenção também alargaria a folga sobre
+      travamento real — exatamente a perda que o despacho pediu para evitar. A correção não tocou
+      nenhum desses números.
+
+      **Por que serializar só estes cinco, e não `integration` inteiro (cuidado c).** A
+      `S1-T0` já registrou, no próprio `vitest.config.ts`, por que `fileParallelism: false` foi
+      recusado em `guards/`: lá a serialização teria **escondido** uma corrida real em estado
+      mutável compartilhado — o bug era a corrida, e paralelismo é o que a expõe. Aqui a disputa é
+      por um recurso real e medido (capacidade do SO de lançar processo, 500-880ms por
+      `powershell.exe` **quente**, `adapters/process/proc-start.ts`), não um artefato de fixture
+      compartilhada — serializar estes cinco **remove** a disputa em vez de escondê-la. Medido, não
+      só argumentado: rodando só os cinco isolados do resto da suíte, em paralelo entre si (sem
+      `fileParallelism: false`, via `--fileParallelism` explícito), os cinco passam em 11,0s — a
+      disputa entre eles sozinhos, sem o resto da suíte rodando junto, não é suficiente para
+      estourar o prazo. É a carga do conjunto inteiro (os outros ~128 arquivos de teste competindo
+      pelas 8 CPUs desta máquina ao mesmo tempo) que empurra o lançamento do `powershell.exe` para
+      fora do orçamento — serializar estes cinco tira o pior caso (dois ou três lançamentos
+      pesados simultâneos) sem impor custo algum aos 36 arquivos irmãos, que nunca tocam
+      `powershell.exe`.
+
+      **Custo medido da serialização:** os cinco arquivos, sozinhos, em série
+      (`fileParallelism: false`, como ficou): 25,5s. Os mesmos cinco, sozinhos, em paralelo entre
+      si: 11,0s. A diferença (~14,5s de trabalho que passou a ser sequencial) fica **dentro** da
+      janela em que os outros 128 arquivos de `unit`/`integration`/`guards` já estão rodando em
+      paralelismo pleno — não é um acréscimo que se soma ao tempo total da suíte, é trabalho que se
+      sobrepõe a um tempo que já ia ser gasto de qualquer forma. Confirmado pelo número que importa,
+      o tempo de parede da suíte inteira: **antes** (vermelho, uma medição) 128s; **depois** (verde,
+      cinco medições) 126s/140s/129s/130s/131s, média 131s — mesma ordem de grandeza, sem regressão
+      perceptível.
+
+      **Aceite, medido cinco vezes seguidas nesta máquina, `npm run verificar`:**
+
+      ```
+      rodada 1: EXITCODE:0, 07:29:02–07:31:08 (126s), 133 arquivos, 1440 passaram, 3 pulados
+      rodada 2: EXITCODE:0, 07:31:18–07:33:38 (140s), 133 arquivos, 1440 passaram, 3 pulados
+      rodada 3: EXITCODE:0, 07:33:42–07:35:51 (129s), 133 arquivos, 1440 passaram, 3 pulados
+      rodada 4: EXITCODE:0, 07:35:55–07:38:05 (130s), 133 arquivos, 1440 passaram, 3 pulados
+      rodada 5: EXITCODE:0, 07:38:09–07:40:20 (131s), 133 arquivos, 1440 passaram, 3 pulados
+      ```
+
+      Cobertura (rodada 1, representativa — as cinco não divergem de forma relevante): geral
+      97,05/92,65/98,2/97,29 (statements/branches/funcs/lines); `core/` 100%; `adapters/process/`
+      dentro do piso de 80% (os cinco arquivos movidos continuam contando para o mesmo diretório,
+      só mudou o projeto vitest que os roda, não o `include` de cobertura). `npm run verificar:linux`
+      verde (container `node:22-bookworm`) — nesta plataforma os cinco arquivos não lançam
+      `powershell.exe` (é Windows-only), então a disputa que motivou esta tarefa nunca existiu ali;
+      a separação de projeto é inofensiva lá, só reduz paralelismo de 5 arquivos que já eram
+      baratos nesse SO.
+
+      **`docs/TESTES.md`** ganhou uma entrada nova documentando o método (contar node primeiro,
+      depois checar se quem falhou lança processo real, depois checar se está sob paralelismo
+      padrão do mesmo projeto vitest) — para o próximo vermelho sem defeito achar isto sem repetir
+      a investigação. **Q-063** registra a divergência da lista de arquivos (o quinto arquivo) e o
+      raciocínio completo dos cuidados (a)-(d).
 
 ## Definição de pronto (vale para toda tarefa)
 

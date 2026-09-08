@@ -14,11 +14,11 @@
   ],
   "scripts": {
     "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.build.json",
-    "test": "vitest run --project unit --project integration --project guards",
+    "test": "vitest run --project unit --project integration --project integration-process --project guards",
     "pretest:e2e": "npm run build",
     "test:e2e": "vitest run --project e2e",
     "test:contrato": "vitest run --project contract",
-    "cobertura": "vitest run --project unit --project integration --project guards --coverage",
+    "cobertura": "vitest run --project unit --project integration --project integration-process --project guards --coverage",
     "lint": "eslint .",
     "dependencias": "depcruise src --config .dependency-cruiser.cjs",
     "format": "prettier --write .",

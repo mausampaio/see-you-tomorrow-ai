@@ -5687,3 +5687,68 @@ sem apagar a medição que já estava documentada.
 
 **Cobertura e portão:** `npm run verificar` e `npm run verificar:linux`, números no relatório da
 tarefa em `docs/PLANO-DE-ENTREGA.md` S4-T9.
+
+## Q-063 — S4-T10: a lista de "testes envolvidos" do despacho tinha quatro arquivos; a evidência
+## tinha cinco — e por que a correção escolhida não é a mesma coisa que a `guards/` recusou
+
+**Tarefa:** S4-T10 — o portão fica vermelho sem defeito nenhum: prazo fixo contra operação de
+custo variável. Bloqueava a publicação da S4-T9 (mesclada, não publicada por causa disto).
+**Bloqueia:** não — `npm run verificar` passou cinco vezes seguidas nesta máquina (números no
+relatório da tarefa em `docs/PLANO-DE-ENTREGA.md` S4-T10).
+
+**1) O despacho citou quatro arquivos; a medição achou um quinto, e ele entrou na correção.**
+`tests/integration/process/termination.test.ts`, `liveness.test.ts`,
+`tests/integration/cli/daemon-command.test.ts` e `tests/integration/scheduler/lock.test.ts` eram
+os "testes envolvidos" nomeados. Rodando `npm run verificar` uma vez no estado herdado, antes de
+qualquer edição minha (commit `da2ebfc`), o vermelho incluiu também
+`tests/integration/cli/composition.test.ts` — que chama a mesma função real,
+`captureObservedProcStart` (`adapters/process/proc-start.ts`), no teste "the real ProcessControl
+reports this test process itself as alive" (`buildCliContext`). Confirmei com
+`grep -rn "captureObservedProcStart(" tests/`: exatamente cinco chamadas reais em `tests/
+integration/` (as quatro nomeadas + `composition.test.ts`), fora as de `tests/unit/` (que passam
+um `run` falso, nunca lançam `powershell.exe` de verdade) e `tests/e2e/` (projeto que não faz
+parte do portão). Incluí o quinto arquivo na correção — a mesma causa, a mesma disputa de recurso,
+o mesmo teste "the real ProcessControl reports this test process itself as alive" que estourou no
+meu próprio "antes" medido. Isto não é decisão nova sobre comportamento do produto (nenhuma regra
+de `AGENTS.md` pede pausa aqui) — é a mesma correção de instrumento que a tarefa já pedia, aplicada
+ao conjunto certo de arquivos em vez do conjunto citado de memória.
+
+**2) Por que a correção NÃO repete o que a S1-T0 já recusou para `guards/`.** O comentário de
+`vitest.config.ts` sobre `guards/` avisa: não reintroduza `fileParallelism: false` ali, porque a
+serialização daquela vez **escondeu** uma corrida real em estado mutável compartilhado (fixture
+escrita na árvore real de `src/`) — o bug era a corrida em si, e paralelismo é o que a expõe cedo.
+Considerei essa objeção antes de propor `fileParallelism: false` em qualquer lugar novo. A
+diferença: aqui a disputa é por um recurso do SO que o próprio projeto já mediu como real e
+variável (500-880ms por `powershell.exe` **quente**, `adapters/process/proc-start.ts`), não um
+artefato de fixture compartilhada nascendo de um descuido de isolamento. Serializar os cinco
+arquivos que realmente lançam esse processo não esconde nenhum defeito de teste — remove uma
+disputa real por um recurso real, e os cinco continuam rodando sob paralelismo TOTAL em relação a
+qualquer outro processo do sistema (só não uns contra os outros). Medi para não confiar só no
+argumento: os cinco arquivos, isolados do resto da suíte e rodando em paralelo ENTRE SI (via
+`--fileParallelism` explícito, ignorando o `fileParallelism: false` do projeto), passam em 11,0s —
+ou seja, cinco lançamentos de `powershell.exe` concorrendo só entre si, sem mais nada rodando, não
+é o suficiente para estourar o prazo. É a carga do conjunto inteiro (os outros ~128 arquivos de
+`unit`/`integration`/`guards` competindo pelas 8 CPUs desta máquina ao mesmo tempo) que empurra
+esses lançamentos para fora do orçamento — o que serializar remove é justamente o pior caso (dois
+ou três lançamentos pesados simultâneos dentro de um sistema já carregado), não uma corrida a ser
+escondida.
+
+**3) Por que não bastava aumentar o prazo.** `terminateGracefully`'s prazos (5s/8s no Windows) já
+somam o orçamento interno da operação **mais** uma folga fixa de 3s (comentário original de
+`termination.test.ts`, preservado). Essa folga é o que ainda pega um travamento real — um alvo que
+nunca reage ao `CTRL_BREAK_EVENT`. Alargar os 5s/8s para caber a disputa de recurso alargaria essa
+mesma folga sobre travamento real, exatamente a perda que o despacho da tarefa pediu para evitar.
+Nenhum prazo foi tocado nesta correção.
+
+**4) O que fica sem resposta, e por quê.** Esta tarefa não investigou POR QUE a máquina passou a
+mostrar contenção hoje quando "passou verde ontem, duas vezes" (frase do despacho) — só confirmou
+que a contenção é real, mediu a forma dela (fica visível só sob carga do conjunto inteiro, some com
+os cinco isolados) e removeu a fatia dela que o projeto controla (lançamentos concorrentes de
+`powershell.exe` entre si). Se a máquina ficar mais carregada de outra forma no futuro (mais
+núcleos ocupados por outro processo, por exemplo), o mesmo sintoma pode voltar por um caminho
+diferente — a entrada nova em `docs/TESTES.md` existe para que o próximo a ver isto comece pelo
+método, não pela suposição de que já foi resolvido para sempre.
+
+**Cobertura e portão:** `npm run verificar` cinco vezes seguidas, verde nas cinco; `npm run
+verificar:linux` verde. Números completos no relatório da tarefa em `docs/PLANO-DE-ENTREGA.md`
+S4-T10.
