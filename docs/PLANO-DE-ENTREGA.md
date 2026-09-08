@@ -3148,6 +3148,33 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       "estou perdido entre vinte sessões" — a metade de **decidir** o que fazer com cada uma é a
       tela do v2. Interessa agora porque é a base que essa tela vai consumir.
 
+- [ ] **S4-T10 — O portão fica vermelho sem defeito nenhum: prazo fixo contra operação de custo
+      variável.** Bloqueia a publicação da **S4-T9**, que está mesclada e **não publicada** por
+      causa disto.
+
+      **Medido em 2026-09-08, quatro rodadas.** `npm run verificar` falha com 2 a 3 testes
+      estourando tempo — **sempre** os que lançam processo de verdade (`powershell.exe`, anexar
+      console), e **o conjunto muda a cada rodada**. `terminateGracefully (Windows:
+      CTRL_BREAK_EVENT via console attach)` falhou em todas.
+
+      **Não é a S4-T9, e isto foi isolado, não suposto:** o portão foi rodado **no commit anterior
+      a ela** (`8a6d71e`) e falhou igual, com três testes. Esse mesmo commit passou **verde ontem,
+      nesta máquina**, duas vezes. **Não é carga do conjunto inteiro:** rodando só os dois arquivos
+      que falharam, passam; rodando **só o projeto `integration`**, falham três — a contenção está
+      dentro dele.
+
+      **A causa provável, e ela está escrita como afirmação no `vitest.config.ts`.** O projeto
+      `integration` declara que "não disputa nenhum recurso, então mantém o paralelismo padrão".
+      Isso é falso para os testes de processo: eles disputam a capacidade do sistema de **lançar
+      processos**, cujo custo o próprio projeto mediu como variável (500-880ms por `powershell.exe`,
+      **quente** — `adapters/process/proc-start.ts`). Os prazos são fixos (5s e 8s). Ontem coube;
+      hoje, com a máquina reiniciada, não cabe.
+
+      *Aceite:* **o portão passa cinco vezes seguidas** nesta máquina. A correção não pode ser
+      apenas aumentar prazo — prazo generoso demais deixa de pegar travamento de verdade, que é
+      exatamente o que esses testes existem para pegar. Medir antes e depois, e dizer o custo em
+      tempo total do conjunto.
+
 ## Definição de pronto (vale para toda tarefa)
 
 1. Código implementa exatamente a spec; divergência virou questão, não improviso.
