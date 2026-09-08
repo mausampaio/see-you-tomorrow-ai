@@ -2,7 +2,7 @@
  * One notification backend in Spike B's fallback chain (docs/spikes/B-notificacoes.md), and the
  * `CommandRunner` seam every real backend spawns its external command through.
  */
-import { spawn } from 'node:child_process';
+import { spawnHidden } from '../process/spawn.js';
 import type { Notice } from '../../core/ports.js';
 
 /**
@@ -53,15 +53,14 @@ export type CommandRunner = (command: string, args: readonly string[]) => Promis
  */
 export const spawnCommand: CommandRunner = (command, args) =>
   new Promise((resolve, reject) => {
-    const child = spawn(command, [...args], {
+    // S4-T6: the daemon (no console of its own, D-005) is a real caller of this, at every
+    // lead-time/end-of-day notice — without `windowsHide`, the WinRT toast helper pops a real,
+    // visible console window on Windows for the length of the call. `spawnHidden` (D-038) forces
+    // that flag now, the same one `console-signal.ts#runPowerShellScript` already carried for the
+    // identical reason; doesn't change `exitCode`/`stdout`/`stderr` either way.
+    const child = spawnHidden(command, [...args], {
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: false,
-      // S4-T6: the daemon (no console of its own, D-005) is a real caller of this, at every
-      // lead-time/end-of-day notice — without this, the WinRT toast helper pops a real, visible
-      // console window on Windows for the length of the call. Windows-only effect; doesn't change
-      // `exitCode`/`stdout`/`stderr` either way. Same option `console-signal.ts#runPowerShellScript`
-      // already carries for the identical reason.
-      windowsHide: true,
     });
     let stdout = '';
     let stderr = '';

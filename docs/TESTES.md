@@ -468,6 +468,56 @@ Nenhuma tarefa e2e nova: as três partes são inteiramente de `core/`/`scheduler
 cenário próprio aqui, e o aceite real de "o amontoado sumiu" é o mantenedor observando o daemon de
 verdade (ver o relatório da tarefa em `docs/PLANO-DE-ENTREGA.md`).
 
+**S4-T9 (2026-09-07): `adapters/process/spawn.ts#spawnHidden` (D-038) — refatoração pura, sem
+comportamento novo para testar, mais uma guarda de lint nova para provar.**
+
+- **Nenhum teste de comportamento novo.** `spawnHidden` é um passa-adiante fino para
+  `node:child_process.spawn`, forçando `windowsHide: true` — os seis call sites que passaram a
+  usá-lo (`spawn-claude.ts`, `run-git.ts`, `spawn-stdout.ts`, as duas chamadas de
+  `console-signal.ts`, `notification/backend.ts`) continuam cobertos pelos MESMOS testes de
+  integração contra processo real que já existiam antes desta tarefa (Q-059 item 1's lista:
+  `tests/integration/notification/spawn-command.test.ts`, `tests/integration/git/`,
+  `tests/integration/generation/lean-generator.test.ts`,
+  `tests/unit/adapters/process/proc-start.test.ts`, mais `tests/integration/process/` e
+  `tests/integration/resumption/spawn-interactive.test.ts` para os três que ficaram de fora do
+  embrulho) — rodados antes E depois da troca, sem alteração de asserção, exatamente a prova que
+  a S4-T6 já tinha registrado como impossível de reforçar com um teste NOVO (o defeito só existe
+  sem console, e `vitest` sempre roda com um).
+- **`tests/integration/guards/eslint-restrictions.test.ts`, novo describe: "guard: eslint rejects
+  spawn imported straight from node:child_process outside the D-038 wrapper and its
+  exceptions"** — seis casos, mesma disciplina do describe de D-019 já existente neste arquivo
+  (fixture real, eslint real como processo filho, nunca a API do eslint chamada in-process):
+  rejeita `import { spawn }` de `node:child_process` num adapter comum, com a mensagem citando
+  `spawnHidden`/D-038; rejeita a mesma coisa com alias (`import { spawn as run }`, prova que
+  `importNames` casa o nome ORIGINAL exportado, não o alias local); aprova importar `spawnHidden`
+  do embrulho em outro lugar de `src/` (controle: a guarda mira `node:child_process`, não a
+  palavra "spawn"); e aprova os quatro arquivos reais da exceção — `adapters/process/spawn.ts` (o
+  próprio embrulho), `adapters/process/daemon-launch.ts`, `adapters/process/termination-posix.ts`
+  e `adapters/resumption/spawn-interactive.ts` — rodando eslint contra o CAMINHO REAL desses
+  arquivos, não uma fixture: a lista de exceção em `eslint.config.js` nomeia cada um pelo caminho
+  exato (não um glob de diretório), então uma fixture dentro de `_guard-eslint/` nunca poderia
+  provar a isenção mesmo se quisesse — só apontar eslint para o arquivo de produção de verdade
+  prova que a isenção existe e vale para o código real, não para uma cópia.
+- **Controle de regressão do guard existente:** o mesmo describe de D-019 ("rejects node:* imported
+  in src/core/") continua verde depois da mudança em `eslint.config.js` — prova que o novo bloco
+  `no-restricted-imports` (com `files: ['src/**/*.ts']`, superset de `src/core/**/*.ts`) NÃO
+  substituiu, por sobreposição de merge do flat config, a proibição mais ampla que já existia só
+  para `core/`. Ver o relatório da tarefa para o porquê exato desse risco (a exclusão explícita
+  de `src/core/**/*.ts` no novo bloco).
+- **`npm run dependencias` como controle passivo, não teste novo:** os seis call sites agora
+  importam `adapters/process/spawn.ts` de dentro de `adapters/generation`, `adapters/git` e
+  `adapters/notification` — import adapter-para-adapter, fora dos 20 pares nomeados na matriz de
+  `docs/ARQUITETURA.md` (a diagonal é "—", não um dos pares contados) e sem regra correspondente
+  em `.dependency-cruiser.cjs`. O portão real (`depcruise src`) aprovou sem violação; não há teste
+  de guarda dedicado a "adapters pode importar adapters" porque isso já é o comportamento PADRÃO
+  (ausência de regra = permitido) — só os pares efetivamente proibidos têm teste de reprovação,
+  seguindo a mesma lógica de todo o resto de `docs/ARQUITETURA.md` § matriz.
+
+Nenhuma tarefa e2e nova. O aceite real — "nenhuma janela aparece" — já foi verificado à mão pelo
+mantenedor na S4-T6 contra o comportamento que esta tarefa apenas reorganiza; o que esta tarefa
+pede de verificação manual nova é mais estreito: que o `start-day` interativo continua abrindo a
+janela de verdade (a exceção, não a regra) — ver o relatório da tarefa.
+
 ## Contrato — a faixa que protege contra o mundo mudar
 
 O app depende de estruturas internas e não documentadas do Claude Code

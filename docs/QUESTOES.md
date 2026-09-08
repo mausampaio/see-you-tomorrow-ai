@@ -5613,3 +5613,77 @@ nome novo no glossário de `AGENTS.md` é necessário.
 linhas / 94,05% branches (ambos acima do piso de 80% por diretório); `npm run verificar:linux` —
 mesmos 133 arquivos, 1434 passaram (3 skipped), portão verde. Os dois códigos de saída lidos
 separadamente do `tail`, não do pipe.
+## Q-062 — S4-T9 (`spawnHidden`, D-038): onde o embrulho mora, a forma da assinatura, e o limite conhecido da guarda
+
+**Tarefa:** S4-T9 — um `spawn` só, invisível por padrão, com a exceção declarada. Fecha a Q-059
+item 3.
+**Bloqueia:** não — `npm run verificar` e `npm run verificar:linux` estão verdes (números no
+relatório da tarefa em `docs/PLANO-DE-ENTREGA.md`).
+
+**1) Onde o embrulho mora: `adapters/process/spawn.ts`, confirmado contra a matriz antes de
+escrever uma linha (cuidado (e) do despacho).** O despacho pediu para eu conferir a matriz de
+camadas antes de assumir que um adapter pode importar de outro adapter — os três chamadores que
+hoje precisam do embrulho (`adapters/generation`, `adapters/git`, `adapters/notification`) são
+todos adapters diferentes de `adapters/process`, onde o embrulho tem que morar (D-020: é onde os
+outros `spawn` de sistema já vivem). A tabela de `docs/ARQUITETURA.md` marca a diagonal
+`adapters` → `adapters` como "—", não "✗" — e essa é justamente a leitura "fora dos 20 pares
+ordenados", não "proibido": os 20 pares são estritamente as 5×4 combinações ENTRE camadas
+diferentes, e importação dentro da mesma camada nunca entrou na contagem. Conferido também contra
+o mecanismo real, não só a tabela: `.dependency-cruiser.cjs` tem uma regra
+`adapters-does-not-import-application-cli-or-scheduler` (adapters → application/cli/scheduler,
+proibido) mas nenhuma regra `adapters-does-not-import-adapters` — testei isso na prática rodando
+`depcruise` contra o próprio commit desta tarefa (`adapters/generation/spawn-claude.ts` importando
+`adapters/process/spawn.ts`) e o portão aprovou sem violação, 151 módulos/452 dependências. Não
+precisei propor um lugar novo nem furar a regra — a matriz já permitia isto, só não estava
+testada por nenhum `spawn` cruzando adapters antes desta tarefa.
+
+**2) A assinatura do embrulho replica os overloads do próprio `child_process.spawn`, em vez de
+aceitar um tipo de opções genérico — decisão central do cuidado (d).** A primeira forma que
+escrevi usava `options: SpawnOptions` (o tipo mais largo do Node) para os três argumentos,
+devolvendo sempre `ChildProcess` genérico. Isso teria forçado quatro dos seis call sites que
+passam `stdio: ['ignore', 'pipe', ...]` (`spawn-stdout.ts`, `run-git.ts`, `notification/
+backend.ts`, as duas chamadas de `console-signal.ts`) a ganhar uma checagem de nulo em
+`child.stdout`/`child.stderr` que eles não tinham antes — exatamente o "forçar uma assinatura
+pobre que obriga o chamador a se contorcer" que o despacho pediu para eu não fazer. A correção:
+`spawnHidden` declara os mesmos overloads que `node:child_process`'s próprio `spawn(command, args,
+options)` (a forma tripla de `stdio`, a forma sem `stdio`, e o geral) — cada call site que já
+passava um `stdio` de três posições continua recebendo o tipo estreito (`Readable` não-nulo onde
+já era `'pipe'`), sem tocar a lógica de leitura de stream em nenhum dos seis arquivos. Só a linha
+de import e a chamada de `spawn(...)` para `spawnHidden(...)` mudaram nesses seis; nenhuma
+checagem nova, nenhum `as`, nenhum `!`. Confirmado com `tsc --noEmit` limpo no commit final e com
+os testes de integração dos seis (Q-059 item 1's lista) verdes sem alteração.
+
+**3) O embrulho NÃO força `shell: false` — só `windowsHide: true`.** Cheguei a considerar forçar
+os dois, já que `shell: false` é invariante do projeto em todo `spawn` (AGENTS.md § "Processos").
+Decidi não forçar: o despacho e a D-038 falam especificamente de `windowsHide`/visibilidade de
+janela, não de `shell`; os nove call sites já passam `shell: false` explicitamente hoje (nenhum
+depende do embrulho para isso), e ampliar o escopo do embrulho para uma segunda invariante que
+ninguém pediu teria sido decidir por conta própria uma coisa que a tarefa não pautou. Se um dia
+`shell: false` também merecer guarda de lint própria, é decisão nova, não algo que enfiei aqui de
+carona.
+
+**4) Limite conhecido da guarda de lint, mesma classe do que D-019 já aceita.** A regra
+(`no-restricted-imports` com `paths`/`importNames: ['spawn']`) casa a forma sintática do import
+nomeado — `import { spawn } from 'node:child_process'`, com ou sem alias (`importNames` compara
+contra o nome ORIGINAL exportado, não o alias local; testei isso: um fixture com `import { spawn
+as run }` continua rejeitado). O que escapa: `import * as cp from 'node:child_process'; cp.spawn(
+...)` — um namespace import não tem "nome importado" para casar. Ninguém escreve isso no projeto
+hoje (grep confirma: nenhum `import * as` de `node:child_process` em `src/`), e a mesma linha que
+D-019 já traça vale aqui — a guarda cobre o descuido de esquecer o embrulho, não o contorno
+deliberado de alguém que decide escrever `cp.spawn` de propósito, que é trabalho de review, não de
+lint. Registrado no comentário do próprio `adapters/process/spawn.ts`, não só aqui.
+
+**5) Por que o embrulho não aceita a forma de dois argumentos (`spawn(command, options)`, sem
+`args`).** Nenhum dos nove call sites usa essa forma — todos já passam um array de argumentos
+explícito, e AGENTS.md § "Processos" já exige isso ("spawn com array de argumentos"). Omitir essa
+sobrecarga não incomoda nenhum chamador real hoje e fecha, de graça, um caminho a mais por onde um
+call site futuro poderia acabar chamando um binário sem array de argumento revisado.
+
+**6) Comentários de medição preservados, não apagados (regra do AGENTS.md § "Comentários").** Os
+seis call sites mantêm o comentário original da S4-T6 que registra POR QUE `windowsHide` importa
+ali (o quê foi medido: uma janela por sessão viva a cada 30s, uma rajada no encerramento) — só
+reescrevi a frase final de "esta opção esconde a janela" para "o embrulho força esta opção agora",
+sem apagar a medição que já estava documentada.
+
+**Cobertura e portão:** `npm run verificar` e `npm run verificar:linux`, números no relatório da
+tarefa em `docs/PLANO-DE-ENTREGA.md` S4-T9.

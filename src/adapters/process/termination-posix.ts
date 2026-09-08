@@ -15,6 +15,9 @@
  * it's included and measured for real: `tests/integration/process/termination.test.ts`'s
  * `describe.skipIf(process.platform === 'win32')` block exercises it against a real child process.
  */
+// D-038 exception, declared here per the decision's own text: this file is POSIX-only by
+// construction (S1-T12, see the module comment above) — `windowsHide` doesn't exist on this
+// platform, so it would be a no-op forever. Direct import, not `spawnHidden`.
 import { spawn } from 'node:child_process';
 import { errorCode, interpretExistenceCheckError } from './liveness.js';
 import { processExists } from './existence.js';

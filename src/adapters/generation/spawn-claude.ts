@@ -1,8 +1,9 @@
 /**
- * The one place this adapter calls `node:child_process.spawn` (AGENTS.md § "Processos": array
- * arguments, `shell: false`, never `exec` with an interpolated string — the `cwd`s this project
- * runs in have spaces and accents). Everything else in `adapters/generation` builds arguments and
- * interprets output; this file is the only one that touches a real process.
+ * The one place this adapter spawns a real process, through `adapters/process/spawn.ts#spawnHidden`
+ * (D-038 — array arguments, `shell: false`, never `exec` with an interpolated string: the `cwd`s
+ * this project runs in have spaces and accents; AGENTS.md § "Processos"). Everything else in
+ * `adapters/generation` builds arguments and interprets output; this file is the only one that
+ * touches a real process.
  *
  * **Hard timeout via `AbortSignal.timeout`, not `setTimeout` (D-019).** `setTimeout`/`setInterval`
  * are banned by name outside `adapters/clock/` (`eslint.config.js`'s `no-restricted-globals`) —
@@ -17,7 +18,7 @@
  * through the model and back in `result` — this is the mechanism Spike C's mangled argument
  * should have used.
  */
-import { spawn } from 'node:child_process';
+import { spawnHidden } from '../process/spawn.js';
 import { GenerationError } from './errors.js';
 
 export interface SpawnClaudeOptions {
@@ -58,18 +59,18 @@ export function spawnClaude(options: SpawnClaudeOptions): Promise<ClaudeProcessR
   const { claudeBinary, args, stdinContent, cwd, env, timeoutMs } = options;
   return new Promise((resolve, reject) => {
     let settled = false;
-    const child = spawn(claudeBinary, [...args], {
+    // S4-T6: this is the daemon's own poll loop calling in (D-005, no console) — without
+    // `windowsHide`, every `claude` capture pops a real, visible console window on Windows for as
+    // long as the model takes to answer (~1 min measured), stealing keyboard focus from whoever
+    // is typing. `spawnHidden` (D-038) forces that flag on every call now, so it's no longer a
+    // per-call-site option to remember — doesn't change what `spawn` reports: stdout/stderr/exit
+    // code are read the same way either side of it (Windows-only; a no-op everywhere else).
+    const child = spawnHidden(claudeBinary, [...args], {
       cwd,
       env,
       shell: false,
       stdio: ['pipe', 'pipe', 'pipe'],
       signal: AbortSignal.timeout(timeoutMs),
-      // S4-T6: this is the daemon's own poll loop calling in (D-005, no console) — without this,
-      // every `claude` capture pops a real, visible console window on Windows for as long as the
-      // model takes to answer (~1 min measured), stealing keyboard focus from whoever is typing.
-      // Doesn't change what `spawn` reports: stdout/stderr/exit code are read the same way either
-      // side of this flag (Windows-only; a no-op everywhere else).
-      windowsHide: true,
     });
     let stdout = '';
     let stderr = '';

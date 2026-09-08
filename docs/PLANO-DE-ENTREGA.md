@@ -2963,7 +2963,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       dois). Os dois códigos de saída lidos separadamente do `tail`, nunca encadeados com o commit.
       Detalhes completos, incluindo os cuidados (a)-(f) um a um, em `docs/QUESTOES.md` **Q-061**.
 
-- [ ] **S4-T9 — Um `spawn` só, invisível por padrão, com a exceção declarada (D-038).** Fecha a
+- [~] **S4-T9 — Um `spawn` só, invisível por padrão, com a exceção declarada (D-038).** Fecha a
       **Q-059 item 3**, decidida pelo mantenedor em 2026-09-07. Roda em paralelo com a **S4-T8** — a
       sequência que este plano afirmava antes estava errada: conferido arquivo a arquivo, as duas
       não se cruzam.
@@ -2987,6 +2987,108 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       verdes, sem alteração de stdout, código de saída ou erro); um `spawn` novo escrito fora do
       embrulho **falha no portão**; e o `start-day` interativo continua abrindo a janela de verdade
       — verificado à mão, porque é o único jeito.
+
+      **Implementado em 2026-09-07.** `src/adapters/process/spawn.ts#spawnHidden`: passa-adiante
+      fino para `node:child_process.spawn`, forçando `windowsHide: true` por cima de qualquer opção
+      recebida (spread de `options` primeiro, override depois — nenhum call site consegue
+      reativar a visibilidade por acidente). A assinatura replica os overloads que o próprio
+      `spawn(command, args, options)` do Node declara (`stdio` em tripla, sem `stdio`, e o geral),
+      em vez de um `SpawnOptions` genérico — decisão registrada em Q-062 item 2: um tipo genérico
+      teria forçado quatro dos seis call sites a ganhar checagem de nulo em `child.stdout`/
+      `child.stderr` que não tinham antes, exatamente o "forçar assinatura pobre" que o cuidado (d)
+      do despacho pediu para evitar.
+
+      Os seis `spawn` que já escondiam a janela passam a importar `spawnHidden` de
+      `adapters/process/spawn.ts`: `adapters/generation/spawn-claude.ts`, `adapters/git/run-git.ts`,
+      `adapters/process/spawn-stdout.ts`, as duas chamadas de `adapters/process/console-signal.ts`
+      e `adapters/notification/backend.ts`. Nenhuma lógica de leitura de stream mudou — só a linha
+      de import e a chamada `spawn(...)` → `spawnHidden(...)`, com o comentário de medição da S4-T6
+      preservado (AGENTS.md § "Comentários") e reescrito só na frase final ("esta opção esconde a
+      janela" → "o embrulho força esta opção agora"). As três exceções mantêm o import direto de
+      `node:child_process`, cada uma com um comentário novo no próprio `import`, não só no
+      comentário de módulo já existente, citando D-038 e o motivo: `daemon-launch.ts` (`detached`+
+      `stdio:'ignore'` já é console nenhum, nada para o wrapper esconder), `termination-posix.ts`
+      (POSIX-only, `windowsHide` seria no-op) e `resumption/spawn-interactive.ts` (a própria exceção
+      da D-038 — `stdio: 'inherit'`, a janela é o produto).
+
+      **A guarda.** `eslint.config.js` ganhou um bloco `no-restricted-imports` (`paths`,
+      `importNames: ['spawn']`) escopado a `src/**/*.ts`, com `ignores` listando os quatro arquivos
+      pelo caminho exato (o embrulho + as três exceções) e, **também**, `src/core/**/*.ts` — essa
+      última exclusão não é sobra, é necessária: `core/` já não pode importar NENHUM `node:*` (bloco
+      já existente), e como o flat config do ESLint resolve regras por "o último config que casa o
+      arquivo vence" (sem merge), um bloco novo cujo `files` é superset de `src/core/**/*.ts` e que
+      declarasse a MESMA chave de regra (`no-restricted-imports`) SEM excluir `core/` teria
+      silenciosamente SUBSTITUÍDO a proibição ampla por uma que só bane `spawn` — testado na prática
+      (Q-062 item 1): sem a exclusão, o teste de guarda já existente "rejects node:* imported in
+      src/core/" fica vermelho. Com a exclusão, os dois blocos coexistem sem conflito, e confirmei
+      manualmente rodando eslint contra um fixture `node:fs` em `src/core/` (continua rejeitado) e
+      contra um `spawn` em `src/adapters/generation/` (rejeitado, mensagem cita `spawnHidden`/D-038).
+
+      **Onde o embrulho mora, conferido contra a matriz antes de escrever (cuidado (e)).**
+      `adapters/process/` — os três chamadores que precisam dele (`adapters/generation`,
+      `adapters/git`, `adapters/notification`) são adapters diferentes importando de outro adapter.
+      A tabela de `docs/ARQUITETURA.md` marca a diagonal `adapters` → `adapters` como "—" (fora dos
+      20 pares ordenados, não um dos proibidos) e `.dependency-cruiser.cjs` não tem regra
+      `adapters-does-not-import-adapters` — só `adapters-does-not-import-application-cli-or-scheduler`.
+      Confirmado contra o portão real, não só a leitura da tabela: `depcruise src` aprovou os seis
+      imports novos sem violação (151 módulos/452 dependências). Detalhe completo em Q-062 item 1.
+
+      **Testes.** `tests/integration/guards/eslint-restrictions.test.ts` ganhou um describe novo
+      com seis casos (rejeita `spawn` comum e com alias — `importNames` casa o nome original
+      exportado, não o alias local; aprova `spawnHidden` importado em outro lugar; aprova os quatro
+      arquivos reais da exceção, apontando eslint para o CAMINHO REAL de cada um, porque a exclusão
+      é por arquivo exato, não por diretório — uma fixture em `_guard-eslint/` nunca poderia provar
+      a isenção). Nenhum teste de comportamento novo nos seis call sites: continuam cobertos pelos
+      MESMOS testes de integração contra processo real de antes (Q-059 item 1), rodados antes e
+      depois da troca sem alteração de asserção. Detalhe em `docs/TESTES.md`, entrada S4-T9.
+
+      **MEDIDO PELO AGENTE.** `npm run verificar` verde (`format:check`, `tsc --noEmit`, `lint`,
+      `dependencias` — 151 módulos/452 dependências sem violação —, `build`, `cobertura`): 133
+      arquivos de teste, 1429 passaram + 3 pulados (1432). Cobertura geral 97,04/92,77/98,19/97,28
+      (statements/branches/funcs/lines); `core/` 100/99,08/100/100 (piso 95%); `scheduler/`
+      98,54/100/93,93/100 (piso 80%, mesmo gap de função já registrado desde a S4-T5,
+      `loop.ts#sleepUntilNextPollOrStop`, não tocado aqui); `adapters/process/` 91,66/81,57/93,18/
+      92,61 (piso 80% — os seis call sites tocados ficam dentro do rollup do diretório; nenhum
+      arquivo individual precisa bater 80% sozinho, só o diretório); `adapters/generation/`
+      96,12/93,33/100/96,06; `adapters/git/` 98,02/83,6/100/97,97; `adapters/notification/`
+      100/93,47/100/100; `adapters/storage/` 94,53/88,23/98,52/94,86; `adapters/resumption/`
+      98,36/91,3/100/98,36; `cli/` 95,28/94,01/95,45/95,71 — todos acima do piso de 80%.
+      `npm run dependencias`: 151 módulos, 452 dependências, zero violações (os seis imports
+      adapter-para-adapter novos incluídos). Guarda de lint provada na prática, três vezes: (1)
+      fixture com `spawn` de `node:child_process` em `src/adapters/generation/` → eslint reprova
+      com a mensagem citando `spawnHidden`/D-038 (exit 1); (2) fixture equivalente em
+      `src/core/` com `node:fs` → continua reprovando com a mensagem original de `core/` (exit 1,
+      prova que a nova regra não substituiu a antiga); (3) suíte de guarda automatizada
+      (`eslint-restrictions.test.ts`), 14 testes no arquivo (8 pré-existentes + 6 novos), todos
+      verdes.
+
+      **NÃO MEDIDO PELO AGENTE, e é o único ponto que o mantenedor precisa conferir à mão: que o
+      `seeya start-day` interativo continua abrindo a janela de verdade.** Nada mudou em
+      `resumption/spawn-interactive.ts` além de um comentário — continua importando `spawn`
+      diretamente de `node:child_process` com `stdio: 'inherit'`, exatamente como antes desta
+      tarefa — e os testes de integração/unidade desse arquivo continuam verdes sem alteração. Mas
+      "a janela ainda abre" é, pela própria natureza do defeito que a S4-T6 documentou, algo que
+      nenhuma suíte automatizada consegue provar (o processo de teste sempre tem console próprio).
+      A S4-T6 já teve esse ponto confirmado à mão pelo mantenedor uma vez; esta tarefa não muda
+      código nesse call site além do comentário, então o risco de regressão é baixo, mas o pedido
+      do despacho foi explícito nesse ponto e eu não tenho como verificar sozinho.
+
+      **Cobertura e portão, medidos separadamente nas duas máquinas** (`npm run verificar` no
+      Windows, `npm run verificar:linux` no container `node:22-bookworm`, ambos em segundo plano
+      por passarem de 120s, código de saída lido do arquivo de saída dedicado — mesma disciplina
+      da S4-T5/S4-T6/S4-T7). Linux (mesmo commit `5a5381d`): `npm run verificar:linux` verde de
+      ponta a ponta (exit 0) — `format:check`, `tsc --noEmit`, `lint`, `dependencias`, `build`,
+      `cobertura`, dentro do container. 133 arquivos de teste, 1429 passaram + 3 pulados (1432) —
+      idêntico ao Windows. Cobertura geral 96,99/92,84/98/97,19 (statements/branches/funcs/lines,
+      levemente diferente do Windows por linha específica, mesma faixa de diferença que a S4-T6/
+      S4-T7 já registraram entre as duas máquinas); `core/` 100/99,08/100/100 (piso 95%,
+      idêntico); `scheduler/` 98,54/100/93,93/100 (piso 80%, idêntico); `adapters/process/`
+      89,81/81,66/93,1/90,47 (piso 80%; `spawn.ts`, o embrulho novo, 100/100/100/100 sozinho);
+      `adapters/git/` 98,02/83,6/100/97,97; `adapters/notification/` 100/93,47/100/100;
+      `adapters/storage/` 93,35/87,16/95,58/93,67; `adapters/resumption/` 98,36/91,3/100/98,36;
+      `cli/` 95,47/94,35/95,45/95,9 — todos acima do piso de 80%. `dependencias`: mesmo resultado
+      do Windows, zero violações. Suíte de guarda (`eslint-restrictions.test.ts`, incluindo os
+      seis testes novos de D-038) verde no container.
 
 ## Sprint 5 — Entregar
 
