@@ -241,9 +241,10 @@ depende dele.
 - **Sincronizar tem um momento certo:** puxar antes do `open` e publicar depois do `end-day`.
   Conflito entre dois dispositivos é problema do git, e o seeya mostra o conflito, sem resolver
   por conta própria (D-039).
-- **Isso mexe na D-037.** A D-037 diz que o seeya enxerga as sessões do mundo onde foi instalado,
-  e continua valendo para as sessões. Mas o **projeto** passaria a atravessar mundos (Windows,
-  WSL, outra máquina). A D-037 precisa ser revista quando a v2 for especificada.
+- **A D-037 continua intacta** (esclarecido pelo mantenedor em 2026-09-11). Quem atravessa
+  dispositivos e sistemas é o **repositório do projeto**, que é só dado. O seeya é a instalação de
+  cada máquina, segue o sistema dela e trabalha sobre o clone local. Nenhum seeya enxerga dois
+  sistemas: em cada mundo há um seeya, e todos leem o mesmo projeto.
 - **Continuar pelo celular sem o computador ligado** dependeria de uma sessão na nuvem abrir o
   repositório do projeto. Isso só funciona se o remoto for acessível por ela, o que volta ao
   primeiro cuidado.
