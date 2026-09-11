@@ -27,9 +27,11 @@ mantenedor. O rumo da v2 está em [`docs/V2-RUMO.md`](docs/V2-RUMO.md) — é ru
 - Todo agente roda em **worktree isolada**, nunca no checkout compartilhado.
 - **Nunca encadeie `npm run verificar` com `git commit`/`git push`.** Rode, leia o código de saída
   separado, e só então publique. Nunca publique com portão vermelho.
-- Depois de publicar, **confira a CI** (`gh run list`). O `gh` pode estar instalado fora do PATH —
-  procure o executável antes de concluir que ele não existe. A CI roda três sistemas; a
-  verificação local cobre dois (Windows e contêiner Linux); macOS só aparece depois do push.
+- Depois de publicar, **confira a CI** (`gh run list`), inclusive em push só de documentação — mas
+  **em segundo plano**: a conversa com o mantenedor não espera o job terminar, salvo quando a
+  resposta depende do resultado. O `gh` pode estar instalado fora do PATH — procure o executável
+  antes de concluir que ele não existe. A CI roda três sistemas; a verificação local cobre dois
+  (Windows e contêiner Linux); macOS só aparece depois do push.
 - `git add` por caminho explícito, nunca `-A`.
 - **Agentes não recebem notificação dos próprios comandos.** O despacho precisa mandar commitar
   cedo e nunca ficar esperando — isso já custou o trabalho inteiro de um agente.
