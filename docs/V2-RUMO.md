@@ -221,6 +221,53 @@ entram no `seeya.json`.
 - **O nome já é `seeya`.** O nome longo fica para o repositório. Renomear quebra o pacote, a URL e
   as instalações existentes, então a hora certa é a fronteira de versão.
 
+## O detector de lacunas — desenho (2026-09-11)
+
+Em uma frase: compara **o que aconteceu** com **o que foi registrado** e lista a diferença. Nunca
+corrige nada sozinho (D-039): aponta onde o registro falta ou mente, e pode rascunhar a entrada
+para a pessoa aceitar.
+
+**As duas fontes.** A evidência: git dos repositórios associados (commits, arquivos sujos,
+branches), transcript recente (arquivos tocados, o que foi discutido), tracker, e o próprio
+`~/.seeya`. Os registros: estado atual, decisões, plano. A v1 já extrai quase toda a primeira
+metade (`commitsToday`, `dirty`, `touchedFiles`, `lastPrompts`).
+
+**Dois tipos de lacuna:**
+
+- **Omissão:** aconteceu e não foi registrado. Doze commits no repositório da API desde o último
+  checkpoint e o estado atual não mudou; o transcript discute "X em vez de Y" e não apareceu
+  decisão nova.
+- **Contradição:** o documento afirma o que a evidência refuta. "CI verde" e a última execução
+  falhou; "próximo passo: rodar o spike" e o resultado do spike já existe. É o caso da D-025, e
+  foi o que o spike K achou no estado escrito pelo PO.
+
+**Três camadas, da mais barata para a mais cara** (fato é barato e contínuo; entendimento é caro e
+por evento):
+
+1. **Estrutural, determinística, sem modelo.** O checkpoint do projeto é um commit no repositório
+   dele. Atividade nos repositórios associados depois dessa data sem mudança nos documentos é
+   lacuna candidata: um `git log --since` contra um `git diff`. Pode rodar a cada ciclo do daemon.
+2. **Afirmações verificáveis.** Os quatro erros que o spike K achou eram **todos conferíveis por
+   máquina**: estado da CI, dia do daemon, data do arquivo, status de uma questão. Em vez de o
+   modelo ler prosa e adivinhar o que ela afirma, o estado atual declara suas afirmações em forma
+   checável (por exemplo, um cabeçalho com `main: <sha>`, `ci: green @ <sha>`,
+   `last_capture: <dia>`), e a verificação vira comparação determinística com `git rev-parse`,
+   com a CI e com o `~/.seeya`. Foi o que a sessão limpa fez à mão. **É a primeira camada a
+   construir:** a mais barata e a que pegou os erros reais.
+3. **Semântica, com modelo, só por evento.** No `end-day`, o modelo recebe apenas o delta desde o
+   checkpoint (diff dos documentos, log do git, trechos novos do transcript) e responde uma
+   pergunta: o que aconteceu que não está nos documentos, e o que os documentos afirmam que a
+   evidência contradiz. O custo é limitado pelo delta, não pelo tamanho do projeto.
+
+**A saída** é uma seção do encerramento: evidência, o que falta ou contradiz, e onde deveria ser
+registrado.
+
+**Risco conhecido: falso positivo.** Muita atividade não precisa de registro (exploração que não
+deu em nada). As lacunas são sugestões ordenadas pelo peso da evidência, e precisa existir um jeito
+barato de dizer "isto não precisa de registro" sem que ele volte a apontar no dia seguinte.
+
+**O K2 testa isso à mão:** estado envelhecido, e ver se a sessão detecta as contradições.
+
 ## Continuidade entre dispositivos (ideia do mantenedor, 2026-09-10)
 
 **Origem:** o mantenedor acompanhava a sessão do PO pelo celular. A conexão caiu, e ao reconectar
@@ -248,6 +295,38 @@ depende dele.
 - **Continuar pelo celular sem o computador ligado** dependeria de uma sessão na nuvem abrir o
   repositório do projeto. Isso só funciona se o remoto for acessível por ela, o que volta ao
   primeiro cuidado.
+
+**O transcript é da máquina; o resto não** (levantado pelo mantenedor em 2026-09-11). Começar o
+dia no computador e fechar no notebook deixa o notebook com git e tracker, que viajam pelo remoto,
+mas sem o transcript do computador. Misturar os dois checkpoints faria o notebook achar que "delta
+desde o checkpoint" cobre tudo.
+
+- **Dois checkpoints.** O do projeto (o commit) é global. O cursor do transcript é local: cada
+  seeya guarda até onde leu os transcripts da própria máquina.
+- **Quem tem o transcript o converte em fato.** Ao sair de uma máquina, o seeya dela faz um
+  `checkpoint` leve, sem modelo: só fatos (arquivos tocados, commits, últimos prompts), gravados no
+  `journal/` do projeto e publicados. É o "até daqui a pouco" servindo de sincronização. O
+  transcript nunca precisa atravessar.
+- **Visão parcial se declara parcial** (D-025 aplicada ao próprio detector). Sem checkpoint, o
+  projeto registra que a máquina X teve sessões ativas até tal hora e nada consolidado depois; o
+  encerramento no notebook diz "há trabalho no computador X ainda não consolidado". A lacuna se
+  fecha sozinha quando o daemon daquela máquina rodar de novo.
+- **O que reduz o problema:** na v2 o transcript é complementar. O que a sessão registrou nos
+  documentos e commitou já viajou pelo caminho normal; o transcript só importa para o que não foi
+  registrado, e isso é detectado onde ele vive.
+- Fatos derivados de transcript no repositório do projeto reforçam o cuidado do remoto: conteúdo
+  limitado a fatos, com teto de tamanho.
+- O cenário multi-máquina fica **depois** do passo 5 do recorte, mas a regra "declare quando a
+  visão é parcial" entra desde a primeira versão, para o caso de duas máquinas degradar de forma
+  honesta em vez de errada.
+
+**Quem configura o remoto** (decidido como direção pelo mantenedor em 2026-09-11): **o seeya
+oferece a opção**, porque toda a sincronização depende dela e deixar para a pessoa fazer à mão é
+deixar a funcionalidade principal sem chão. Mas a oferta vem com aviso claro, no momento da
+escolha, de que **um remoto público expõe o contexto de trabalho** do projeto — decisões,
+estado, fatos derivados de transcript. O seeya nunca escolhe o provedor nem cria o repositório
+remoto; só aponta para o que a pessoa indicou, e recusa silêncio: sem remoto configurado, o
+`checkpoint` diz que não sincronizou, em vez de parecer que sincronizou.
 
 ## Relação com o Sprint 5
 
