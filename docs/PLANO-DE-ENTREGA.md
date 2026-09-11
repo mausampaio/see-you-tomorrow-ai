@@ -1068,7 +1068,16 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
 ## Sprint 4 — Automatizar
 
-- [~] **S4-T00 — Medir se a captura pega carona no cache.** Aprovada pelo mantenedor em
+**Estado do sprint, corrigido em 2026-09-08.** Todas as tarefas abaixo marcadas `[x]` foram
+revisadas, mescladas e publicadas pelo PO à medida que voltaram — mas o plano ficou com `[~]` em
+27 delas, porque a revisão mesclava e esquecia de marcar. Ninguém lendo este arquivo saberia
+que o sprint estava fechado no código. É o risco que a `docs/V2-RUMO.md` descreve (documento
+desatualizado afirma o falso com confiança), observado aqui antes de ser teoria. **Exceção:**
+a S4-T0i (idioma do conteúdo gerado, D-033) não foi feita. **O aceite do sprint** ("um dia
+inteiro de uso real sem intervenção") depende de declaração do mantenedor — o daemon rodou de
+verdade em 06, 07 e 08/09.
+
+- [x] **S4-T00 — Medir se a captura pega carona no cache.** Aprovada pelo mantenedor em
       2026-08-30 ao fechar a Q-032: "acho importante saber disso desde já". **Vem antes da
       S4-T0 e da S4-T1** porque é a resposta que decide a forma do daemon.
       *O que medir, e só isto por enquanto:* o custo de uma captura profunda **logo depois** de
@@ -1088,7 +1097,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       "gerar por dentro". Qualquer desenho que saia daqui precisa mostrar que não gasta o
       contexto da sessão viva nem interrompe o turno dela.
 
-- [~] **S4-T00b — Qual dos três flags quebra a identidade de prefixo?** Aprovada pelo mantenedor
+- [x] **S4-T00b — Qual dos três flags quebra a identidade de prefixo?** Aprovada pelo mantenedor
       em 2026-08-31, saída do Spike J. **Pode dissolver a Q-034 em vez de forçar a escolha.**
       *O que o Spike J não isolou:* ele comparou **os três flags juntos** (`--tools ""`,
       `--system-prompt` próprio, `--json-schema`) contra **nenhum deles**. A Q-034 só é um dilema
@@ -1117,7 +1126,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       (Q-035, nova, aberta). **A Q-034 sobrevive** como escolha real entre barato e estruturado —
       não é um dilema falso.
 
-- [~] **S4-T00c — O modo enxuto para de jogar fora o texto do assistente.** Saída da reavaliação
+- [x] **S4-T00c — O modo enxuto para de jogar fora o texto do assistente.** Saída da reavaliação
       da **D-011** sob a **D-031**, em 2026-08-31. **É o conserto do defeito que o primeiro teste
       real expôs.**
       *O defeito:* `buildLeanPrompt` manda ao modelo projeto, `cwd`, última atividade, **os dez
@@ -1140,7 +1149,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* uma sessão onde o assistente diz o que fez e o usuário nunca repete produz
       handoff que registra o que foi feito — o caso exato que falhou no teste real.
 
-- [~] **S4-T00d — A falha de geração precisa dizer o que o `claude` respondeu.** Achada pelo
+- [x] **S4-T00d — A falha de geração precisa dizer o que o `claude` respondeu.** Achada pelo
       mantenedor em 2026-08-31, testando à mão a captura nova da S4-T00c. **Faça antes do daemon:**
       ele vai chamar a captura em laço, e uma falha cega repetida N vezes é pior que uma.
 
@@ -1197,7 +1206,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       consertado (o `timeout` de `spawn-claude.ts` descarta o mesmo tipo de evidência, só que no
       caminho de timeout) registrados na Q-039.
 
-- [~] **S4-T00e — Captura que falhou não pode bloquear a retentativa do dia.** Achada pelo
+- [x] **S4-T00e — Captura que falhou não pode bloquear a retentativa do dia.** Achada pelo
       mantenedor em 2026-08-31, testando à mão. **Antes do daemon**, que vai chamar a captura em
       laço e multiplicar o efeito.
 
@@ -1246,7 +1255,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       de assinatura (D-026) não mudou. Onde o limite de retentativas do daemon (S4-T3) deveria
       encaixar, registrado sem implementar, em Q-040.
 
-- [~] **S4-T0b — Implementar a D-031: capturar o que está vivo, listar o que foi fechado.**
+- [x] **S4-T0b — Implementar a D-031: capturar o que está vivo, listar o que foi fechado.**
       A **D-031** foi decidida em 2026-08-30 e **nunca implementada** — o código continua
       capturando sessão fechada, que é exatamente o que ela tira de escopo. **Antes do daemon
       (S4-T3)**, para ele nascer laçando o escopo certo em vez de ser corrigido depois.
@@ -1302,7 +1311,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       (`core/early-warnings.ts`) não foi tocado e continua funcionando — ele opera sobre a
       descoberta completa, de fora do corte de escopo. Sete escolhas registradas em **Q-041**.
 
-- [~] **S4-T0c — O artefato do dia precisa dizer quando foi um recorte.** Saída da Q-041,
+- [x] **S4-T0c — O artefato do dia precisa dizer quando foi um recorte.** Saída da Q-041,
       levantada pelo mantenedor em 2026-09-01 a partir do teste à mão. **Antes do daemon.**
 
       **O defeito.** `core/briefing.ts` não tem noção de ter sido uma execução filtrada. Um
@@ -1361,7 +1370,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       houver ao menos uma), sem alarmar sessões ordinariamente sem título. Seis escolhas
       registradas em **Q-042**.
 
-- [~] **S4-T0d — A nota de recorte precisa trazer o número que já está em mãos.** Emenda pequena
+- [x] **S4-T0d — A nota de recorte precisa trazer o número que já está em mãos.** Emenda pequena
       à S4-T0c, apontada pelo mantenedor em 2026-09-01. **Erro meu, não do agente que a
       implementou** — ele obedeceu uma premissa que eu escrevi errada na Q-041.
 
@@ -1420,7 +1429,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       2 — a diferença é exatamente a sessão fechada, que nunca foi candidata. Escolhas registradas
       em **Q-043**.
 
-- [~] **S4-T0e — O prompt de captura precisa proibir identificador inventado.** Achado pelo
+- [x] **S4-T0e — O prompt de captura precisa proibir identificador inventado.** Achado pelo
       mantenedor em 2026-09-02, num `end-day` real sobre a própria sessão de trabalho. **Trataria
       como mais urgente que o daemon:** este defeito corrompe o artefato **em silêncio**.
 
@@ -1504,7 +1513,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       de falso positivo em paráfrase legítima. Validação real (observar capturas de verdade) ainda
       **não aconteceu** — registrado em **Q-045**, em aberto para o mantenedor decidir quando.
 
-- [~] **S4-T0 — A evidência não pode ficar presa ao `cwd` de lançamento.** Aprovada pelo
+- [x] **S4-T0 — A evidência não pode ficar presa ao `cwd` de lançamento.** Aprovada pelo
       mantenedor em 2026-08-30. **O problema, observado no primeiro teste real:** a sessão subiu
       de `C:\Users\<usuario>` e o trabalho aconteceu numa pasta criada durante a conversa. O
       `GitReader` olhou para o diretório pessoal — que não é repositório — e não achou nada, então
@@ -1619,7 +1628,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       `GitEvidenceAcrossRepos`, `filesOutsideRepository`, `reposNotVisited`) e o valor de
       `MAX_GIT_ROOTS_TO_VISIT`, para confirmação do mantenedor.
 
-- [~] **S4-T0f — Teste de unidade que spawna processo real está na faixa errada.** Achado em
+- [x] **S4-T0f — Teste de unidade que spawna processo real está na faixa errada.** Achado em
       2026-09-04, investigando um vermelho no CI de Windows.
 
       **O que falhou.** `tests/unit/adapters/process/proc-start.test.ts`, caso
@@ -1658,7 +1667,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* o caso `win32` não spawna processo nenhum, e a asserção sobre a rotulagem
       continua valendo.
 
-- [~] **S4-T0g — O CI de Windows *pareceu* quadruplicar com a S4-T0 — e não foi isso.** Achado na mesma
+- [x] **S4-T0g — O CI de Windows *pareceu* quadruplicar com a S4-T0 — e não foi isso.** Achado na mesma
 
       > **CORREÇÃO (2026-09-05, medido — a premissa desta tarefa era minha e estava errada).**
       > Eu li a **duração total do job** e atribuí ao código. Medindo **por passo**, em 7
@@ -1717,7 +1726,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Aceite:* o job de Windows volta para a ordem de grandeza anterior **sem** perder cobertura
       real de git — e o relatório diz onde estava o tempo, não só que melhorou.
 
-- [~] **S4-T0h — A saída do `end-day` mostra a prosa e esconde a lista.** Achado pelo mantenedor
+- [x] **S4-T0h — A saída do `end-day` mostra a prosa e esconde a lista.** Achado pelo mantenedor
       em 2026-09-05, com captura de tela de uma execução real. **É a S3-T6 outra vez, no outro
       comando** — aquele conserto nunca atravessou para cá.
 
@@ -1811,13 +1820,13 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       Detalhe completo, tabelas e as três medições (local, por etapa de CI, por arquivo no runner
       real) em `docs/QUESTOES.md` Q-048.
 
-- [~] **S4-T1 — `adapters/notification`** conforme o Spike B, com a cadeia de fallback e o
+- [x] **S4-T1 — `adapters/notification`** conforme o Spike B, com a cadeia de fallback e o
       contrato mínimo **sem ações**. Validação manual do `activationType="protocol"` com esquema
       `seeya://` no Windows; se não se provar, o produto segue sem ações clicáveis e nada quebra.
       **Q-007:** quando `canTerminate: true` estiver ligado e a terminação não acontecer (depois da
       S1-T2b: quando não há console para anexar), o aviso diz **qual sessão não foi encerrada e por
       captura — o handoff foi gravado; só a terminação não ocorreu.
-- [~] **S4-T2 — `core/schedule`.** Puro: dado config + estado + agora, o que deve acontecer.
+- [x] **S4-T2 — `core/schedule`.** Puro: dado config + estado + agora, o que deve acontecer.
       É aqui que moram os testes de horário de verão e de máquina suspensa.
       **Implementado em 2026-08-31:** `src/core/schedule.ts` — `resolveEndOfDayInstant` (a
       conversão `"HH:MM"` + dia + fuso, D-019, delegando DST inteiramente à plataforma: hora
@@ -1840,7 +1849,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       reset de virada de dia vivendo no `core/` em vez de esperar a chave de disco de S4-T3/S4-T4).
       29 testes em `tests/unit/core/schedule.test.ts`, incluindo os dois dias de virada de horário
       de verão com `TZ` forçado e restaurado. `npm run verificar` e `npm run verificar:linux` verdes.
-- [~] **S4-T3 — Daemon.** Loop, lockfile de instância única, recuperação de disparo atrasado.
+- [x] **S4-T3 — Daemon.** Loop, lockfile de instância única, recuperação de disparo atrasado.
       **Sobe desanexado do shell que o chamou** (D-005, emendado): `detached` + `stdio` ignorado
       + `unref()`. Não é comando em segundo plano — sobrevive a fechar a janela e a deslogar.
       No Windows isso significa **console nenhum**, e é o que torna o daemon inalcançável pelo
@@ -1964,7 +1973,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       lugar nenhum) e a legibilidade de `captureModel`/`budgetPerSessionUsd` ficarem presos ao
       valor do início do daemon (ao contrário de `relevanceHours`, que é relido a cada ciclo)
       estão registrados na Q-049 para o mantenedor decidir, não decididos aqui.
-- [~] **S4-T3e — O `fake-claude.mjs` vaza processo, e isso envenena toda medição de tempo.**
+- [x] **S4-T3e — O `fake-claude.mjs` vaza processo, e isso envenena toda medição de tempo.**
       Achado em 2026-09-05, investigando um vermelho do portão que não era do código.
 
       **O sintoma.** Havia **365 processos node** vivos na máquina do mantenedor, acumulados por
@@ -2029,7 +2038,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       para **0** dentro dos 6 segundos seguintes, medido por polling a cada 750ms — nunca mais
       cresce. Detalhes completos, incluindo os números passo a passo, em Q-052.
 
-- [~] **S4-T3b — O daemon precisa deixar rastro quando falha, e o lock precisa desempatar PID.**
+- [x] **S4-T3b — O daemon precisa deixar rastro quando falha, e o lock precisa desempatar PID.**
       Saída da **Q-049**, respondida em 2026-09-05. **Antes da S4-T5**, que vai querer ler as duas
       coisas.
 
@@ -2127,7 +2136,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       verificar:linux` verdes (medido nesta máquina, o segundo via Docker Desktop, container Linux
       real).
 
-- [~] **S4-T3c — Persistir o `assistantMessages` no handoff.** Decisão do mantenedor ao fechar a
+- [x] **S4-T3c — Persistir o `assistantMessages` no handoff.** Decisão do mantenedor ao fechar a
       **Q-036**, em 2026-09-05.
 
       **Por que muda.** O `understanding` é **derivado** do texto do assistente. Sem ele em disco,
@@ -2211,7 +2220,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       Docker Desktop). Cobertura: `core/` 100%, `adapters/storage` 97,92% statements/90,29%
       branches/98,03% funções/98,42% linhas — acima do piso de 80% do diretório.
 
-- [~] **S4-T3d — Quatro números para a config (D-035) e o agendamento vencido (D-036).**
+- [x] **S4-T3d — Quatro números para a config (D-035) e o agendamento vencido (D-036).**
       Saída da varredura de questões com o mantenedor, em 2026-09-05.
 
       **Parte 1 — D-035.** Quatro números viram chave de `config.json`, **com o valor atual como
@@ -2333,7 +2342,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       `npm run verificar:linux` verdes, códigos de saída lidos separadamente do comando, nunca
       encadeados com commit.
 
-- [~] **S4-T4 — `seeya snooze`, `seeya skip-today`, `seeya config`.**
+- [x] **S4-T4 — `seeya snooze`, `seeya skip-today`, `seeya config`.**
       `docs/ESPECIFICACAO.md` § "seeya snooze..."/"seeya config" (D-006, D-027, D-035).
 
       **`snooze`/`skip-today` construíram zero regra nova** — tudo já existia em `core/schedule.ts`
@@ -2391,7 +2400,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       arquivos novos (`snooze-command.ts`, `config-command.ts`) e o `config-schema.ts` estendido
       todos acima de 80%. `npm run verificar` e `npm run verificar:linux` verdes, códigos de saída
       lidos separadamente do comando, nunca encadeados com commit.
-- [~] **S4-T4b — Escrita concorrente não pode virar stack trace no `snooze`.** Saída da medição
+- [x] **S4-T4b — Escrita concorrente não pode virar stack trace no `snooze`.** Saída da medição
       da S4-T4, em 2026-09-06.
 
       **Medido**, 300 iterações concorrentes de leitura/escrita, 3 execuções cada:
@@ -2468,7 +2477,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       `src/**` fora de `adapters/clock/`, sem exceção por intenção), e por que a solução escolhida
       foi `setImmediate` sem `Clock` em vez de expandir a assinatura de `StorageAdapter`.
 
-- [~] **S4-T5 — `seeya daemon --stop/--status`.** Fecha o Sprint 4.
+- [x] **S4-T5 — `seeya daemon --stop/--status`.** Fecha o Sprint 4.
       *Aceite do sprint:* e2e 6, 7 e 8 passam. Um dia inteiro de uso real sem intervenção.
 
       **Implementado em 2026-09-06.** `src/cli/daemon-command.ts` ganhou `runDaemonStatus` e
@@ -2737,7 +2746,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       às 09:06, com encerramento às 09:30, o toast disse `closing in 23 min` — no dia anterior, na
       mesma situação, teria dito `30 min`.
 
-- [~] **S4-T7 — Notificação não pode virar ruído: histerese por tipo, e alertas precoces num
+- [x] **S4-T7 — Notificação não pode virar ruído: histerese por tipo, e alertas precoces num
       aviso só.** Saída da **Q-059 item 4**, refinada pelo mantenedor em 2026-09-07.
 
       **Parte 1 — histerese por tipo de notificação.** Medido no uso real: o aviso prévio dispara
@@ -2853,7 +2862,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       `AGENTS.md` (`leadTimeHysteresisMinutes`, `lastLeadTimeWarningNoticeAt`,
       `firedLeadTimesEffectiveEndOfDay`).
 
-- [~] **S4-T8 — A leva pequena: três mensagens que falam do mecanismo em vez de falar com a
+- [x] **S4-T8 — A leva pequena: três mensagens que falam do mecanismo em vez de falar com a
       pessoa.** Todas saíram de uso real nos dias 06 e 07/09/2026, nenhuma de teste. Nenhuma muda
       comportamento — só o que o programa diz. A S4-T7 já aterrissou, então
       `config-schema.ts` está livre; roda em paralelo com a **S4-T9**, que não toca nenhum arquivo
@@ -2963,7 +2972,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       dois). Os dois códigos de saída lidos separadamente do `tail`, nunca encadeados com o commit.
       Detalhes completos, incluindo os cuidados (a)-(f) um a um, em `docs/QUESTOES.md` **Q-061**.
 
-- [~] **S4-T9 — Um `spawn` só, invisível por padrão, com a exceção declarada (D-038).** Fecha a
+- [x] **S4-T9 — Um `spawn` só, invisível por padrão, com a exceção declarada (D-038).** Fecha a
       **Q-059 item 3**, decidida pelo mantenedor em 2026-09-07. Roda em paralelo com a **S4-T8** — a
       sequência que este plano afirmava antes estava errada: conferido arquivo a arquivo, as duas
       não se cruzam.
@@ -3090,65 +3099,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       do Windows, zero violações. Suíte de guarda (`eslint-restrictions.test.ts`, incluindo os
       seis testes novos de D-038) verde no container.
 
-## Sprint 5 — Entregar
-
-- [ ] **S5-T1 — Autostart do daemon** por SO (Task Scheduler, launchd, systemd user).
-- [ ] **S5-T2 — `seeya init`**: config guiada na primeira execução.
-- [ ] **S5-T3 — README** e empacotamento npm.
-- [ ] **S5-T4 — Bateria manual nos 3 SOs** e correção do que aparecer.
-
----
-
-- [ ] **S5-T5 — Atualizar as ações do CI, que rodam num runtime obsoleto.** Não é a nossa versão
-      do Node: o `ci.yml` pede `node-version: 22` para o projeto e isso está certo (D-008). O que
-      está velho é o **runtime das ações**: `actions/checkout@v4` e `actions/setup-node@v4` são
-      construídas para Node 20, e o GitHub já as força a rodar em Node 24, avisando em toda
-      execução.
-      Isso é **relógio correndo, não preferência**: hoje é aviso, e vira falha quando o GitHub
-      parar de forçar. A troca é de duas linhas; o custo de deixar passar é o CI quebrar num dia
-      em que ninguém mexeu em nada — e aí alguém vai procurar a causa no código.
-      *Aceite:* CI verde nos três sistemas **sem o aviso de runtime obsoleto** na saída.
-- [ ] **S5-T6 — Portão de segurança antes de publicar: dependências e SAST.** Pedido do mantenedor
-      em 2026-08-30, com a ressalva de que não é para agora — entra antes da publicação, não
-      durante a construção.
-      O motivo de existir: este projeto vai para npm como código aberto, **executa processos**,
-      **lê arquivos do usuário** e tem uma exceção documentada para **apagar** dentro do
-      `~/.claude/`. É superfície suficiente para merecer análise automática antes de alguém
-      instalar isto na própria máquina.
-      - **dependências:** `npm audit` no portão. A árvore é pequena hoje, então é barato — e o
-        momento de estabelecer o hábito é enquanto é barato
-      - **SAST:** o CodeQL é o encaixe natural (nativo do GitHub, gratuito em repositório
-        público, entende TypeScript). Vale apontá-lo em especial para o que o projeto faz de
-        arriscado: montagem de argumento de `spawn`, caminho de arquivo vindo de fora, e a
-        exclusão do D-012
-      - **segredo:** já existe o `scripts/verificar-termos-locais.mjs` no pre-commit, mas ele só
-        protege quem commita **nesta** máquina. Varredura no CI cobre quem clonar e contribuir
-      **Uma decisão a tomar quando chegar:** o portão de segurança **reprova** o CI ou só reporta?
-      Reprovar por vulnerabilidade transitiva que não tem correção disponível trava o projeto por
-      algo fora do alcance dele. Reportar e ninguém olhar é o mesmo que não ter. Não decida isso
-      agora — decida com o primeiro achado real na mão.
-
-- [ ] **S5-T7 — Avaliar um `--sessions` que aceite lista.** Ideia do mantenedor em 2026-08-30,
-      ao fechar a Q-030, **com a ressalva dele de que não é para agora** — registrada aqui para
-      não se perder, não como tarefa aceita.
-      *Contexto:* a S3-T5 fez `--session` **recusar** valor ambíguo em vez de resolver várias
-      sessões de uma vez. Isso não removeu capacidade nenhuma: capturar todas as sessões de um
-      `cwd` nunca foi objetivo, era efeito colateral de comparar caminho por igualdade de string
-      numa flag cuja ajuda diz "limit to a single session".
-      *Se um dia entrar:* uma flag **separada e explícita** para várias, nunca reinterpretando a
-      singular. O `--session` recusando ambiguidade é o que impede escolha errada no comando que
-      também pode encerrar processo (D-002); relaxar aquilo para acomodar o caso plural traria o
-      problema de volta pela porta dos fundos.
-      *Critério para existir:* necessidade real de uso, não simetria de API. Se ninguém sentir
-      falta, esta entrada some sem custo — que é o melhor destino possível para ela.
-- [ ] **S5-T8 (candidato, NÃO agendado) — Briefing agrupado por projeto.** Direção aprovada pelo
-      mantenedor em 2026-09-07 (**D-039**), sem tarefa disparada e sem prazo. O `summary.md` hoje é
-      lista plana de sessões; a D-032 já descobre os repositórios de cada sessão pelos arquivos
-      tocados, então o agrupamento sai de evidência que já existe. Ataca a metade **de leitura** do
-      "estou perdido entre vinte sessões" — a metade de **decidir** o que fazer com cada uma é a
-      tela do v2. Interessa agora porque é a base que essa tela vai consumir.
-
-- [~] **S4-T10 — O portão fica vermelho sem defeito nenhum: prazo fixo contra operação de custo
+- [x] **S4-T10 — O portão fica vermelho sem defeito nenhum: prazo fixo contra operação de custo
       variável.** Bloqueia a publicação da **S4-T9**, que está mesclada e **não publicada** por
       causa disto.
 
@@ -3257,6 +3208,64 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       padrão do mesmo projeto vitest) — para o próximo vermelho sem defeito achar isto sem repetir
       a investigação. **Q-063** registra a divergência da lista de arquivos (o quinto arquivo) e o
       raciocínio completo dos cuidados (a)-(d).
+
+## Sprint 5 — Entregar
+
+- [ ] **S5-T1 — Autostart do daemon** por SO (Task Scheduler, launchd, systemd user).
+- [ ] **S5-T2 — `seeya init`**: config guiada na primeira execução.
+- [ ] **S5-T3 — README** e empacotamento npm.
+- [ ] **S5-T4 — Bateria manual nos 3 SOs** e correção do que aparecer.
+
+---
+
+- [ ] **S5-T5 — Atualizar as ações do CI, que rodam num runtime obsoleto.** Não é a nossa versão
+      do Node: o `ci.yml` pede `node-version: 22` para o projeto e isso está certo (D-008). O que
+      está velho é o **runtime das ações**: `actions/checkout@v4` e `actions/setup-node@v4` são
+      construídas para Node 20, e o GitHub já as força a rodar em Node 24, avisando em toda
+      execução.
+      Isso é **relógio correndo, não preferência**: hoje é aviso, e vira falha quando o GitHub
+      parar de forçar. A troca é de duas linhas; o custo de deixar passar é o CI quebrar num dia
+      em que ninguém mexeu em nada — e aí alguém vai procurar a causa no código.
+      *Aceite:* CI verde nos três sistemas **sem o aviso de runtime obsoleto** na saída.
+- [ ] **S5-T6 — Portão de segurança antes de publicar: dependências e SAST.** Pedido do mantenedor
+      em 2026-08-30, com a ressalva de que não é para agora — entra antes da publicação, não
+      durante a construção.
+      O motivo de existir: este projeto vai para npm como código aberto, **executa processos**,
+      **lê arquivos do usuário** e tem uma exceção documentada para **apagar** dentro do
+      `~/.claude/`. É superfície suficiente para merecer análise automática antes de alguém
+      instalar isto na própria máquina.
+      - **dependências:** `npm audit` no portão. A árvore é pequena hoje, então é barato — e o
+        momento de estabelecer o hábito é enquanto é barato
+      - **SAST:** o CodeQL é o encaixe natural (nativo do GitHub, gratuito em repositório
+        público, entende TypeScript). Vale apontá-lo em especial para o que o projeto faz de
+        arriscado: montagem de argumento de `spawn`, caminho de arquivo vindo de fora, e a
+        exclusão do D-012
+      - **segredo:** já existe o `scripts/verificar-termos-locais.mjs` no pre-commit, mas ele só
+        protege quem commita **nesta** máquina. Varredura no CI cobre quem clonar e contribuir
+      **Uma decisão a tomar quando chegar:** o portão de segurança **reprova** o CI ou só reporta?
+      Reprovar por vulnerabilidade transitiva que não tem correção disponível trava o projeto por
+      algo fora do alcance dele. Reportar e ninguém olhar é o mesmo que não ter. Não decida isso
+      agora — decida com o primeiro achado real na mão.
+
+- [ ] **S5-T7 — Avaliar um `--sessions` que aceite lista.** Ideia do mantenedor em 2026-08-30,
+      ao fechar a Q-030, **com a ressalva dele de que não é para agora** — registrada aqui para
+      não se perder, não como tarefa aceita.
+      *Contexto:* a S3-T5 fez `--session` **recusar** valor ambíguo em vez de resolver várias
+      sessões de uma vez. Isso não removeu capacidade nenhuma: capturar todas as sessões de um
+      `cwd` nunca foi objetivo, era efeito colateral de comparar caminho por igualdade de string
+      numa flag cuja ajuda diz "limit to a single session".
+      *Se um dia entrar:* uma flag **separada e explícita** para várias, nunca reinterpretando a
+      singular. O `--session` recusando ambiguidade é o que impede escolha errada no comando que
+      também pode encerrar processo (D-002); relaxar aquilo para acomodar o caso plural traria o
+      problema de volta pela porta dos fundos.
+      *Critério para existir:* necessidade real de uso, não simetria de API. Se ninguém sentir
+      falta, esta entrada some sem custo — que é o melhor destino possível para ela.
+- [ ] **S5-T8 (candidato, NÃO agendado) — Briefing agrupado por projeto.** Direção aprovada pelo
+      mantenedor em 2026-09-07 (**D-039**), sem tarefa disparada e sem prazo. O `summary.md` hoje é
+      lista plana de sessões; a D-032 já descobre os repositórios de cada sessão pelos arquivos
+      tocados, então o agrupamento sai de evidência que já existe. Ataca a metade **de leitura** do
+      "estou perdido entre vinte sessões" — a metade de **decidir** o que fazer com cada uma é a
+      tela do v2. Interessa agora porque é a base que essa tela vai consumir.
 
 ## Definição de pronto (vale para toda tarefa)
 

@@ -1,5 +1,9 @@
 # Contrato de trabalho — See You Tomorrow AI
 
+> **Chegou sem contexto?** Comece pelo [`INDEX.md`](INDEX.md): ele diz qual é o seu papel e onde
+> está o estado atual. Se você recebeu uma tarefa `S#-T#` num despacho, este arquivo é o seu
+> contrato — continue lendo.
+
 Leia este arquivo inteiro antes de escrever qualquer linha. Ele vale mais que a sua intuição
 sobre o que seria melhor.
 
