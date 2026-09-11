@@ -189,7 +189,9 @@ projeto já tem.
 trabalho com 5 de 5 pendências, respeitou todas as regras de despacho e ainda achou quatro
 afirmações falsas no estado escrito à mão pelo PO, no mesmo dia. Com isso, o ajuste 1 deixa de ser
 argumento e passa a ser medição: **nem quem escreve com conhecimento total mantém o estado em
-dia**, e o que salva é conferir contra a evidência.
+dia**, e o que salva é conferir contra a evidência. (A sessão testada tinha lido o protocolo do
+spike, então que ela confira **sem ser instruída** fica provável, não medido. Por isso a v2 não
+conta com isso: o detector de lacunas é do seeya, não da boa vontade da sessão.)
 
 ### Privacidade
 
