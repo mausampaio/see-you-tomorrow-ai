@@ -1,28 +1,38 @@
 # Estado atual
 
-_Atualizado em 2026-09-08, refletindo `main` no merge da S4-T10. Se o `git log` mostrar trabalho
-posterior que não aparece aqui, **este arquivo está atrasado**: confie no git e atualize o arquivo._
+_Atualizado em 2026-09-10, depois do spike K. Se o `git log`, a CI ou o `~/.seeya` contarem algo
+diferente do que está aqui, **este arquivo está atrasado**: confie na evidência e atualize o
+arquivo. Isso já aconteceu: a primeira versão dele, escrita à mão no mesmo dia, tinha quatro
+afirmações falsas, e quem achou foi uma sessão limpa (spike K)._
 
 ## Em uma frase
 
 O código do Sprint 4 está concluído e publicado, com aceite formal pendente. O Sprint 5 (entregar)
-não começou. O mantenedor está desenhando a v2, e o próximo passo combinado é o **spike K**
-(retomada por sessão limpa).
+não começou. A v2 tem rumo registrado, e o **spike K passou**: uma sessão limpa retoma o trabalho a
+partir dos documentos.
 
 ## Onde o código está
 
-- `main` publicado, CI verde nos três sistemas (último push: merge da S4-T10).
+- `main` publicado. **A CI do push `4146faa` (só documentação) falhou no Windows**, com 14 testes
+  de integração estourando o tempo: `git/git-adapter`, `git/primitives`, `storage/atomic-write` e
+  os dois `*-concurrent-write`, além de um `EBUSY` ao apagar diretório temporário. Ubuntu e macOS
+  passaram. É a mesma classe de problema da S4-T10 (prazo fixo contra lançamento de processo), mas
+  fora dos cinco arquivos que ela serializou. **O resultado do push seguinte decide:** se passar,
+  foi instabilidade do runner; se falhar de novo, vira tarefa. Confira com `gh run list`.
 - Nada mesclado sem publicar. Todas as branches de agentes já estão mescladas em `main`; as
   worktrees antigas em `.claude/worktrees/` podem ser removidas sem perda.
 - O portão local (`npm run verificar`) está estável desde a S4-T10: cinco rodadas verdes seguidas.
 
 ## Sprint 4 — concluído no código, aceite pendente
 
-- S4-T00 a S4-T10 mescladas e publicadas. **Exceção:** a S4-T0i (idioma do conteúdo gerado,
-  D-033) não foi feita.
+- S4-T00 a S4-T10 mescladas e publicadas. **Exceção:** a S4-T0i (idioma do conteúdo gerado)
+  não foi feita. Ela **já está decidida** (D-033, confirmada em 05/09: o conteúdo gerado espelha o
+  idioma da sessão); falta só implementar uma frase no `GENERATION_SYSTEM_PROMPT`. É a candidata
+  natural a próximo despacho.
 - O aceite do sprint pede "um dia inteiro de uso real sem intervenção". O mantenedor usou o daemon
-  de verdade em 06, 07 e 08/09: a captura agendada disparou sozinha, os avisos prévios saíram e
-  nenhuma janela de console apareceu. **Falta ele declarar o sprint aceito.**
+  de verdade em 06 e 07/09: a captura agendada disparou sozinha, os avisos prévios saíram e
+  nenhuma janela de console apareceu. Em 08/09 houve só a retomada com `start-day`, sem daemon.
+  **Falta ele declarar o sprint aceito.**
 - Os itens 6 e 7 do e2e não são automatizáveis: o binário compilado não tem ponto de injeção de
   relógio. Isso está declarado, não fingido.
 
@@ -41,11 +51,13 @@ Isto se perderia se a sessão que o viveu terminasse:
    esperando notificação de um comando que eles mesmos dispararam, e um deles estava com dez
    arquivos modificados e nenhum commit. A regra já existe; o que falha é ela ser lida na hora
    certa.
-4. **Questões dos agentes ainda não triadas pelo PO:** Q-052 a Q-057 e Q-060 a Q-063, além das
-   antigas Q-045, Q-046 e Q-049. Triagem no formato combinado: o PO fecha o que é dele e sobe o
-   resto resumido, uma de cada vez.
+4. **Questões dos agentes ainda não triadas pelo PO:** Q-052, Q-053, Q-055 a Q-057 e Q-060 a
+   Q-063, além das antigas Q-045, Q-046 e Q-049 (a Q-054 já está fechada). Triagem no formato
+   combinado: o PO fecha o que é dele e sobe o resto resumido, uma de cada vez.
 5. **Sprint 5 inteiro:** S5-T1 a S5-T7, mais a S5-T8, que é candidata e não está agendada
    (briefing agrupado por projeto).
+6. **Spike K2:** repetir o spike K daqui a alguns dias **sem atualizar este arquivo**, para medir
+   se a sessão percebe que o estado envelheceu.
 
 ## Decisões recentes — por onde começar no `DECISOES.md`
 
@@ -59,8 +71,9 @@ Isto se perderia se a sessão que o viveu terminasse:
 
 ## Próximo passo
 
-Rodar o **spike K** ([`spikes/K-sessao-limpa.md`](spikes/K-sessao-limpa.md)). Depois, com o
-mantenedor: aceite do Sprint 4, triagem das questões e a ordem entre Sprint 5 e v2.
+Com o mantenedor: aceite do Sprint 4, a CI do Windows (se continuar vermelha), o despacho da
+S4-T0i, a triagem das questões e a ordem entre Sprint 5 e v2. O resultado do spike K está em
+[`spikes/K-sessao-limpa.md`](spikes/K-sessao-limpa.md).
 
 ## Ambiente do mantenedor
 

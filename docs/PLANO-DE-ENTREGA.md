@@ -1068,14 +1068,14 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
 ## Sprint 4 — Automatizar
 
-**Estado do sprint, corrigido em 2026-09-08.** Todas as tarefas abaixo marcadas `[x]` foram
+**Estado do sprint, corrigido em 2026-09-10.** Todas as tarefas abaixo marcadas `[x]` foram
 revisadas, mescladas e publicadas pelo PO à medida que voltaram — mas o plano ficou com `[~]` em
 27 delas, porque a revisão mesclava e esquecia de marcar. Ninguém lendo este arquivo saberia
 que o sprint estava fechado no código. É o risco que a `docs/V2-RUMO.md` descreve (documento
 desatualizado afirma o falso com confiança), observado aqui antes de ser teoria. **Exceção:**
 a S4-T0i (idioma do conteúdo gerado, D-033) não foi feita. **O aceite do sprint** ("um dia
 inteiro de uso real sem intervenção") depende de declaração do mantenedor — o daemon rodou de
-verdade em 06, 07 e 08/09.
+verdade em 06 e 07/09 (em 08/09 houve só a retomada com `start-day`, sem daemon).
 
 - [x] **S4-T00 — Medir se a captura pega carona no cache.** Aprovada pelo mantenedor em
       2026-08-30 ao fechar a Q-032: "acho importante saber disso desde já". **Vem antes da
@@ -1789,7 +1789,12 @@ verdade em 06, 07 e 08/09.
       Observado na mesma captura de tela: a sessão do projeto saiu **em português** e a
       `seeya-todo-test` **em inglês**, no mesmo relatório.
 
-      **Não é defeito de código — é decisão de produto que ninguém tomou.** O modelo espelha o
+      **Decidida desde 05/09: a D-033 fixa que a moldura é inglesa e o conteúdo gerado espelha o
+      idioma da sessão. Falta só implementar** — uma frase no `GENERATION_SYSTEM_PROMPT`, dentro do
+      teto de 1000 caracteres que um teste já vigia. O texto abaixo é de antes da decisão e ficou
+      desatualizado; a sessão limpa do spike K foi induzida a erro por ele (2026-09-10).
+
+      *Texto original:* **Não é defeito de código — é decisão de produto que ninguém tomou.** O modelo espelha o
       idioma da sessão capturada, e num dia com sessões mistas o `summary.md` e o terminal ficam
       bilíngues. A **D-028** fixa inglês para o que é **público** (CLI, docs), e o conteúdo
       gerado a partir da conversa do usuário nunca foi classificado.

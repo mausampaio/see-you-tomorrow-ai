@@ -1,6 +1,6 @@
 # Rumo da v2 — o projeto como unidade de continuidade
 
-_Registrado em 2026-09-08. **É rumo, não decisão:** nada aqui está travado. Cada parte vira uma
+_Registrado em 2026-09-10. **É rumo, não decisão:** nada aqui está travado. Cada parte vira uma
 decisão (D-0xx) quando for implementada, e pode mudar até lá. Os exemplos são genéricos de
 propósito — o projeto é open source, e nenhum dado real de trabalho entra neste repositório._
 
@@ -143,7 +143,7 @@ descoberta de sessões, a leitura do git, o handoff e a retomada são reaproveit
 7. detecção de sessões sem projeto e sugestão de associação;
 8. interface gráfica organizada por projeto, com botões de ação nas notificações (D-034).
 
-## Avaliação do PO (2026-09-08)
+## Avaliação do PO (2026-09-10)
 
 **A direção está certa e é melhor do que o caminho anterior.** Ela dissolve três riscos que o
 caminho de governar sessões carregava:
@@ -162,7 +162,7 @@ que não encerra o dia — o "até daqui a pouco" chega sem nenhuma mudança no 
 **A evidência mais forte a favor é este repositório.** `DECISOES.md`, `QUESTOES.md`,
 `PLANO-DE-ENTREGA.md` e `AGENTS.md` são exatamente essa estrutura, e é ela que sustenta quatro
 sprints com agentes que chegam sem contexto. **E o repositório também mostra onde a proposta
-quebra:** em 2026-09-08 os documentos somavam 10.763 linhas (só o `QUESTOES.md` tinha 5.754), um
+quebra:** em 2026-09-10 os documentos somavam 10.763 linhas (só o `QUESTOES.md` tinha 5.754), um
 volume que uma sessão limpa não lê. O `INDEX.md` e o estado atual resolvem um problema que o
 projeto já tem.
 
@@ -174,7 +174,7 @@ projeto já tem.
    o que foi registrado e apontar a diferença. Qualquer um copia o template; o detector é o
    produto. E ele precisa pegar também o documento velho, não só o que falta, porque um estado
    desatualizado **afirma o falso com confiança** (D-025).
-   **Isso foi observado aqui antes de virar teoria:** em 2026-09-08, 27 tarefas do Sprint 4
+   **Isso foi observado aqui antes de virar teoria:** em 2026-09-10, 27 tarefas do Sprint 4
    estavam mescladas e publicadas, mas continuavam marcadas como "em andamento" no plano.
 2. **A pasta do projeto é um repositório git.** O "delta desde o último checkpoint" vira um
    `git diff`, o checkpoint vira um commit, e o histórico das decisões vem de graça.
@@ -184,6 +184,12 @@ projeto já tem.
 4. **Validar antes de escrever código.** A hipótese central é que uma sessão limpa com essa
    estrutura retoma o trabalho tão bem quanto um `--resume`, e isso pode ser testado agora, sem
    código: é o [spike K](spikes/K-sessao-limpa.md).
+
+**Validado em 2026-09-10 pelo [spike K](spikes/K-sessao-limpa.md):** a sessão limpa retomou o
+trabalho com 5 de 5 pendências, respeitou todas as regras de despacho e ainda achou quatro
+afirmações falsas no estado escrito à mão pelo PO, no mesmo dia. Com isso, o ajuste 1 deixa de ser
+argumento e passa a ser medição: **nem quem escreve com conhecimento total mantém o estado em
+dia**, e o que salva é conferir contra a evidência.
 
 ### Privacidade
 
