@@ -221,6 +221,33 @@ entram no `seeya.json`.
 - **O nome já é `seeya`.** O nome longo fica para o repositório. Renomear quebra o pacote, a URL e
   as instalações existentes, então a hora certa é a fronteira de versão.
 
+## Continuidade entre dispositivos (ideia do mantenedor, 2026-09-10)
+
+**Origem:** o mantenedor acompanhava a sessão do PO pelo celular. A conexão caiu, e ao reconectar
+o histórico do período desconectado não apareceu mais no aparelho. **Nada se perdeu**, porque tudo
+o que foi decidido estava no repositório. O que faltou no celular foi só a conversa.
+
+**Por que a direção da v2 quase entrega isso de graça:** com a pasta do projeto sendo um
+repositório git (ajuste 2), continuar em outro dispositivo passa a ser clonar e abrir uma sessão
+limpa. O spike K mostrou que uma sessão limpa retoma o trabalho a partir dos arquivos. O transcript
+continua preso à máquina onde a sessão rodou, e isso deixa de importar, porque o projeto não
+depende dele.
+
+**Cuidados para quando virar funcionalidade:**
+
+- **O remoto é do usuário, e o seeya nunca escolhe onde hospedar.** A pasta do projeto guarda
+  contexto de trabalho, que pode ser sensível. O seeya sincroniza com o remoto configurado e mais
+  nada.
+- **Sincronizar tem um momento certo:** puxar antes do `open` e publicar depois do `end-day`.
+  Conflito entre dois dispositivos é problema do git, e o seeya mostra o conflito, sem resolver
+  por conta própria (D-039).
+- **Isso mexe na D-037.** A D-037 diz que o seeya enxerga as sessões do mundo onde foi instalado,
+  e continua valendo para as sessões. Mas o **projeto** passaria a atravessar mundos (Windows,
+  WSL, outra máquina). A D-037 precisa ser revista quando a v2 for especificada.
+- **Continuar pelo celular sem o computador ligado** dependeria de uma sessão na nuvem abrir o
+  repositório do projeto. Isso só funciona se o remoto for acessível por ela, o que volta ao
+  primeiro cuidado.
+
 ## Relação com o Sprint 5
 
 Nada disto invalida o Sprint 5: a v1 sai como está. O único ponto de contato é o `seeya init`
