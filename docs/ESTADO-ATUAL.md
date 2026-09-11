@@ -16,7 +16,8 @@ partir dos documentos.
 - `main` publicado. **A CI do Windows falhou em dois pushes só de documentação** (`4146faa` em
   10/09 e `e9286a5` em 11/09), sempre nos testes de integração de `git/` e `storage/` estourando
   5 s, mais um `EBUSY` na limpeza de pasta temporária. Ubuntu e macOS passam. O portão local está
-  verde. Como aconteceu duas vezes, virou tarefa: **S4-T11** no plano, aguardando despacho. Até
+  verde, e **a reexecução do mesmo job passou sem mudança nenhuma** (variabilidade do runner).
+  Como aconteceu duas vezes, virou tarefa: **S4-T11** no plano, aguardando despacho. Até
   ela, um vermelho no Windows em push de docs não é sinal de defeito novo — mas confira os
   arquivos: se forem outros, é outra coisa.
 - Nada mesclado sem publicar. Todas as branches de agentes já estão mescladas em `main`; as
@@ -25,10 +26,9 @@ partir dos documentos.
 
 ## Sprint 4 — aceito em 2026-09-10
 
-- S4-T00 a S4-T10 mescladas e publicadas. **Exceção:** a S4-T0i (idioma do conteúdo gerado)
-  não foi feita. Ela **já está decidida** (D-033, confirmada em 05/09: o conteúdo gerado espelha o
-  idioma da sessão); falta só implementar uma frase no `GENERATION_SYSTEM_PROMPT`. É a candidata
-  natural a próximo despacho.
+- S4-T00 a S4-T10 mescladas e publicadas. A S4-T0i (idioma do conteúdo gerado, D-033) foi feita
+  em 11/09: o prompt de captura agora pede o idioma predominante da sessão nos campos gerados.
+  Validação real fica para o próximo `end-day` com sessões de idioma misto.
 - O aceite do sprint pede "um dia inteiro de uso real sem intervenção". O mantenedor usou o daemon
   de verdade em 06 e 07/09: a captura agendada disparou sozinha, os avisos prévios saíram e
   nenhuma janela de console apareceu. Em 08/09 houve só a retomada com `start-day`, sem daemon.
@@ -71,7 +71,7 @@ Isto se perderia se a sessão que o viveu terminasse:
 
 ## Próximo passo
 
-Com o mantenedor: o despacho da S4-T0i, a triagem das questões e a ordem entre Sprint 5 e v2. O resultado do spike K está em
+Com o mantenedor: o despacho da S4-T11, a triagem das questões e a ordem entre Sprint 5 e v2. O resultado do spike K está em
 [`spikes/K-sessao-limpa.md`](spikes/K-sessao-limpa.md).
 
 ## Ambiente do mantenedor

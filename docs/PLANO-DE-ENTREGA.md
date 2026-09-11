@@ -1786,7 +1786,7 @@ como tarefa aberta, já decidida, fora do aceite.
       linha, e o gate por `source`). `npm run verificar` e `npm run verificar:linux` verdes;
       `core/` 100% linhas, `cli/` 100% linhas.
 
-- [~] **S4-T0i — Tornar deliberado o idioma do conteúdo gerado (D-033).**
+- [x] **S4-T0i — Tornar deliberado o idioma do conteúdo gerado (D-033).** Revisada e mesclada em 2026-09-11; validação real fica para o próximo `end-day` com sessões de idioma misto.
       Observado na mesma captura de tela: a sessão do projeto saiu **em português** e a
       `seeya-todo-test` **em inglês**, no mesmo relatório.
 
@@ -3254,6 +3254,10 @@ como tarefa aberta, já decidida, fora do aceite.
       30 s. Junto, **`EBUSY: resource busy or locked, rmdir '...\seeya-git-...\main'`** na
       limpeza do diretório temporário do git. Ubuntu e macOS passam nas mesmas execuções. O
       portão local está verde (cinco rodadas seguidas depois da S4-T10).
+
+      **Medido depois:** a reexecução do mesmo job (`gh run rerun --failed`), sem nenhuma mudança,
+      **passou**. É variabilidade do runner; o defeito é os testes serem sensíveis a ela. Não
+      procure defeito de código.
 
       **Hipótese, não medição:** é a mesma classe de problema da S4-T10 — prazo fixo contra
       lançamento de processo de custo variável — só que nos testes que lançam **`git`** (cada
