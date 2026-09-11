@@ -1073,9 +1073,10 @@ revisadas, mescladas e publicadas pelo PO à medida que voltaram — mas o plano
 27 delas, porque a revisão mesclava e esquecia de marcar. Ninguém lendo este arquivo saberia
 que o sprint estava fechado no código. É o risco que a `docs/V2-RUMO.md` descreve (documento
 desatualizado afirma o falso com confiança), observado aqui antes de ser teoria. **Exceção:**
-a S4-T0i (idioma do conteúdo gerado, D-033) não foi feita. **O aceite do sprint** ("um dia
-inteiro de uso real sem intervenção") depende de declaração do mantenedor — o daemon rodou de
-verdade em 06 e 07/09 (em 08/09 houve só a retomada com `start-day`, sem daemon).
+a S4-T0i (idioma do conteúdo gerado, D-033) não foi feita. **Sprint aceito pelo mantenedor em
+2026-09-10**, com base no daemon rodando de verdade em 06 e 07/09 (captura agendada disparando
+sozinha, avisos prévios, nenhuma janela) e na retomada com `start-day` em 08/09. A S4-T0i fica
+como tarefa aberta, já decidida, fora do aceite.
 
 - [x] **S4-T00 — Medir se a captura pega carona no cache.** Aprovada pelo mantenedor em
       2026-08-30 ao fechar a Q-032: "acho importante saber disso desde já". **Vem antes da

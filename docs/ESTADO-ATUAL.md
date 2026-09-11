@@ -7,7 +7,7 @@ afirmações falsas, e quem achou foi uma sessão limpa (spike K)._
 
 ## Em uma frase
 
-O código do Sprint 4 está concluído e publicado, com aceite formal pendente. O Sprint 5 (entregar)
+O Sprint 4 foi **aceito pelo mantenedor em 2026-09-10**. O Sprint 5 (entregar)
 não começou. A v2 tem rumo registrado, e o **spike K passou**: uma sessão limpa retoma o trabalho a
 partir dos documentos.
 
@@ -23,7 +23,7 @@ partir dos documentos.
   worktrees antigas em `.claude/worktrees/` podem ser removidas sem perda.
 - O portão local (`npm run verificar`) está estável desde a S4-T10: cinco rodadas verdes seguidas.
 
-## Sprint 4 — concluído no código, aceite pendente
+## Sprint 4 — aceito em 2026-09-10
 
 - S4-T00 a S4-T10 mescladas e publicadas. **Exceção:** a S4-T0i (idioma do conteúdo gerado)
   não foi feita. Ela **já está decidida** (D-033, confirmada em 05/09: o conteúdo gerado espelha o
@@ -32,7 +32,7 @@ partir dos documentos.
 - O aceite do sprint pede "um dia inteiro de uso real sem intervenção". O mantenedor usou o daemon
   de verdade em 06 e 07/09: a captura agendada disparou sozinha, os avisos prévios saíram e
   nenhuma janela de console apareceu. Em 08/09 houve só a retomada com `start-day`, sem daemon.
-  **Falta ele declarar o sprint aceito.**
+  **Com isso, o mantenedor declarou o sprint aceito em 2026-09-10.**
 - Os itens 6 e 7 do e2e não são automatizáveis: o binário compilado não tem ponto de injeção de
   relógio. Isso está declarado, não fingido.
 
@@ -71,8 +71,7 @@ Isto se perderia se a sessão que o viveu terminasse:
 
 ## Próximo passo
 
-Com o mantenedor: aceite do Sprint 4, a CI do Windows (se continuar vermelha), o despacho da
-S4-T0i, a triagem das questões e a ordem entre Sprint 5 e v2. O resultado do spike K está em
+Com o mantenedor: o despacho da S4-T0i, a triagem das questões e a ordem entre Sprint 5 e v2. O resultado do spike K está em
 [`spikes/K-sessao-limpa.md`](spikes/K-sessao-limpa.md).
 
 ## Ambiente do mantenedor

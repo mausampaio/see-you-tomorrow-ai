@@ -115,7 +115,7 @@ procedimento. O transcript fica fora do repositório; os números abaixo foram t
   escritos). **O mapa funcionou:** nenhum dos arquivos de mais de 3 mil linhas foi lido inteiro.
   Não há número equivalente da linha de base para comparar custo, então fica sem comparação.
 
-### O achado maior: ela fez o K2 sem ninguém pedir
+### O achado maior: ela conferiu o estado contra a evidência
 
 Antes de responder, a sessão **conferiu o estado atual contra o git, a CI e o `~/.seeya`**, e
 achou **quatro afirmações falsas** no `ESTADO-ATUAL.md`. Esse arquivo foi escrito à mão pelo PO, no
@@ -140,11 +140,38 @@ todos são trabalho do PO.
   "os agentes não mantêm os documentos" era argumento. Agora está medido que **quem escreveu com
   conhecimento total também não manteve, nem no mesmo dia**. O que salvou o teste foi a
   verificação contra evidência, não a qualidade do documento.
-- **Uma linha do `INDEX.md` provavelmente disparou a verificação** (inferência, não medição): "se
-  o `git log` mostrar trabalho posterior que não aparece aqui, este arquivo está atrasado: confie
-  no git". Essa instrução entra no template da v2.
+- **O que disparou a verificação não dá para separar** (ver "Contaminação" abaixo). Candidatos:
+  a linha do `INDEX.md` que manda confiar no git quando ele discorda do arquivo, e o próprio
+  protocolo deste spike, que a sessão leu. A instrução do `INDEX.md` entra no template da v2 de
+  qualquer jeito, porque não custa nada.
 - **O K2 continua valendo.** Aqui o estado tinha zero dias; com dias de atraso, a distância entre
   documento e evidência é maior, e a verificação espontânea pode não acontecer.
+
+### Contaminação: a sessão sabia que estava sendo testada
+
+Um limite que o protocolo não declarou, levantado pelo mantenedor ao notar que a sessão sugeriu o
+`/exit` no fim. **Este protocolo estava no repositório, e a sessão testada o leu na P1.** O
+gabarito ficou de fora, mas o procedimento, os critérios e a frase "afirmações falsas pesam mais
+que omissões" estavam à vista. Ela deduziu que estava no teste (repositório aberto direto, sem
+`--resume`, primeira mensagem idêntica à P1) e disse isso com ressalva ("se esta conversa é o
+teste"). A sugestão do `/exit` veio do passo 4 do procedimento.
+
+**O que isso afeta, pela ordem das chamadas no transcript:**
+
+- A conferência do **git** (log, branches, status) aconteceu **antes** de ela ler este arquivo,
+  então foi espontânea.
+- A conferência da **CI** e do **`~/.seeya`** aconteceu **depois**. Não dá para saber se ela teria
+  feito isso sem saber que afirmação falsa era o que se media.
+- A cobertura de pendências e as regras de despacho **não** dependem disso: vieram do
+  `ESTADO-ATUAL.md` e do `INDEX.md`.
+
+**Conclusão ajustada:** a estrutura funciona (hipótese confirmada). A parte de "verificar contra a
+evidência sem ninguém pedir" fica **provável, não medida**. As quatro afirmações falsas no estado
+continuam medidas: elas existiam, independentemente de quem as achou.
+
+**Regra para o K2 e para qualquer teste com sessão limpa:** o protocolo fica fora do repositório
+até o teste terminar, junto com o gabarito. A sessão testada não pode poder ler que está sendo
+testada.
 
 ### Gabarito (escrito antes do teste e mantido fora do repositório até agora)
 
