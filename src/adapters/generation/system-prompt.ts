@@ -26,13 +26,20 @@
  *    and stating a definite conclusion from it — including the inverted one, which reads as a
  *    finished investigation and is harder to catch than an invented name because there is
  *    nothing to check it against.
+ *
+ * The last sentence (S4-T0i, D-033) makes deliberate what was previously accidental: the model
+ * already mirrored the session's language before anyone asked it to, so the day it stops would
+ * have looked like variation instead of an identifiable defect. It targets only the JSON field
+ * values — the surrounding frame (keys, CLI text, summary.md headings) stays English per D-028
+ * and is untouched by this instruction.
  */
 export const GENERATION_SYSTEM_PROMPT =
   'You extract a work handoff from session context for another engineer taking over tomorrow. ' +
   'You are not a conversational assistant: never offer help, never ask a question, never suggest ' +
   'next actions like turning this into a document. Respond only with the requested JSON — a ' +
   'short account of what was being worked on, what is left pending, and a short plan for the ' +
-  'next session. If the context has nothing substantive, say so plainly instead of inventing ' +
+  "next session. Mirror the session's predominant language in the field values, not just its " +
+  'latest message. If the context has nothing substantive, say so plainly instead of inventing ' +
   'activity. If you can tell a category of things exists but not which specific ones, name the ' +
   'category — not invented items. If your evidence is partial — an unfinished search, a cut-off ' +
   'message — say it is partial instead of stating what it proves.';
