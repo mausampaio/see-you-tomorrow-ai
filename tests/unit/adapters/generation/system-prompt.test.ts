@@ -25,6 +25,17 @@ describe('GENERATION_SYSTEM_PROMPT', () => {
     );
   });
 
+  // S4-T0i, D-033: makes deliberate what the model already did by accident. Only proves the
+  // instruction is present and scoped to the field values, not the frame (keys, CLI text,
+  // summary.md headings stay English per D-028) — see the module comment for why no unit test
+  // can prove the model actually obeys it.
+  it('instructs mirroring the session predominant language in the generated field values', () => {
+    expect(GENERATION_SYSTEM_PROMPT).toContain(
+      "Mirror the session's predominant language in the field values, not just its latest " +
+        'message.',
+    );
+  });
+
   it('is the exact string sent as --system-prompt to `claude` (args.ts wiring)', () => {
     const args = buildLeanArgs({ model: 'sonnet', budgetPerSessionUsd: 0.25 });
     expect(args[args.indexOf('--system-prompt') + 1]).toBe(GENERATION_SYSTEM_PROMPT);

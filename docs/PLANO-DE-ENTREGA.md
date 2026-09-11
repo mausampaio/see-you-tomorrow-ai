@@ -1786,7 +1786,7 @@ como tarefa aberta, já decidida, fora do aceite.
       linha, e o gate por `source`). `npm run verificar` e `npm run verificar:linux` verdes;
       `core/` 100% linhas, `cli/` 100% linhas.
 
-- [ ] **S4-T0i — Tornar deliberado o idioma do conteúdo gerado (D-033).**
+- [~] **S4-T0i — Tornar deliberado o idioma do conteúdo gerado (D-033).**
       Observado na mesma captura de tela: a sessão do projeto saiu **em português** e a
       `seeya-todo-test` **em inglês**, no mesmo relatório.
 
@@ -1808,6 +1808,34 @@ como tarefa aberta, já decidida, fora do aceite.
 
       **Não implemente antes de decidir.** Abra a questão com as opções e o custo de cada uma; a
       escolha é do mantenedor.
+
+      **Feito (2026-09-11).** Uma frase acrescentada ao `GENERATION_SYSTEM_PROMPT`
+      (`src/adapters/generation/system-prompt.ts`), entre a instrução de responder só com o JSON
+      pedido e as instruções de não inventar (D-025) já existentes desde a S4-T0e:
+
+      > `Mirror the session's predominant language in the field values, not just its latest
+      > message.`
+
+      **Medido: 701 caracteres antes, 793 depois** — dentro do teto de 1000 do teste-tripwire, com
+      folga de 207. "Field values" restringe a instrução ao conteúdo dos campos do JSON
+      (`understanding`, `pendingItems`, `tomorrowPlan`); não menciona `key` nem formato, então não
+      dá margem para o modelo ler "responda no idioma da sessão" como cobrindo a moldura (chaves,
+      texto do CLI, títulos do `summary.md`), que continua em inglês por D-028 e não foi tocada. O
+      comentário do módulo cita D-033 e S4-T0i para o porquê; o comentário do teste novo faz o
+      mesmo.
+
+      Teste novo em `tests/unit/adapters/generation/system-prompt.test.ts`: asserção de conteúdo
+      (a frase existe, verbatim, na string exportada) mais o tripwire de 1000 caracteres já
+      existente, agora provando 793 < 1000. **Inferido, não medido: que o modelo de fato espelha
+      o idioma predominante em vez do idioma da última mensagem** — nenhum teste de unidade prova
+      isso (é prosa gerada), e não escrevi teste que aparente provar mais do que "a instrução
+      existe no prompt enviado". **O que o mantenedor precisa ver à mão:** o próximo `end-day` real
+      com sessão de idioma misto — confirmar que os campos gerados seguem o idioma predominante da
+      sessão e não o da última mensagem digitada.
+
+      `npm run verificar` verde: 133 arquivos de teste, 1441 testes passando (3 skipped),
+      cobertura 97,05% statements / 92,65% branches / 98,2% funcs / 97,29% lines — acima dos
+      mínimos de `AGENTS.md`. `npm run verificar:linux` verde.
 
       **Medido (Q-048): a hipótese do `createGitFixture` caiu, e a "desproporção" some quando o
       job é separado por etapa.** Isolando `Instala as dependências` (`npm ci`) de `Roda o portão`
