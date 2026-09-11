@@ -3215,6 +3215,35 @@ como tarefa aberta, já decidida, fora do aceite.
       a investigação. **Q-063** registra a divergência da lista de arquivos (o quinto arquivo) e o
       raciocínio completo dos cuidados (a)-(d).
 
+- [ ] **S4-T11 — A CI do Windows fica vermelha em push só de documentação: os testes de `git/` e
+      `storage/` ficaram fora da S4-T10.** Proposta do PO em 2026-09-11, ainda **não despachada**.
+
+      **Medido em dois pushes de oito desde 10/09, ambos só de documentação** (`4146faa` e
+      `e9286a5`): o job `windows-latest` falha com 14 testes estourando `5000ms`, sempre nos
+      mesmos arquivos — `tests/integration/git/git-adapter.test.ts` (12 dos 14 casos),
+      `git/primitives.test.ts`, `storage/atomic-write.test.ts`, os dois
+      `storage/*-concurrent-write.test.ts` e, uma vez, `discovery/transcript-scan.test.ts` em
+      30 s. Junto, **`EBUSY: resource busy or locked, rmdir '...\seeya-git-...\main'`** na
+      limpeza do diretório temporário do git. Ubuntu e macOS passam nas mesmas execuções. O
+      portão local está verde (cinco rodadas seguidas depois da S4-T10).
+
+      **Hipótese, não medição:** é a mesma classe de problema da S4-T10 — prazo fixo contra
+      lançamento de processo de custo variável — só que nos testes que lançam **`git`** (cada
+      `createGitFixture` faz vários `git init`/`commit`/`worktree add` por caso) e nos que matam
+      processo de verdade (`atomic-write`), todos ainda em paralelismo padrão porque a S4-T10
+      serializou só os cinco arquivos que lançam `powershell.exe`. O `EBUSY` pode ser um `git`
+      ainda vivo quando o `afterEach` apaga a pasta — o que seria defeito de higiene do teste, e
+      não só de prazo.
+
+      *O que fazer:* medir antes de mexer (tempo por arquivo e quantidade de processos lançados
+      por caso), estender o método da S4-T10 ao que a medição apontar, e explicar o `EBUSY` em vez
+      de contorná-lo. **Sem aumentar prazo sem medição** (mesma regra da S4-T10). Nada em `src/`.
+
+      *Aceite:* explicação do `EBUSY`; os arquivos apontados com tempo por caso registrado; o
+      portão local continua verde cinco vezes seguidas; e a CI do Windows verde nos **três pushes
+      seguintes** à mesclagem — a única prova possível, porque o runner é o que não se reproduz
+      aqui.
+
 ## Sprint 5 — Entregar
 
 - [ ] **S5-T1 — Autostart do daemon** por SO (Task Scheduler, launchd, systemd user).

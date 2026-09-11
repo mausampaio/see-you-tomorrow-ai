@@ -13,12 +13,12 @@ partir dos documentos.
 
 ## Onde o código está
 
-- `main` publicado, **CI verde nos três sistemas** no push `fc2606f` (conferido com
-  `gh run watch`). O push anterior, `4146faa`, que só mexia em documentação, **falhou no Windows**:
-  14 testes de integração que lançam `git` e processos reais estouraram o prazo de 5 s. Como o
-  push seguinte passou sem mudança de código, foi instabilidade do runner. É a mesma classe de
-  problema da S4-T10, mas fora dos cinco arquivos que ela serializou. **Se voltar a acontecer,
-  vira tarefa:** estender o método da S4-T10 aos testes de `git/` e `storage/`.
+- `main` publicado. **A CI do Windows falhou em dois pushes só de documentação** (`4146faa` em
+  10/09 e `e9286a5` em 11/09), sempre nos testes de integração de `git/` e `storage/` estourando
+  5 s, mais um `EBUSY` na limpeza de pasta temporária. Ubuntu e macOS passam. O portão local está
+  verde. Como aconteceu duas vezes, virou tarefa: **S4-T11** no plano, aguardando despacho. Até
+  ela, um vermelho no Windows em push de docs não é sinal de defeito novo — mas confira os
+  arquivos: se forem outros, é outra coisa.
 - Nada mesclado sem publicar. Todas as branches de agentes já estão mescladas em `main`; as
   worktrees antigas em `.claude/worktrees/` podem ser removidas sem perda.
 - O portão local (`npm run verificar`) está estável desde a S4-T10: cinco rodadas verdes seguidas.
