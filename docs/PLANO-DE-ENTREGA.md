@@ -3243,7 +3243,7 @@ como tarefa aberta, já decidida, fora do aceite.
       a investigação. **Q-063** registra a divergência da lista de arquivos (o quinto arquivo) e o
       raciocínio completo dos cuidados (a)-(d).
 
-- [~] **S4-T11 — A CI do Windows fica vermelha em push só de documentação: os testes de `git/` e
+- [x] **S4-T11 — A CI do Windows fica vermelha em push só de documentação: os testes de `git/` e
       `storage/` ficaram fora da S4-T10.** Proposta do PO em 2026-09-11.
 
       **Medido em dois pushes de oito desde 10/09, ambos só de documentação** (`4146faa` e
@@ -3275,6 +3275,10 @@ como tarefa aberta, já decidida, fora do aceite.
       portão local continua verde cinco vezes seguidas; e a CI do Windows verde nos **três pushes
       seguintes** à mesclagem — a única prova possível, porque o runner é o que não se reproduz
       aqui.
+
+      **Aceita em 2026-09-12: os três pushes seguintes à mesclagem passaram no Windows** (`ce6005b`,
+      `7629672`, `9230ab1`), sem reexecução. O residual da Q-064 (contenção de CPU entre os projetos
+      `guards` e `integration` no runner) continua registrado, não resolvido.
 
       **Implementado em 2026-09-12.**
 

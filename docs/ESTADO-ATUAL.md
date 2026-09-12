@@ -70,9 +70,9 @@ Isto se perderia se a sessão que o viveu terminasse:
 
 ## Próximo passo
 
-A S4-T11 foi mesclada e publicada em 12/09; o aceite dela são **os três pushes seguintes verdes
-no Windows**, e isso está sendo contado (1 de 3 no próprio push da mesclagem, se passar). Na
-fila com aval do mantenedor: S4-T12 e S4-T13. Decisão ainda aberta: a ordem entre Sprint 5 e v2. O resultado do spike K está em
+A S4-T11 foi aceita em 12/09: três pushes seguidos verdes no Windows. A **S4-T12 está em
+andamento** (agente despachado em 12/09). Na fila com aval do mantenedor: S4-T13. Decisão ainda
+aberta: a ordem entre Sprint 5 e v2. A v2 está sendo desenhada em `V2-RUMO.md` em paralelo. O resultado do spike K está em
 [`spikes/K-sessao-limpa.md`](spikes/K-sessao-limpa.md).
 
 ## Ambiente do mantenedor
