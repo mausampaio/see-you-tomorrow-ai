@@ -102,15 +102,16 @@ seeya end-day                       pausa/consolida as frentes ativas e gera a v
 
 **A separação coincide com a de custo e a de leitor, e é isso que a sustenta:**
 
-- **`checkpoint` é fato: barato, sem modelo, pode rodar sempre.** Git dos repositórios associados,
-  cursor do transcript, arquivos tocados, e o carimbo "esta máquina observou até aqui". É o que
-  viaja entre máquinas pelo repositório do projeto (ver "Continuidade entre dispositivos"). O
-  daemon pode disparar sozinho — ao sair de uma máquina, em intervalo, antes de suspender — e a
-  pessoa também pode.
+- **`checkpoint` é fato: barato, sem modelo, roda sozinho.** Git dos repositórios associados,
+  cursor do transcript, arquivos tocados, e o carimbo "esta máquina observou até aqui". **É
+  automático por padrão** — ao sair de uma máquina, em intervalo, antes de suspender — com config
+  para desligar (D-035: é sobre como a pessoa trabalha). **E nunca toca o repositório do
+  projeto:** tudo o que ele produz fica em `~/.seeya/`, fora do git (mantenedor, 2026-09-12).
 - **`pause` é entendimento: caro, com modelo, por evento e por frente.** É o "vou almoçar, seeya".
-  Roda o detector de lacunas sobre o delta desde o último checkpoint, escreve o ponto de retomada
-  e atualiza o `journal/`. A terminação é opcional e continua opt-in por projeto: a D-002 não
-  muda de lado.
+  Roda o detector de lacunas sobre o delta desde o último checkpoint e **propõe** o ponto de
+  retomada e a entrada do `journal/`. **O commit no repositório do projeto só acontece com aceite
+  humano**, e o push idem. A terminação é opcional e continua opt-in por projeto: a D-002 não muda
+  de lado.
 - **`end-day` é para o humano.** Pausa o que ainda não foi pausado, consolida e produz a visão
   global: frentes com atividade, bloqueios, reviews pendentes, sessões sem projeto, trabalho fora
   das frentes conhecidas, e a sugestão **editável** de prioridades para o dia seguinte (D-039).
@@ -123,7 +124,31 @@ seeya end-day                       pausa/consolida as frentes ativas e gera a v
    sugestão de prioridades justifica uma chamada pequena de modelo.
 2. **O agendamento do daemon vira rede de segurança de `end-day`**, como hoje: se a pessoa
    esqueceu de parar, o horário faz por ela. O que muda é que o caminho principal passa a ser
-   `pause`, a pedido, e não o relógio.
+   `pause`, a pedido, e não o relógio. **Consequência do aceite humano:** o `end-day` agendado
+   **propõe e não commita** — ninguém está lá para aceitar. A proposta fica em `~/.seeya/` e o
+   aceite acontece quando a pessoa voltar, o que dá ao `start-day` da v2 um papel natural:
+   revisar e aceitar o que ficou proposto.
+
+**Por que o aceite humano não é burocracia (mantenedor, 2026-09-12).** O seeya observa lacunas
+pelo transcript, e o transcript carrega o que a pessoa colou numa sessão: caminhos internos,
+nomes de sistemas, às vezes segredo. Um commit ou push automático subiria isso para o repositório
+do projeto — e, com remoto, para fora da máquina — sem ninguém ter olhado. **A regra que decorre:**
+
+- **`~/.seeya/` guarda o operacional:** cursores, filas, identificadores de sessão, checkpoints,
+  propostas ainda não aceitas, e os fatos crus (prompts, mensagens do assistente). Nada disso vai
+  para o git.
+- **O repositório do projeto carrega só o que precisa atravessar sessões e máquinas:** decisões,
+  estado, plano, ponto de retomada, entradas do `journal/` aceitas, e referências. **Por padrão,
+  resumo e ponteiro, nunca prompt cru** — o que cruza é o que a pessoa aceitou ver cruzar.
+- **A proposta mostra exatamente o que vai ser commitado**, não um resumo do que vai ser commitado.
+  Aceitar às cegas é o mesmo que automático.
+
+**O que isso muda na continuidade entre máquinas, e é preciso dizer com honestidade:** outra
+máquina só enxerga o que foi **aceito** no repositório do projeto. Se a pessoa saiu do computador
+sem aceitar a proposta, o notebook não tem como saber que existe observação pendente lá — ele só
+sabe **quando foi a última consolidação aceita daquela máquina**. A frase certa é "a última
+consolidação do computador X foi às 14:00", e não "há trabalho não consolidado no computador X",
+que afirmaria o que não se vê (D-025). A seção seguinte foi ajustada para isso.
 
 **Relação com a v1:** `end-day` e `start-day` da v1 continuam valendo para sessões que não
 pertencem a nenhum projeto — é o modo de recuperação, e é o que roda hoje.
@@ -326,19 +351,19 @@ desde o checkpoint" cobre tudo.
 
 - **Dois checkpoints.** O do projeto (o commit) é global. O cursor do transcript é local: cada
   seeya guarda até onde leu os transcripts da própria máquina.
-- **Quem tem o transcript o converte em fato.** Ao sair de uma máquina, o seeya dela faz um
-  `checkpoint` leve, sem modelo: só fatos (arquivos tocados, commits, últimos prompts), gravados no
-  `journal/` do projeto e publicados. É o "até daqui a pouco" servindo de sincronização. O
-  transcript nunca precisa atravessar.
-- **Visão parcial se declara parcial** (D-025 aplicada ao próprio detector). Sem checkpoint, o
-  projeto registra que a máquina X teve sessões ativas até tal hora e nada consolidado depois; o
-  encerramento no notebook diz "há trabalho no computador X ainda não consolidado". A lacuna se
-  fecha sozinha quando o daemon daquela máquina rodar de novo.
+- **Quem tem o transcript o converte em fato — e o fato só cruza depois de aceito.** O
+  `checkpoint` da máquina registra em `~/.seeya/` até onde ela observou; o `pause` transforma isso
+  em proposta; o aceite humano commita a entrada do `journal/` (resumo e ponteiros, nunca o
+  transcript) e publica. É o "até daqui a pouco" servindo de sincronização, com a pessoa no laço.
+- **Visão parcial se declara parcial** (D-025 aplicada ao próprio detector). Outra máquina só vê o
+  que foi aceito, então o que ela pode dizer é "a última consolidação do computador X foi às
+  14:00" — nunca "há trabalho não consolidado lá", que ela não tem como saber. A lacuna se fecha
+  quando a pessoa voltar àquela máquina e aceitar a proposta pendente.
 - **O que reduz o problema:** na v2 o transcript é complementar. O que a sessão registrou nos
   documentos e commitou já viajou pelo caminho normal; o transcript só importa para o que não foi
   registrado, e isso é detectado onde ele vive.
-- Fatos derivados de transcript no repositório do projeto reforçam o cuidado do remoto: conteúdo
-  limitado a fatos, com teto de tamanho.
+- Fatos derivados de transcript só entram no repositório do projeto como resumo aceito, com teto
+  de tamanho; o cru fica em `~/.seeya/`.
 - O cenário multi-máquina fica **depois** do passo 5 do recorte, mas a regra "declare quando a
   visão é parcial" entra desde a primeira versão, para o caso de duas máquinas degradar de forma
   honesta em vez de errada.
