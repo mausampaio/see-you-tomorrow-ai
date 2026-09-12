@@ -3481,8 +3481,8 @@ como tarefa aberta, já decidida, fora do aceite.
       `canTerminate: true` para essa sessão, e `seeya config get projectPolicy` deve mostrar a
       chave já canonicalizada (`c:/code/x`), não a que foi digitada.
 
-- [ ] **S4-T13 — `seeya status` é o painel único.** Decisão do mantenedor em 2026-09-12, saída
-      da triagem da Q-056 (item 4), que fechava o gap aberto na Q-015 (S1-T6). **Não despachada.**
+- [~] **S4-T13 — `seeya status` é o painel único.** Decisão do mantenedor em 2026-09-12, saída
+      da triagem da Q-056 (item 4), que fechava o gap aberto na Q-015 (S1-T6).
 
       **O que está errado hoje, e não é só omissão.** `cli/format-status.ts` imprime literalmente
       `Daemon: not implemented yet` — uma afirmação falsa em produção desde a S4-T3 (D-025), com
@@ -3512,6 +3512,88 @@ como tarefa aberta, já decidida, fora do aceite.
       não verificou; `daemon --status` e `status` nunca discordam sobre o daemon porque leem a
       mesma decisão; teste de unidade para cada um dos quatro estados do daemon e para
       adiado/pulado/já rodou.
+
+      **Relatório da execução (2026-09-12).** `checkLiveLock`/`describeLiveness`/
+      `describeScheduleDecision`/`describeHealth` saíram de `cli/daemon-command.ts` para um módulo
+      novo, `cli/daemon-state.ts`, junto com uma função combinada nova (`describeDaemonState`) que
+      monta o bloco inteiro do daemon; `runDaemonStatus` virou um `return
+      describeDaemonState(deps)` de uma linha, e `cli/status-command.ts` chama a mesma função —
+      nunca duas renderizações do mesmo estado. `StatusCommandContext` ganhou `storage`/
+      `processControl`; `cli/composition.ts#CliContext` (compartilhado com `seeya sessions`) ganhou
+      os dois campos também, para não duplicar uma segunda função de composição quase idêntica a
+      `buildCliContext`. Detalhe de cada escolha em Q-066.
+
+      **Antes (S1-T6/Q-015, reconstruído do código anterior a esta tarefa — `cli/format-status.ts`
+      antes da edição, não reexecutado: a string era literal, não havia como diferir):**
+      ```
+      End-of-day time: <configurado ou "not configured (manual only)">
+      Eligible sessions: <N> of <M> discovered
+      Daemon: not implemented yet
+      ```
+
+      **Depois (medido nesta máquina, `dist/cli/index.js` real contra um `~/.seeya` temporário —
+      nunca o `~/.seeya` real desta máquina):**
+
+      Estado fresco, nada configurado ainda:
+      ```
+      $ seeya status
+      End-of-day time: not configured (manual only)
+      Eligible sessions: 0 of 0 discovered
+      Daemon: not running.
+      End-of-day: not configured (manual only).
+      Daemon health: no failed cycles recorded (as of the last time it ran, if ever).
+      ```
+
+      Depois de `seeya config set endOfDayTime 23:59` e `seeya snooze +15m`, com o daemon **no ar**
+      (`seeya daemon` real, detached, pid real):
+      ```
+      $ seeya status
+      End-of-day time: 23:59 local
+      Eligible sessions: 0 of 0 discovered
+      Daemon: running (pid 22756, started 2026-09-12T17:13:23.582Z).
+      End-of-day: scheduled for 00:14, not reached yet.
+      Snoozed today: 15 minute(s) total.
+      Daemon health: healthy — no failed cycles recorded.
+
+      $ seeya daemon --status
+      Daemon: running (pid 22756, started 2026-09-12T17:13:23.582Z).
+      End-of-day: scheduled for 00:14, not reached yet.
+      Snoozed today: 15 minute(s) total.
+      Daemon health: healthy — no failed cycles recorded.
+      ```
+      As quatro linhas do daemon são **idênticas, byte a byte**, entre `seeya status` e `seeya
+      daemon --status` — o teste `tests/unit/cli/daemon-status-agreement.test.ts` prova o mesmo
+      para os quatro estados do lock (D-024) e uma falha em série, não só este caso feliz.
+
+      Depois de `seeya daemon --stop` (parado à força — sem caminho gracioso no Windows, D-005):
+      ```
+      $ seeya daemon --stop
+      Stopped the daemon (pid 22756) forcibly. Nothing was lost: it saves its state after every
+      poll cycle, so the next "seeya daemon" picks up exactly where this one left off.
+
+      $ seeya status
+      End-of-day time: 23:59 local
+      Eligible sessions: 0 of 0 discovered
+      Daemon: not running.
+      End-of-day: scheduled for 00:14, not reached yet.
+      Snoozed today: 15 minute(s) total.
+      Daemon health: no failed cycles recorded (as of the last time it ran, if ever).
+      ```
+
+      **Verificação:** `npm run verificar` verde nesta máquina (código de saída lido separado do
+      `npm test`/`npm run cobertura` que ele engloba). `npm run verificar:linux` (Docker Desktop já
+      rodando): na primeira passada pegou de verdade um teste novo (`tests/unit/cli/
+      status-command.test.ts`, o caso de adiamento) que só falhava dentro do container por
+      depender de fuso horário — corrigido e reconfirmado sob `TZ=UTC` e mais quatro fusos extremos
+      nesta máquina antes de rodar `verificar:linux` de novo. A segunda passada: 135 arquivos de
+      teste, todos passando, tabela de cobertura completa sem nenhum diretório abaixo do próprio
+      piso, nenhum "FAIL"/erro — a captura do log perdeu só a última linha de resumo percentual
+      (artefato do redirecionamento através do Docker Desktop neste host: um teto de cobertura não
+      atingido interrompe ANTES da tabela completa, com um bloco de erro, o que não aconteceu
+      aqui). Cobertura (medida na máquina local, mesmos números confirmados linha a linha no
+      container): `core/` 100%, `cli/` 96.77% statements / 95.39% branches / 94.85% functions /
+      97.23% lines — acima do piso de 80%; `cli/daemon-state.ts` isolado em 100% statements/lines,
+      96.42% branches.
 
 ## Sprint 5 — Entregar
 
