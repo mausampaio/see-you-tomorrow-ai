@@ -41,6 +41,15 @@ export interface CliContext {
   readonly sessionProvider: SessionProvider;
   readonly config: Config;
   readonly clock: Clock;
+  /**
+   * S4-T13: `seeya status` needs `Storage`/`ProcessControl` to render the daemon section through
+   * `cli/daemon-state.ts#describeDaemonState` — the same function `seeya daemon --status` calls
+   * (`cli/composition.ts`'s own docstring on `buildDaemonContext` already sets this precedent:
+   * every port a command needs is built here, once, by the one composition root, D-020).
+   * `seeya sessions` (the other consumer of `CliContext`) simply never reads either field.
+   */
+  readonly storage: Storage;
+  readonly processControl: ProcessControl;
 }
 
 /**
@@ -81,6 +90,12 @@ function buildStorage(home: CliHome): Storage {
  * (`relevanceHours` has to be known before the `SessionProvider` can be constructed — the config
  * read isn't optional plumbing, it's an input the provider needs). `homeDir` defaults to the real
  * `os.homedir()`; tests pass a `tmpdir` fixture instead, same convention as `resolveCliHome`.
+ *
+ * **`storage`/`processControl` (S4-T13)** are here for `status-command.ts`'s own call to
+ * `cli/daemon-state.ts#describeDaemonState`, which re-reads `config.json`/`estado.json`/
+ * `daemon.lock` itself — the one extra read this costs over `sessions` (which never touches
+ * either field) is a plain file read, not the expensive part (`describeDaemonState`'s own
+ * `ProcessControl.isAlive` liveness check, which still only runs once per `seeya status`).
  */
 export async function buildCliContext(homeDir: string = os.homedir()): Promise<CliContext> {
   const home = resolveCliHome(homeDir);
@@ -93,7 +108,7 @@ export async function buildCliContext(homeDir: string = os.homedir()): Promise<C
     realProcessControl,
     config.relevanceHours,
   );
-  return { sessionProvider, config, clock };
+  return { sessionProvider, config, clock, storage, processControl: realProcessControl };
 }
 
 export interface EndDayContext {

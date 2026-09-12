@@ -73,7 +73,9 @@ program
 program
   .command('status')
   .description(
-    'Show the configured end-of-day time and how many discovered sessions are currently eligible for it.',
+    'The single-panel answer to what is going to happen today and whether the daemon is ' +
+      'handling it: configured and effective end-of-day time (snooze/skip-today folded in), ' +
+      "eligible sessions, and the daemon's own state and health. Read-only.",
   )
   .action(async () => {
     const context = await buildCliContext();
