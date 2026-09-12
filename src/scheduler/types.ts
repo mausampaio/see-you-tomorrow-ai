@@ -24,6 +24,17 @@ import type {
 import type { DiscoveredSession } from '../core/types.js';
 import type { EarlyWarning } from '../core/early-warnings.js';
 
+/** `Config.captureModel`/`Config.budgetPerSessionUsd` (S4-T12) — the two fields
+ * `DaemonDeps.buildGenerators` needs fresh every poll. Named locally, not imported from
+ * `adapters/generation/*` (whose `LeanHandoffGeneratorOptions`/`DeepHandoffGeneratorOptions` this
+ * happens to be a subset of): `scheduler/` cannot import `adapters/` at all (D-020's layer matrix),
+ * and this file already keeps its own small types for the same reason `EarlyWarning` above is
+ * imported from `core/` rather than an adapter. */
+export interface CaptureGeneratorOptions {
+  readonly model: string;
+  readonly budgetPerSessionUsd: number;
+}
+
 export interface DaemonDeps {
   readonly clock: Clock;
   readonly storage: Storage;
@@ -31,8 +42,6 @@ export interface DaemonDeps {
   readonly processControl: ProcessControl;
   readonly transcriptReader: TranscriptReader;
   readonly gitReader: GitReader;
-  readonly leanGenerator: HandoffGenerator;
-  readonly deepGenerator: HandoffGenerator;
   readonly forkCleanup: ForkCleanup;
   /**
    * Runs S1-T7's early-warning detection for real (`adapters/discovery/early-warnings.ts#discoverEarlyWarnings`)
@@ -65,4 +74,21 @@ export interface DaemonDeps {
    * does — so paying it every 30s poll costs nothing real.
    */
   readonly buildSessionProvider: (relevanceHours: number) => SessionProvider;
+  /**
+   * Builds fresh `lean`/`deep` `HandoffGenerator`s bound to `options`, called once per poll with
+   * whatever `storage.readConfig()` just returned (`scheduler/poll.ts#buildEndDayDeps`) — the exact
+   * same factory shape `buildSessionProvider` above already uses, and for the identical reason
+   * (S4-T12, docs/QUESTOES.md Q-049 item 8): a daemon is ONE process for potentially days, so
+   * generators built once at startup would keep using whatever `captureModel`/`budgetPerSessionUsd`
+   * `config.json` held when `seeya daemon` launched, silently ignoring a later `seeya config edit`
+   * until the daemon itself restarted — exactly the gap `relevanceHours` already avoids via
+   * `buildSessionProvider`, now closed for the capture model/budget too. Building two generator
+   * instances is cheap (both constructors do no I/O; only `.generate()` spawns `claude -p`), so
+   * paying it every 30s poll costs nothing real, the same reasoning `buildSessionProvider`'s own
+   * docstring already gives for rebuilding a `SessionProvider`.
+   */
+  readonly buildGenerators: (options: CaptureGeneratorOptions) => {
+    readonly leanGenerator: HandoffGenerator;
+    readonly deepGenerator: HandoffGenerator;
+  };
 }

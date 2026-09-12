@@ -45,13 +45,25 @@ import {
  */
 const ACTIVE_TURN_RETRY_BUDGET_MS = 5 * 60_000;
 
-function buildEndDayDeps(deps: DaemonDeps, relevanceHours: number): EndDayDeps {
+/**
+ * `leanGenerator`/`deepGenerator` come from `deps.buildGenerators`, called HERE with THIS poll's
+ * freshly-read `config` (S4-T12) — the same "rebuild every poll from fresh config" treatment
+ * `sessionProvider` already gets on the line above, closing the gap docs/QUESTOES.md Q-049 item 8
+ * flagged: before this, both generators were built once at daemon startup in `cli/composition.ts`,
+ * so a `seeya config set captureModel`/`budgetPerSessionUsd` made while the daemon was already
+ * running only took effect after a restart.
+ */
+function buildEndDayDeps(deps: DaemonDeps, config: EndOfDayConfig): EndDayDeps {
+  const { leanGenerator, deepGenerator } = deps.buildGenerators({
+    model: config.captureModel,
+    budgetPerSessionUsd: config.budgetPerSessionUsd,
+  });
   return {
-    sessionProvider: deps.buildSessionProvider(relevanceHours),
+    sessionProvider: deps.buildSessionProvider(config.relevanceHours),
     transcriptReader: deps.transcriptReader,
     gitReader: deps.gitReader,
-    leanGenerator: deps.leanGenerator,
-    deepGenerator: deps.deepGenerator,
+    leanGenerator,
+    deepGenerator,
     storage: deps.storage,
     processControl: deps.processControl,
     clock: deps.clock,
@@ -59,11 +71,17 @@ function buildEndDayDeps(deps: DaemonDeps, relevanceHours: number): EndDayDeps {
   };
 }
 
-/** The three `Config` fields `runEndOfDay` needs — narrowed from the full `Config` the same way
- * this file already narrowed it to `relevanceHours` alone, before D-035 added the other two. */
+/** The `Config` fields `runEndOfDay` needs — narrowed from the full `Config` the same way this
+ * file already narrowed it to `relevanceHours` alone, before D-035 added the other two.
+ * `captureModel`/`budgetPerSessionUsd` joined this list in S4-T12, for `buildEndDayDeps`'s own
+ * `buildGenerators` call above. */
 type EndOfDayConfig = Pick<
   Config,
-  'relevanceHours' | 'maxCaptureAttemptsPerSessionPerDay' | 'overdueFireThresholdMinutes'
+  | 'relevanceHours'
+  | 'maxCaptureAttemptsPerSessionPerDay'
+  | 'overdueFireThresholdMinutes'
+  | 'captureModel'
+  | 'budgetPerSessionUsd'
 >;
 
 /**
@@ -103,7 +121,7 @@ async function runEndOfDay(
   nextStateFromDecision: DayState,
   config: EndOfDayConfig,
 ): Promise<EndDayResult> {
-  const endDayDeps = buildEndDayDeps(deps, config.relevanceHours);
+  const endDayDeps = buildEndDayDeps(deps, config);
   const sessionFilter = buildRetryFilter(priorState, config.maxCaptureAttemptsPerSessionPerDay);
   const overdueThresholdMs = config.overdueFireThresholdMinutes * 60_000;
   const overdue = decision.delayMs >= overdueThresholdMs;

@@ -5,12 +5,15 @@
  * flow, not re-testing `configFileSchema` itself (already covered by
  * `tests/integration/storage/read-config.test.ts`).
  */
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  resolvePolicyCwdArgument,
   runConfigGetCommand,
   runConfigPolicyCommand,
   runConfigSetCommand,
 } from '../../../src/cli/config-command.js';
+import { normalizeCwdForComparison } from '../../../src/core/cwd-normalization.js';
 import { InMemoryScheduleStorage } from './_fakes.js';
 import type { Config } from '../../../src/core/types.js';
 
@@ -205,10 +208,14 @@ describe('runConfigPolicyCommand', () => {
     });
 
     expect(message).toContain('canTerminate=true, deepCapture=true');
-    expect(storage.savedConfigs[0]?.projectPolicy['c:\\code\\p']).toEqual({
+    // S4-T12: written CANONICALIZED (separators unified to `/`), merged onto the existing entry —
+    // see `applyProjectPolicyUpdate`'s own tests in `config-schema.test.ts` for the normalization
+    // itself; this just proves the CLI layer wires it through.
+    expect(storage.savedConfigs[0]?.projectPolicy['c:/code/p']).toEqual({
       canTerminate: true,
       deepCapture: true,
     });
+    expect(storage.savedConfigs[0]?.projectPolicy['c:\\code\\p']).toBeUndefined();
   });
 
   it('sets both flags at once', async () => {
@@ -217,7 +224,7 @@ describe('runConfigPolicyCommand', () => {
       canTerminate: 'true',
       deepCapture: 'true',
     });
-    expect(storage.savedConfigs[0]?.projectPolicy['c:\\code\\p']).toEqual({
+    expect(storage.savedConfigs[0]?.projectPolicy['c:/code/p']).toEqual({
       canTerminate: true,
       deepCapture: true,
     });
@@ -233,5 +240,55 @@ describe('runConfigPolicyCommand', () => {
     expect(message).toContain('true');
     expect(message).toContain('false');
     expect(storage.savedConfigs).toHaveLength(0);
+  });
+
+  // S4-T12 (docs/QUESTOES.md Q-056 item 3): reading a policy already on disk under a raw key still
+  // matches a `cwd` spelled differently, without needing a write to "fix" it first.
+  it('with no flags, matches an existing raw-keyed entry spelled with a different separator/case', async () => {
+    const storage = new InMemoryScheduleStorage(
+      config({ projectPolicy: { 'c:\\code\\p': { canTerminate: true, deepCapture: false } } }),
+    );
+    const report = await runConfigPolicyCommand({ storage }, 'c:/code/p', {});
+    expect(report).toContain('canTerminate=true, deepCapture=false');
+  });
+
+  describe('S4-T12 cuidado (b): a relative cwd is resolved, never silently written unmatched', () => {
+    it('a relative cwd resolves against the CLI process working directory before writing', async () => {
+      const storage = new InMemoryScheduleStorage(config());
+      const message = await runConfigPolicyCommand({ storage }, 'relative-project', {
+        canTerminate: 'true',
+      });
+
+      const expectedCanonicalCwd = normalizeCwdForComparison(
+        path.resolve('relative-project'),
+        process.platform === 'win32' ? 'win32' : 'posix',
+      );
+      expect(message).toContain(expectedCanonicalCwd);
+      expect(storage.savedConfigs[0]?.projectPolicy[expectedCanonicalCwd]).toEqual({
+        canTerminate: true,
+        deepCapture: false,
+      });
+      // Never written under the raw, unresolved string — that key would never match any real
+      // session's absolute `cwd`.
+      expect(storage.savedConfigs[0]?.projectPolicy['relative-project']).toBeUndefined();
+    });
+  });
+});
+
+describe('resolvePolicyCwdArgument (S4-T12 cuidado (b))', () => {
+  it('leaves an already-absolute cwd (either OS convention) untouched, regardless of host', () => {
+    expect(resolvePolicyCwdArgument('c:\\code\\x', '/irrelevant/base')).toBe('c:\\code\\x');
+    expect(resolvePolicyCwdArgument('/home/x/project', '/irrelevant/base')).toBe('/home/x/project');
+  });
+
+  it('resolves a relative cwd against the injected working directory, not the real process.cwd()', () => {
+    const resolved = resolvePolicyCwdArgument('sub/dir', '/base');
+    expect(path.isAbsolute(resolved)).toBe(true);
+    expect(resolved).not.toBe('sub/dir');
+  });
+
+  it('defaults the working directory to the real process.cwd() when none is injected', () => {
+    const resolved = resolvePolicyCwdArgument('.');
+    expect(resolved).toBe(path.resolve('.'));
   });
 });

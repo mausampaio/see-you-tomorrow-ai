@@ -19,7 +19,16 @@
  * invocations. That is what makes this command's write visible to a concurrently-running daemon
  * on its very next poll (`scheduler/poll.ts` re-reads `config.json` at the top of every cycle),
  * the same "persisted, not remembered" discipline `estado.json`/`seeya snooze` already has (D-006).
+ *
+ * **`policy`'s `cwd` argument (S4-T12, docs/QUESTOES.md Q-056 item 3):** resolved if relative
+ * (`resolvePolicyCwdArgument`) and matched/written through the normalized criterion
+ * `application/eligibility-assembly.ts#projectPolicyFor`/`adapters/storage/config-schema.ts
+ * #applyProjectPolicyUpdate` already use for `ignore` — see both functions' own docstrings. Before
+ * this task, `policy`'s `cwd` was compared and stored as a raw string, so a spelling different from
+ * whatever a discovered session's `cwd` happened to be (separator, case, a trailing slash, or a
+ * relative path) made `canTerminate`/`deepCapture` silently never apply.
  */
+import path from 'node:path';
 import {
   applyConfigFieldUpdate,
   applyProjectPolicyUpdate,
@@ -32,6 +41,7 @@ import {
   schemaVersionNotEditableMessage,
   unknownConfigKeyMessage,
 } from '../adapters/storage/config-schema.js';
+import { projectPolicyFor } from '../application/eligibility-assembly.js';
 import type { Storage } from '../core/ports.js';
 import type { Config, ProjectPolicy } from '../core/types.js';
 
@@ -146,6 +156,38 @@ export interface ConfigPolicyOptions {
   readonly deepCapture?: string;
 }
 
+/**
+ * A `cwd` absolute under EITHER path convention (`c:\...`/`c:/...`, or `/...`) is left exactly as
+ * typed — checking both, not just the host's own, means an already-absolute key written on a
+ * different OS (D-032's own concern) is never mistaken for "relative" just because it doesn't
+ * match the CURRENT host's convention. `path.win32`/`path.posix` are pure string utilities (unlike
+ * bare `path.isAbsolute`, they never read `process.platform`), so this check itself needs no
+ * platform parameter at all.
+ */
+function looksAbsolute(cwd: string): boolean {
+  return path.win32.isAbsolute(cwd) || path.posix.isAbsolute(cwd);
+}
+
+/**
+ * S4-T12 (docs/QUESTOES.md Q-056 item 3, cuidado (b)): a relative `cwd` typed into
+ * `seeya config policy` would never match the absolute `cwd` a discovered session always carries —
+ * resolved against the CLI's own working directory (`path.resolve`; `cli/` is the composition root,
+ * D-020, the one place that knows it) rather than refused, per the PO's call recorded in
+ * docs/QUESTOES.md Q-065: resolving is what the person meant, and the confirmation
+ * (`runConfigPolicyCommand` below) shows the absolute path that actually got written.
+ *
+ * `cliWorkingDirectory` defaults to the real `process.cwd()` — exported and parameterized (not a
+ * bare call inside the function body) so a test can inject a fixed base directory instead of
+ * depending on wherever the test runner happens to execute from, same discipline `Clock`/`platform`
+ * already get elsewhere in this project (D-019, `core/cwd-normalization.ts`).
+ */
+export function resolvePolicyCwdArgument(
+  cwd: string,
+  cliWorkingDirectory: string = process.cwd(),
+): string {
+  return looksAbsolute(cwd) ? cwd : path.resolve(cliWorkingDirectory, cwd);
+}
+
 /** No flags at all is a `get` for that one `cwd` — symmetric with `runConfigGetCommand`, and
  * useful on its own: "what is this project's policy right now" is a real question independent of
  * changing it. */
@@ -154,10 +196,14 @@ export async function runConfigPolicyCommand(
   cwd: string,
   options: ConfigPolicyOptions,
 ): Promise<string> {
+  const resolvedCwd = resolvePolicyCwdArgument(cwd);
   const current = await context.storage.readConfig();
   if (options.canTerminate === undefined && options.deepCapture === undefined) {
-    const policy = current.projectPolicy[cwd] ?? { canTerminate: false, deepCapture: false };
-    return renderProjectPolicyLine(cwd, policy);
+    // S4-T12: normalized lookup (`projectPolicyFor`), not a raw `current.projectPolicy[cwd]` read —
+    // so this reports the policy that will actually APPLY to a session at this `cwd`, matching a
+    // raw key already on disk regardless of separator/case/trailing-slash spelling.
+    const policy = projectPolicyFor(current, resolvedCwd);
+    return renderProjectPolicyLine(resolvedCwd, policy);
   }
 
   const canTerminate = parseBooleanFlag('--can-terminate', options.canTerminate);
@@ -169,10 +215,16 @@ export async function runConfigPolicyCommand(
     return `seeya config policy: ${deepCapture.error}`;
   }
 
-  const { config: updated, policy } = applyProjectPolicyUpdate(current, cwd, {
+  const {
+    config: updated,
+    policy,
+    canonicalCwd,
+  } = applyProjectPolicyUpdate(current, resolvedCwd, {
     ...(canTerminate.kind === 'value' ? { canTerminate: canTerminate.value } : {}),
     ...(deepCapture.kind === 'value' ? { deepCapture: deepCapture.value } : {}),
   });
   await context.storage.saveConfig(updated);
-  return `Updated policy — ${renderProjectPolicyLine(cwd, policy)}.`;
+  // `canonicalCwd` (not the raw `cwd` argument) — cuidado (b): the confirmation shows the absolute,
+  // canonicalized path that was actually written, not what the person typed.
+  return `Updated policy — ${renderProjectPolicyLine(canonicalCwd, policy)}.`;
 }

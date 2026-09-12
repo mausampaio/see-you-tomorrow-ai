@@ -92,10 +92,12 @@ describe('runDaemonWorker', () => {
       processControl,
       transcriptReader: new FakeTranscriptReader(),
       gitReader: new FakeGitReader(),
-      leanGenerator: failingGenerator('not exercised by either test in this file'),
-      deepGenerator: failingGenerator('not exercised by either test in this file'),
       forkCleanup: new FakeForkCleanup(),
       buildSessionProvider: () => ({ list: () => Promise.reject(new Error('not exercised')) }),
+      buildGenerators: () => ({
+        leanGenerator: failingGenerator('not exercised by either test in this file'),
+        deepGenerator: failingGenerator('not exercised by either test in this file'),
+      }),
       discoverEarlyWarnings: () =>
         Promise.reject(new Error('not exercised — the lock check must win first')),
     };

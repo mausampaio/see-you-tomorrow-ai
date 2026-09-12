@@ -109,7 +109,9 @@ describe('config-command against a real StorageAdapter', () => {
       { storage: new StorageAdapter(fixture.seeyaHome) },
       'projectPolicy',
     );
-    expect(report).toContain('c:\\code\\a: canTerminate=true, deepCapture=false');
-    expect(report).toContain('c:\\code\\b: canTerminate=false, deepCapture=true');
+    // S4-T12: `applyProjectPolicyUpdate` writes the CANONICAL key (separators unified to `/`), not
+    // the raw string typed — `c:\code\a` was typed but `c:/code/a` is what's on disk.
+    expect(report).toContain('c:/code/a: canTerminate=true, deepCapture=false');
+    expect(report).toContain('c:/code/b: canTerminate=false, deepCapture=true');
   });
 });

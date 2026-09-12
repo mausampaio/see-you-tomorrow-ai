@@ -8,15 +8,36 @@
  */
 import type { Notifier, ProcessControl } from '../../../src/core/ports.js';
 import type { DaemonLockInfo } from '../../../src/core/daemon-lock.js';
-import type { DayState } from '../../../src/core/types.js';
+import type { Config, DayState, Handoff } from '../../../src/core/types.js';
 import type { Notice } from '../../../src/core/ports.js';
 import { FakeStorage } from '../application/_fakes.js';
 
 /** Real in-memory `estado.json`/`daemon.lock` — what every `scheduler/` test needs that
- * `application/endDay`'s own tests never touch. */
+ * `application/endDay`'s own tests never touch.
+ *
+ * **`readConfig`/`saveConfig` are overridden too (S4-T12), unlike `FakeStorage`'s own (which
+ * rejects `saveConfig` — accurate for `endDay`, which never calls it).** `scheduler/poll.ts` reads
+ * `Storage.readConfig()` at the top of EVERY poll, so a test proving a mid-day `seeya config set`
+ * takes effect on the next cycle (docs/QUESTOES.md Q-049 item 8) needs `saveConfig` to actually
+ * persist here, the same "make config mutable" step this class already took for `estado.json`. */
 export class InMemoryDaemonStorage extends FakeStorage {
   private state: DayState | null = null;
   private lock: DaemonLockInfo | null = null;
+  private currentConfig: Config;
+
+  constructor(initialConfig: Config, existingHandoffs?: ReadonlyMap<string, Handoff>) {
+    super(initialConfig, existingHandoffs);
+    this.currentConfig = initialConfig;
+  }
+
+  override readConfig(): Promise<Config> {
+    return Promise.resolve(this.currentConfig);
+  }
+
+  override saveConfig(config: Config): Promise<void> {
+    this.currentConfig = config;
+    return Promise.resolve();
+  }
 
   override readState(): Promise<DayState | null> {
     return Promise.resolve(this.state);

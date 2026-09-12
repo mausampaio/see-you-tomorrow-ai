@@ -88,6 +88,22 @@ describe('buildSessionRows', () => {
 
       expect(row?.canTerminate).toBe(false);
     });
+
+    // S4-T12 (docs/QUESTOES.md Q-056 item 3): the session's `cwd` (as it arrives from the
+    // registry) and the `projectPolicy` key (as typed into `seeya config policy`) are matched
+    // through `application/eligibility-assembly.ts#projectPolicyFor`'s normalization, not raw
+    // string equality — a different separator or a trailing slash must not make `canTerminate`
+    // silently stop applying.
+    it('still applies when the session cwd and the policy key differ only by separator/trailing slash', () => {
+      const session = createSessionWithPid({ cwd: 'c:/code/projeto/' });
+      const cfg = config({
+        projectPolicy: { 'c:\\code\\projeto': { canTerminate: true, deepCapture: false } },
+      });
+
+      const [row] = buildSessionRows([session], cfg, NOW);
+
+      expect(row?.canTerminate).toBe(true);
+    });
   });
 
   it('sorts rows by name then cwd, independent of discovery order', () => {
