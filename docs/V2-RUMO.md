@@ -135,6 +135,23 @@ aviso de remoto público passa a dizer exatamente isso. Compartilhar por projeto
 quando existir outra pessoa, e pode ser resolvido depois por divisão ou por submódulo sem refazer
 o resto.
 
+**O fluxo de instalação, confirmado com o mantenedor em 2026-09-12.** A instalação pergunta
+duas coisas: onde o espaço de trabalho mora neste dispositivo (padrão dentro de `~/.seeya/`) e
+qual é o remoto dele. Três respostas possíveis para o remoto:
+
+1. **Já existe** (um repositório do seeya na conta da pessoa): o seeya clona no caminho local e
+   já enxerga os projetos que estão lá — os diretórios só se materializam no `open`.
+2. **Não existe e a pessoa quer um:** o seeya **orienta** a criar um repositório vazio e privado
+   no provedor dela e a colar a URL — **ele nunca cria o remoto**, nem escolhe o provedor. Com a
+   URL, inicializa o espaço de trabalho local com zero projetos, mostra o esqueleto que vai
+   commitar (registro do dispositivo, versão do esquema — nada de conteúdo), e publica. O aviso
+   de remoto público aparece aqui.
+3. **Sem remoto:** válido. O espaço de trabalho nasce como repositório git local, com sincronização
+   `off`. O remoto pode ser acrescentado depois por `config`, e aí vale o caso 1 ou 2.
+
+O primeiro projeto entra por `project create`; instalação com zero projetos é o estado normal de
+quem acabou de chegar, não um erro.
+
 **Isto resolve a identidade do dispositivo**, que estava aberta: na instalação, o dispositivo se
 registra no espaço de trabalho com um identificador gerado (não o nome da máquina) e um rótulo
 legível que a pessoa escolhe. O identificador vive em `~/.seeya/` e na branch de estado.
