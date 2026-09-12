@@ -5118,7 +5118,8 @@ crua, gravada como digitada, com o `cwd` da sessão como veio do registro. `c:/c
 nunca casa com `C:\code\x`, e `canTerminate: true` silenciosamente nunca se aplica — silêncio
 onde deveria haver efeito ou erro, o oposto da D-025. Vai para a **S4-T12**. (4) `seeya status`
 sem agendamento nem daemon: **sobe ao mantenedor** — é o produto decidir se `status` é o painel
-único ou se `daemon --status` basta. (5) resolvido pela S4-T4b (Q-058).
+único ou se `daemon --status` basta. **Mantenedor, 2026-09-12: painel único** — vira a
+**S4-T13**. (5) resolvido pela S4-T4b (Q-058).
 
 ---
 

@@ -3301,6 +3301,38 @@ como tarefa aberta, já decidida, fora do aceite.
       `budgetPerSessionUsd` com o daemon no ar vale no ciclo seguinte, sem restart, com teste em
       `tests/unit/scheduler/poll.test.ts`. Sem chave nova em disco.
 
+- [ ] **S4-T13 — `seeya status` é o painel único.** Decisão do mantenedor em 2026-09-12, saída
+      da triagem da Q-056 (item 4), que fechava o gap aberto na Q-015 (S1-T6). **Não despachada.**
+
+      **O que está errado hoje, e não é só omissão.** `cli/format-status.ts` imprime literalmente
+      `Daemon: not implemented yet` — uma afirmação falsa em produção desde a S4-T3 (D-025), com
+      um comentário no topo do arquivo que ainda diz que `core/schedule`, `snooze` e o daemon
+      "não existem ainda". Quem digita `status` quer saber **o que vai acontecer hoje**, e a
+      resposta mora em outro comando (`daemon --status`, S4-T5) que a pessoa precisa saber que
+      existe.
+
+      **O que fazer.** `seeya status` passa a mostrar, além do que já mostra (horário configurado,
+      sessões elegíveis de descobertas): o horário **efetivo** de hoje (com adiamento acumulado e
+      `skip-today`), se o encerramento já rodou, e o estado do daemon nos mesmos quatro casos que
+      `daemon --status` já distingue (não rodando / rodando e saudável / rodando e falhando há N
+      minutos / lock presente mas não verificável). **Reuse, não duplique:** a decisão do
+      agendamento vem de `core/schedule.ts#decideSchedule` (o mesmo que `snooze` já chama só para
+      renderizar) e o estado do daemon vem do mesmo `checkLiveLock`/`describeHealth` de
+      `cli/daemon-command.ts` — extraia o que for compartilhado em vez de copiar texto.
+      `daemon --status` continua existindo (é o par natural de `--stop`), mostrando o mesmo que
+      `status` mostra sobre o daemon, pela mesma função.
+
+      **Cuidados:** `status` é **somente leitura** — não limpa lock morto (isso é do `--stop`), não
+      persiste estado. O `Clock` é o injetado (D-019). Texto em inglês (D-028), concentrado, não
+      espalhado. O comentário do topo de `format-status.ts` sai: ele descreve um mundo que não
+      existe mais.
+
+      *Aceite:* `seeya status` responde "o que vai acontecer hoje e o daemon está cuidando disso?"
+      sem a pessoa precisar de outro comando; nenhuma frase do `status` afirma o que o programa
+      não verificou; `daemon --status` e `status` nunca discordam sobre o daemon porque leem a
+      mesma decisão; teste de unidade para cada um dos quatro estados do daemon e para
+      adiado/pulado/já rodou.
+
 ## Sprint 5 — Entregar
 
 - [ ] **S5-T1 — Autostart do daemon** por SO (Task Scheduler, launchd, systemd user).

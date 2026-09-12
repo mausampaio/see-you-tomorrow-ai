@@ -47,8 +47,8 @@ Isto se perderia se a sessão que o viveu terminasse:
 2. **Validar a histerese da S4-T7 em uso real, com o cenário provocado:** subir o daemon poucos
    minutos antes do horário, com as duas regras de aviso já vencidas. Os dias reais até agora
    seguiram o caminho saudável, que não exercita o caso.
-3. **Decisão do mantenedor pendente, saída da triagem (Q-056 item 4):** `seeya status` deve ser o
-   painel único (agendamento, adiamento, daemon), ou `daemon --status` basta?
+3. **S4-T13 planejada e não despachada:** `seeya status` vira o painel único (decisão do
+   mantenedor em 12/09). Hoje ele imprime `Daemon: not implemented yet`, que é falso.
 4. **S4-T12 planejada e não despachada:** política por projeto que não casa por diferença de
    forma do `cwd`, e `captureModel`/`budgetPerSessionUsd` que só mudam no restart do daemon.
    Triagem das questões feita em 12/09: Q-045, 046, 049, 052, 053, 055 a 057 e 060 a 063 fechadas
@@ -70,8 +70,8 @@ Isto se perderia se a sessão que o viveu terminasse:
 
 ## Próximo passo
 
-A S4-T11 está em andamento (agente despachado em 12/09). Com o mantenedor: a decisão sobre
-`seeya status`, o despacho da S4-T12, e a ordem entre Sprint 5 e v2. O resultado do spike K está em
+A S4-T11 está em andamento (agente despachado em 12/09). Depois dela, na fila com aval do
+mantenedor: S4-T12 e S4-T13. Decisão ainda aberta: a ordem entre Sprint 5 e v2. O resultado do spike K está em
 [`spikes/K-sessao-limpa.md`](spikes/K-sessao-limpa.md).
 
 ## Ambiente do mantenedor
