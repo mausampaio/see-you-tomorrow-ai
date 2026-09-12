@@ -308,7 +308,11 @@ afirmações falsas no estado escrito à mão pelo PO, no mesmo dia. Com isso, o
 argumento e passa a ser medição: **nem quem escreve com conhecimento total mantém o estado em
 dia**, e o que salva é conferir contra a evidência. (A sessão testada tinha lido o protocolo do
 spike, então que ela confira **sem ser instruída** fica provável, não medido. Por isso a v2 não
-conta com isso: o detector de lacunas é do seeya, não da boa vontade da sessão.)
+conta com isso: o detector de lacunas é do seeya, não da boa vontade da sessão.) **O [spike
+L](spikes/L-outro-harness.md), em 2026-09-12, fechou essa lacuna:** uma sessão limpa do **Codex**
+(GPT-5.6), num clone sem histórico e sem protocolo à vista, retomou o trabalho pelo `AGENTS.md`
+nativo e apontou três documentos desatualizados antes de ler qualquer menção a teste. A costura
+com um segundo harness funciona sem adaptação; o custo é o das permissões do sandbox dele.
 
 ### Privacidade
 

@@ -749,6 +749,11 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
 ## Sprint 3 — Começar o dia
 
+**Estado do sprint, corrigido em 2026-09-12.** S3-T4 a S3-T7 estavam marcadas `[~]` desde a
+aceitação do sprint, embora mescladas e aceitas — a varredura de 10/09 corrigiu o Sprint 4 e não
+olhou este. Quem achou foi uma sessão limpa do Codex, sem saber que estava sendo testada
+(`docs/spikes/L-outro-harness.md`).
+
 - [x] **S3-T1 — Leitura do briefing pendente** e montagem do prompt de retomada por sessão.
       **Implementado em 2026-08-30:** `Storage` ganhou `readBriefing(day)` (`core/ports.ts`,
       segundo bloco mesclado ao fim do arquivo — mesmo padrão de Q-022 item 2, porque a S3-T2
@@ -883,7 +888,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
 
 ---
 
-- [~] **S3-T4 — Teste de contrato para `--append-system-prompt-file`.** Aprovado pelo mantenedor
+- [x] **S3-T4 — Teste de contrato para `--append-system-prompt-file`.** Aprovado pelo mantenedor
       em 2026-08-30 ao fechar a Q-027 item 3. O fallback da retomada (D-004) entrega o plano por
       `--append-system-prompt-file`, escolhido em vez de `--system-prompt-file` porque o primeiro
       **acrescenta** ao prompt de sistema e o segundo **substitui** o do Claude Code inteiro — o
@@ -951,7 +956,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       *Fora de escopo:* trocar o flag, ou construir fallback para o caso de ele sumir — só
       quando e se a medição mostrar que sumiu.
 
-- [~] **S3-T5 — Identificar a sessão na listagem e no `--session`.** Aprovada pelo mantenedor em
+- [x] **S3-T5 — Identificar a sessão na listagem e no `--session`.** Aprovada pelo mantenedor em
       2026-08-30, saída do primeiro teste real. **O problema:** ele lança o `claude` do diretório
       do usuário — hábito comum, e deliberado, porque trabalha em vários repositórios ao mesmo
       tempo e quer uma memória só para o projeto inteiro. Resultado: **dezenas de sessões com o
@@ -1015,7 +1020,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       tarefa). `core/` 100%, `application/` 100% linhas (96,2% branches, agregado — ver Q-030 item
       1 sobre a leitura de `process.platform`), `cli/` 100% linhas (96,79% branches, agregado).
 
-- [~] **S3-T6 — Formatação da saída do `start-day`.** Aprovada pelo mantenedor em 2026-08-30
+- [x] **S3-T6 — Formatação da saída do `start-day`.** Aprovada pelo mantenedor em 2026-08-30
       ("achei confuso demais"), com a saída real do primeiro uso como evidência. **Não é o
       PowerShell — é o nosso formatador**, em `core/consolidated-plan.ts`:
       (1) `pendingItems` e `tomorrowPlan` são **listas** e viram uma linha corrida só, coladas
@@ -1035,7 +1040,7 @@ boa vontade. Onze decisões nasceram de medição, não de opinião.
       (`start-day-selection.ts`) deixava implícitas. Sem laço de nova tentativa (mantido de
       S3-T3); código de saída continua 0. Escolhas registradas em `docs/QUESTOES.md` Q-031.
 
-- [~] **S3-T7 — Mensagem de falha do fallback com o argv, e build que limpa o destino.** Saída da
+- [x] **S3-T7 — Mensagem de falha do fallback com o argv, e build que limpa o destino.** Saída da
       Q-029, aprovada em 2026-08-30. **O problema, hoje:** se o
       `--append-system-prompt-file` sumir ou mudar de nome numa versão futura — e o mantenedor
       está certo de que isso é questão de tempo —, o `claude` recusa o argumento, sai rápido com
@@ -3481,7 +3486,7 @@ como tarefa aberta, já decidida, fora do aceite.
       `canTerminate: true` para essa sessão, e `seeya config get projectPolicy` deve mostrar a
       chave já canonicalizada (`c:/code/x`), não a que foi digitada.
 
-- [~] **S4-T13 — `seeya status` é o painel único.** Decisão do mantenedor em 2026-09-12, saída
+- [x] **S4-T13 — `seeya status` é o painel único.** Decisão do mantenedor em 2026-09-12, saída
       da triagem da Q-056 (item 4), que fechava o gap aberto na Q-015 (S1-T6).
 
       **O que está errado hoje, e não é só omissão.** `cli/format-status.ts` imprime literalmente

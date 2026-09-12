@@ -1,6 +1,6 @@
 # Estado atual
 
-_Atualizado em 2026-09-10, depois do spike K. Se o `git log`, a CI ou o `~/.seeya` contarem algo
+_Atualizado em 2026-09-12, depois do spike L. Se o `git log`, a CI ou o `~/.seeya` contarem algo
 diferente do que está aqui, **este arquivo está atrasado**: confie na evidência e atualize o
 arquivo. Isso já aconteceu: a primeira versão dele, escrita à mão no mesmo dia, tinha quatro
 afirmações falsas, e quem achou foi uma sessão limpa (spike K)._
@@ -17,9 +17,9 @@ partir dos documentos.
   10/09 e `e9286a5` em 11/09), sempre nos testes de integração de `git/` e `storage/` estourando
   5 s, mais um `EBUSY` na limpeza de pasta temporária. Ubuntu e macOS passam. O portão local está
   verde, e **a reexecução do mesmo job passou sem mudança nenhuma** (variabilidade do runner).
-  Como aconteceu duas vezes, virou tarefa: **S4-T11** no plano, aguardando despacho. Até
-  ela, um vermelho no Windows em push de docs não é sinal de defeito novo — mas confira os
-  arquivos: se forem outros, é outra coisa.
+  Como aconteceu duas vezes, virou a **S4-T11**, mesclada e aceita em 12/09 (três pushes
+  seguintes verdes). Se um vermelho no Windows voltar, o próximo passo não é serializar mais
+  arquivos: é olhar o agendamento dos projetos `guards`/`integration` no runner (Q-064).
 - Nada mesclado sem publicar. Todas as branches de agentes já estão mescladas em `main`; as
   worktrees antigas em `.claude/worktrees/` podem ser removidas sem perda.
 - O portão local (`npm run verificar`) está estável desde a S4-T10: cinco rodadas verdes seguidas.
@@ -50,6 +50,7 @@ Isto se perderia se a sessão que o viveu terminasse:
 3. **S4-T13 mesclada e publicada em 12/09:** `seeya status` é o painel único e mostra o daemon
    pelo mesmo bloco que `daemon --status` (teste de concordância). A Q-066 do agente ainda não foi
    triada pelo PO. Verificação à mão para o mantenedor: `seeya status` com o daemon no ar e parado.
+   Marcada `[x]` no plano só em 12/09 à noite — quem notou a falta foi o spike L.
 4. **S4-T12 mesclada e publicada em 12/09** (política por projeto casa por `cwd` normalizado;
    `captureModel`/`budgetPerSessionUsd` valem no ciclo seguinte, sem restart). Q-065 fechada pelo
    PO. Verificação à mão que fica para o mantenedor: `seeya config
@@ -58,7 +59,9 @@ Isto se perderia se a sessão que o viveu terminasse:
 5. **Sprint 5 inteiro:** S5-T1 a S5-T7, mais a S5-T8, que é candidata e não está agendada
    (briefing agrupado por projeto).
 6. **Spike K2:** repetir o spike K daqui a alguns dias **sem atualizar este arquivo**, para medir
-   se a sessão percebe que o estado envelheceu.
+   se a sessão percebe que o estado envelheceu — com os controles do spike L (clone raso, sem
+   remoto, protocolo fora). O **spike L** (Codex, GPT-5.6) passou em 12/09 e achou três documentos
+   velhos sem saber que era teste: `spikes/L-outro-harness.md`.
 
 ## Decisões recentes — por onde começar no `DECISOES.md`
 
