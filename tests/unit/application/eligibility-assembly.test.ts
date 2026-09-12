@@ -38,6 +38,76 @@ describe('projectPolicyFor', () => {
       deepCapture: false,
     });
   });
+
+  // S4-T12 (docs/QUESTOES.md Q-056 item 3): before this, `projectPolicyFor` compared the raw
+  // `projectPolicy` key against a raw session `cwd`, so a session's `canTerminate`/`deepCapture`
+  // silently never applied unless the two spellings matched EXACTLY — the same bug S3-T5 already
+  // fixed for `ignore`. Separator/trailing-slash cases are platform-independent (`core/
+  // cwd-normalization.ts` only folds case on `win32`), so these run on every CI host.
+  describe('policy matching normalizes cwd before comparing', () => {
+    it('a session cwd spelled with forward slashes still matches a backslash-spelled policy key', () => {
+      const config = {
+        ...DEFAULT_TEST_CONFIG,
+        projectPolicy: { 'c:\\code\\projeto': { canTerminate: true, deepCapture: false } },
+      };
+      expect(projectPolicyFor(config, 'c:/code/projeto')).toEqual({
+        canTerminate: true,
+        deepCapture: false,
+      });
+    });
+
+    it('a trailing separator on either side does not defeat the match', () => {
+      const config = {
+        ...DEFAULT_TEST_CONFIG,
+        projectPolicy: { 'c:\\code\\projeto\\': { canTerminate: true, deepCapture: true } },
+      };
+      expect(projectPolicyFor(config, 'c:\\code\\projeto')).toEqual({
+        canTerminate: true,
+        deepCapture: true,
+      });
+    });
+
+    it('a genuinely different cwd never matches just because it shares a prefix', () => {
+      const config = {
+        ...DEFAULT_TEST_CONFIG,
+        projectPolicy: { 'c:\\code\\projeto': { canTerminate: true, deepCapture: false } },
+      };
+      expect(projectPolicyFor(config, 'c:\\code\\projeto-2')).toEqual({
+        canTerminate: false,
+        deepCapture: false,
+      });
+    });
+
+    // Case-folding is platform-gated (win32 only) — run only on a real win32 CI host so this never
+    // depends on running on Windows TO PASS (S3-T5's own lesson), it just also never runs elsewhere
+    // pretending to prove something it can't on that host.
+    it.runIf(process.platform === 'win32')(
+      'on win32, a policy key written with different case still matches (S4-T12 cuidado (a) example)',
+      () => {
+        const config = {
+          ...DEFAULT_TEST_CONFIG,
+          projectPolicy: { 'C:\\code\\X\\': { canTerminate: true, deepCapture: false } },
+        };
+        expect(projectPolicyFor(config, 'c:/code/x')).toEqual({
+          canTerminate: true,
+          deepCapture: false,
+        });
+      },
+    );
+  });
+
+  // D-002 stays opt-in: this task makes a CONFIGURED policy apply reliably, it must never make
+  // termination apply somewhere nobody configured it.
+  it('a cwd absent from projectPolicy still defaults to false, even under normalization', () => {
+    const config = {
+      ...DEFAULT_TEST_CONFIG,
+      projectPolicy: { 'c:\\code\\projeto': { canTerminate: true, deepCapture: true } },
+    };
+    expect(projectPolicyFor(config, 'c:\\code\\outro-projeto')).toEqual({
+      canTerminate: false,
+      deepCapture: false,
+    });
+  });
 });
 
 describe('evaluateCheapEligibility (no I/O)', () => {

@@ -63,6 +63,30 @@ export function withComparableCwd(session: DiscoveredSession): DiscoveredSession
 const DEFAULT_PROJECT_POLICY: ProjectPolicy = { canTerminate: false, deepCapture: false };
 
 /**
+ * `config.projectPolicy`'s keys, normalized the same way `normalizedIgnoreSet` above normalizes
+ * `config.ignore`'s entries — S4-T12 (docs/QUESTOES.md Q-056 item 3). Before this, `projectPolicyFor`
+ * compared a raw `projectPolicy` key against a session's `cwd` exactly as it arrived from the
+ * registry, so `c:/code/x`, a relative path, a different case, or a trailing slash made
+ * `canTerminate`/`deepCapture` never apply — silently, the same shape of bug S3-T5 already fixed
+ * for `ignore` (D-025: silence where the person configured an effect is exactly the failure mode
+ * this project bans).
+ *
+ * A duplicate normalized key (two raw spellings of the same directory both present in
+ * `config.projectPolicy`) keeps whichever `Object.entries` visits LAST — only reachable by
+ * hand-editing `config.json` with two spellings of one path, since `applyProjectPolicyUpdate`
+ * (the only writer) always migrates an existing raw entry onto its own canonical key instead of
+ * adding a second one (`adapters/storage/config-schema.ts`). Not worth refusing a read over a
+ * hand-edit collision this rare.
+ */
+function normalizedProjectPolicy(config: Config): ReadonlyMap<string, ProjectPolicy> {
+  return new Map(
+    Object.entries(config.projectPolicy).map(
+      ([cwd, policy]) => [normalizeCwdForComparison(cwd, PLATFORM_HINT), policy] as const,
+    ),
+  );
+}
+
+/**
  * Always empty, on purpose (docs/QUESTOES.md Q-021, item 5) — see `evaluateCheapEligibility`'s
  * docstring for why: both discovery strategies (S1-T3, S1-T8) already exclude `forks.json`'s
  * sessions before a fork ever reaches `endDay`.
@@ -77,11 +101,23 @@ const DEFAULT_PROJECT_POLICY: ProjectPolicy = { canTerminate: false, deepCapture
  */
 const NO_KNOWN_FORKS: ReadonlySet<string> = new Set();
 
-/** `config.projectPolicy[cwd]`, defaulted the same opt-in way `config-schema.ts#resolveProjectPolicy`
- * already fills a policy that mentions only one of the two flags (D-002/D-011: silence means
- * "not opted in"), extended to a `cwd` the config doesn't mention at all. */
+/**
+ * `config.projectPolicy[cwd]`, matched by NORMALIZED `cwd` (S4-T12, see `normalizedProjectPolicy`
+ * above) — the same criterion `normalizedIgnoreSet`/`withComparableCwd` already use for `ignore`,
+ * reused rather than a second one invented (docs/PLANO-DE-ENTREGA.md S4-T12 cuidado (a)). Defaults
+ * to `{ canTerminate: false, deepCapture: false }` the same opt-in way
+ * `config-schema.ts#resolveProjectPolicy` already fills a policy that mentions only one of the two
+ * flags (D-002/D-011: silence means "not opted in"), extended to a `cwd` the config doesn't mention
+ * at all — a `cwd` genuinely absent from `projectPolicy` is not, and must never become, the same
+ * thing as `canTerminate: true`.
+ *
+ * Exported: `cli/session-view.ts#resolveCanTerminate` and `cli/config-command.ts` need the exact
+ * same normalized lookup — `cli/` importing `application/` is permitted (D-020), and a second copy
+ * of this normalization would be the duplication AGENTS.md rules out.
+ */
 export function projectPolicyFor(config: Config, cwd: string): ProjectPolicy {
-  return config.projectPolicy[cwd] ?? DEFAULT_PROJECT_POLICY;
+  const normalizedCwd = normalizeCwdForComparison(cwd, PLATFORM_HINT);
+  return normalizedProjectPolicy(config).get(normalizedCwd) ?? DEFAULT_PROJECT_POLICY;
 }
 
 /**

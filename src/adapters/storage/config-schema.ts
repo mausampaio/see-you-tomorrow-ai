@@ -15,6 +15,12 @@
  */
 import { z } from 'zod';
 import type { Config, ProjectPolicy } from '../../core/types.js';
+import { normalizeCwdForComparison, type PathPlatformHint } from '../../core/cwd-normalization.js';
+
+/** Read once, same pattern `adapters/git/git-adapter.ts`/`application/eligibility-assembly.ts`
+ * already use for `core/cwd-normalization.ts` (S3-T5): the function itself stays pure and platform
+ * is a parameter, the real `process.platform` is only ever read here, at the one call site. */
+const PLATFORM_HINT: PathPlatformHint = process.platform === 'win32' ? 'win32' : 'posix';
 
 /** Current `schemaVersion` for `config.json`. Passed to `resolveSchemaVersion` by the adapter
  * (`index.ts`) before this module ever sees the document. */
@@ -403,30 +409,76 @@ export function applyConfigFieldUpdate(
 }
 
 /**
+ * Finds the `projectPolicy` entry, if any, whose RAW key names the same directory as
+ * `normalizedCwd` once normalized (S4-T12) — the merge target for `applyProjectPolicyUpdate` below,
+ * so updating a project through a differently-spelled `cwd` (a different separator, case, or
+ * trailing slash than whatever's already on disk) merges onto the SAME entry instead of creating a
+ * second one next to it.
+ */
+function findExistingPolicyEntry(
+  projectPolicy: Readonly<Record<string, ProjectPolicy>>,
+  normalizedCwd: string,
+): { readonly rawKey: string; readonly policy: ProjectPolicy } | null {
+  for (const [rawKey, policy] of Object.entries(projectPolicy)) {
+    if (normalizeCwdForComparison(rawKey, PLATFORM_HINT) === normalizedCwd) {
+      return { rawKey, policy };
+    }
+  }
+  return null;
+}
+
+/**
  * `seeya config policy <cwd>` (D-002, D-011): sets `canTerminate`/`deepCapture` independently for
  * one `cwd`, defaulting whichever flag WASN'T passed to its previous value — or to the safe opt-in
  * default (`false`) when `cwd` has no entry yet at all — never to `undefined`. Same
  * per-field-independent defaulting `resolveProjectPolicy` above already applies on READ; this is
  * the WRITE side of the identical rule.
  *
- * Returns the resolved `policy` alongside the updated `Config` — not just the `Config` — so a
- * caller (`cli/config-command.ts`) can report exactly what was written without reading it back out
- * of `updated.projectPolicy[cwd]` with a non-null assertion (AGENTS.md § "Tipos": `!` is a sign the
- * type is wrong, not that the reader knows better; here the type system genuinely can't know a
- * `Record<string, ProjectPolicy>` has `cwd` as a key without this function saying so directly).
+ * **S4-T12 (docs/QUESTOES.md Q-056 item 3): `cwd` is written CANONICALIZED, the same
+ * `normalizeCwdForComparison` `application/eligibility-assembly.ts` uses to MATCH it later** — the
+ * identical "write the canonical form, tolerate any spelling on read" idiom `normalizeEndOfDayTime`
+ * above already established for `endOfDayTime`'s single/double-digit hour, applied here to the one
+ * other field this module canonicalizes on write. Before writing, this looks for an EXISTING entry
+ * under any other spelling of the same directory (`findExistingPolicyEntry`) so its flags are
+ * merged in — never silently reset — and that old raw key is removed, so `projectPolicy` never ends
+ * up holding two keys for the same directory at once. A `config.json` written before this task
+ * existed, or hand-edited, keeps whatever raw key it already has until the NEXT write that touches
+ * that project — reads already match it regardless (`projectPolicyFor`'s own normalization), so
+ * there is no need to migrate it eagerly (docs/PLANO-DE-ENTREGA.md S4-T12 cuidado (a): "um
+ * config.json existente com chave crua continua casando").
+ *
+ * Returns the resolved `policy` AND the `canonicalCwd` actually written, alongside the updated
+ * `Config` — not just the `Config` — so a caller (`cli/config-command.ts`) can report exactly what
+ * was written (docs/PLANO-DE-ENTREGA.md S4-T12 cuidado (b): "mostrar na confirmação o caminho
+ * absoluto que foi gravado") without reading it back out of `updated.projectPolicy[cwd]` with a
+ * non-null assertion (AGENTS.md § "Tipos": `!` is a sign the type is wrong, not that the reader
+ * knows better; here the type system genuinely can't know a `Record<string, ProjectPolicy>` has
+ * `cwd` as a key without this function saying so directly).
  */
 export function applyProjectPolicyUpdate(
   current: Config,
   cwd: string,
   updates: { readonly canTerminate?: boolean; readonly deepCapture?: boolean },
-): { readonly config: Config; readonly policy: ProjectPolicy } {
-  const existing = current.projectPolicy[cwd] ?? { canTerminate: false, deepCapture: false };
+): { readonly config: Config; readonly policy: ProjectPolicy; readonly canonicalCwd: string } {
+  const canonicalCwd = normalizeCwdForComparison(cwd, PLATFORM_HINT);
+  const existing = findExistingPolicyEntry(current.projectPolicy, canonicalCwd);
+  const previous = existing?.policy ?? { canTerminate: false, deepCapture: false };
   const policy: ProjectPolicy = {
-    canTerminate: updates.canTerminate ?? existing.canTerminate,
-    deepCapture: updates.deepCapture ?? existing.deepCapture,
+    canTerminate: updates.canTerminate ?? previous.canTerminate,
+    deepCapture: updates.deepCapture ?? previous.deepCapture,
   };
-  const config: Config = { ...current, projectPolicy: { ...current.projectPolicy, [cwd]: policy } };
-  return { config, policy };
+  // Rebuilt via `Object.fromEntries` (not a spread + `delete`) so migrating off a stale raw key
+  // (`existing.rawKey !== canonicalCwd`) never leaves it behind under a second spelling of the
+  // same directory.
+  const survivingEntries = Object.entries(current.projectPolicy).filter(
+    ([rawKey]) => existing === null || rawKey !== existing.rawKey,
+  );
+  const nextProjectPolicy: Record<string, ProjectPolicy> = {
+    ...Object.fromEntries(survivingEntries),
+    [canonicalCwd]: policy,
+  };
+  const config: Config = { ...current, projectPolicy: nextProjectPolicy };
+  return { config, policy, canonicalCwd };
 }
 
 /** Plain-text rendering of one config value (AGENTS.md § "Registro e saída": user-facing output

@@ -6,6 +6,7 @@
 import { classifyState } from '../core/classification.js';
 import type { DiscoveredSession, SessionState, Config } from '../core/types.js';
 import { computeDisplaySessionIds } from './session-id-display.js';
+import { projectPolicyFor } from '../application/eligibility-assembly.js';
 
 export interface SessionRow {
   readonly name: string;
@@ -27,17 +28,21 @@ export interface SessionRow {
 }
 
 /**
- * `config.projectPolicy` is keyed by exact `cwd` string (`core/types.ts`'s `ProjectPolicy` doc) —
- * no normalization here, same convention `core/eligibility.ts`'s `ignoredCwds` already follows. A
- * `cwd` the policy doesn't mention at all defaults to `canTerminate: false` (D-002: termination is
- * opt-in, silence means "not opted in").
+ * `config.projectPolicy`, matched by NORMALIZED `cwd` (S4-T12, docs/QUESTOES.md Q-056 item 3) —
+ * `application/eligibility-assembly.ts#projectPolicyFor` is the single place that normalization
+ * lives (same criterion `core/eligibility.ts`'s `ignoredCwds` already uses for `ignore`); `cli/`
+ * importing `application/` is permitted (D-020), so this reuses it instead of a second, raw-key
+ * lookup that would silently stop matching the moment a `cwd` arrives spelled differently than
+ * whatever's on disk (a different separator, case, or a trailing slash — exactly the bug this task
+ * fixes). A `cwd` the policy doesn't mention at all defaults to `canTerminate: false` (D-002:
+ * termination is opt-in, silence means "not opted in").
  *
  * Exported (S2-T5): `cli/format-end-day.ts` needs the exact same resolution to describe, during a
  * `--dry-run` preview, which captured sessions the config WOULD have terminated — reusing this
  * instead of a second copy (AGENTS.md: "nada de duplicação").
  */
 export function resolveCanTerminate(cwd: string, config: Config): boolean {
-  return config.projectPolicy[cwd]?.canTerminate ?? false;
+  return projectPolicyFor(config, cwd).canTerminate;
 }
 
 /**

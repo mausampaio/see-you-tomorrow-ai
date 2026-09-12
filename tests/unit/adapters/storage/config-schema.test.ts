@@ -321,13 +321,21 @@ describe('applyConfigFieldUpdate (S4-T4)', () => {
   });
 });
 
-describe('applyProjectPolicyUpdate (S4-T4)', () => {
+describe('applyProjectPolicyUpdate (S4-T4, normalization added in S4-T12)', () => {
   it('a cwd never mentioned before defaults both flags to false, then applies just the one passed', () => {
-    const { config, policy } = applyProjectPolicyUpdate(DEFAULT_CONFIG, 'c:\\code\\new', {
-      canTerminate: true,
-    });
+    const { config, policy, canonicalCwd } = applyProjectPolicyUpdate(
+      DEFAULT_CONFIG,
+      'c:\\code\\new',
+      {
+        canTerminate: true,
+      },
+    );
     expect(policy).toEqual({ canTerminate: true, deepCapture: false });
-    expect(config.projectPolicy['c:\\code\\new']).toEqual(policy);
+    // S4-T12: written CANONICALIZED (separators unified to `/`) — `canonicalCwd` is exactly the key
+    // that ends up in `config.projectPolicy`, so a caller can report what was actually written.
+    expect(canonicalCwd).toBe('c:/code/new');
+    expect(config.projectPolicy[canonicalCwd]).toEqual(policy);
+    expect(config.projectPolicy['c:\\code\\new']).toBeUndefined();
   });
 
   it('updating one flag preserves the other flag already on record for that cwd', () => {
@@ -354,6 +362,68 @@ describe('applyProjectPolicyUpdate (S4-T4)', () => {
       deepCapture: true,
     });
   });
+
+  // S4-T12 (docs/QUESTOES.md Q-056 item 3): the write side of the same normalization
+  // `application/eligibility-assembly.ts#projectPolicyFor` uses to MATCH a session's `cwd`.
+  describe('normalizing before writing (separator/trailing slash — platform-independent cases)', () => {
+    it('a cwd spelled with forward slashes normalizes to the SAME key as one written with backslashes', () => {
+      const first = applyProjectPolicyUpdate(DEFAULT_CONFIG, 'c:\\code\\shared', {
+        canTerminate: true,
+      });
+      const second = applyProjectPolicyUpdate(first.config, 'c:/code/shared', {
+        deepCapture: true,
+      });
+
+      // One entry, not two — the second write MERGED onto the first's canonical key instead of
+      // adding a second spelling of the same directory.
+      expect(Object.keys(second.config.projectPolicy)).toEqual(['c:/code/shared']);
+      expect(second.policy).toEqual({ canTerminate: true, deepCapture: true });
+    });
+
+    it('a trailing separator does not defeat the merge, and the stale raw key is removed', () => {
+      const withRawTrailingSlash: typeof DEFAULT_CONFIG = {
+        ...DEFAULT_CONFIG,
+        projectPolicy: { 'c:\\code\\x\\': { canTerminate: true, deepCapture: false } },
+      };
+      const { config, policy, canonicalCwd } = applyProjectPolicyUpdate(
+        withRawTrailingSlash,
+        'c:/code/x',
+        { deepCapture: true },
+      );
+
+      expect(canonicalCwd).toBe('c:/code/x');
+      expect(policy).toEqual({ canTerminate: true, deepCapture: true }); // merged, not reset
+      expect(Object.keys(config.projectPolicy)).toEqual(['c:/code/x']);
+      expect(config.projectPolicy['c:\\code\\x\\']).toBeUndefined(); // stale raw key is gone
+    });
+  });
+
+  // Case-folding is platform-gated (`core/cwd-normalization.ts`'s own docstring: only `win32`
+  // folds case) — asserted with an EXPLICIT fixture pair that only coincides on `win32`, and the
+  // real-host `applyProjectPolicyUpdate` call is skipped on a non-`win32` CI runner instead of
+  // asserting host-dependent behavior (docs/PLANO-DE-ENTREGA.md S3-T5's own lesson: a test "não
+  // pode depender de rodar no Windows para valer" — here that means never FAILING on Linux, not
+  // pretending to cover the win32-only branch there).
+  it.runIf(process.platform === 'win32')(
+    'on win32, a different-cased cwd merges onto the SAME entry (S4-T12 cuidado (a) example)',
+    () => {
+      const withMixedCase: typeof DEFAULT_CONFIG = {
+        ...DEFAULT_CONFIG,
+        projectPolicy: { 'C:\\code\\X\\': { canTerminate: true, deepCapture: false } },
+      };
+      const { config, policy, canonicalCwd } = applyProjectPolicyUpdate(
+        withMixedCase,
+        'c:/code/x',
+        {
+          deepCapture: true,
+        },
+      );
+
+      expect(canonicalCwd).toBe('c:/code/x');
+      expect(policy).toEqual({ canTerminate: true, deepCapture: true });
+      expect(Object.keys(config.projectPolicy)).toEqual(['c:/code/x']);
+    },
+  );
 });
 
 describe('formatConfigValue (S4-T4)', () => {
