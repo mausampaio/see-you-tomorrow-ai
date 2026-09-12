@@ -368,19 +368,44 @@ PO). Uma config só, em que cada nível inclui o anterior:
 | `off` | nada; tudo fica local | — |
 | `state` | só metadados: identidade do dispositivo, último checkpoint, "há rascunho aberto" — **sem conteúdo** | uma branch de estado do seeya no remoto |
 | `accepted` | o que a pessoa aceitou: decisões, estado, `journal/` | `main` do repositório do projeto |
-| `drafts` | também os rascunhos não aceitos | **uma branch por dispositivo**, nunca `main` |
+| `drafts` | também os rascunhos não aceitos, como **documentos de proposta**, nunca como árvore modificada | a mesma branch de estado do seeya, nunca `main` |
 
 Regras que decorrem:
 
 - **`checkpoint` é automático e local**; nunca sincroniza por si.
 - **`pause` é manual, tem aceite, e sincroniza depois do aceite** (nível `accepted` ou acima).
-- **`end-day` agendado gera rascunho** e o sincroniza só no nível `drafts` — para a branch do
-  dispositivo. O `start-day` em outra máquina **detecta o rascunho vindo de outro dispositivo** e
-  oferece revisar e aceitar ali.
-- **Aceitar um rascunho de outro dispositivo é mesclar a branch dele em `main`.** Conflito é do
-  git, e o seeya **mostra** o conflito sem resolver por conta própria (D-039). O mesmo vale para
-  o retorno: quem volta a uma máquina cujo rascunho ficou para trás enquanto `main` andou vê a
-  diferença antes de aceitar.
+- **`end-day` agendado gera rascunho** e o sincroniza só no nível `drafts`. O `start-day` em
+  outra máquina **detecta o rascunho vindo de outro dispositivo** e oferece revisar e aceitar ali.
+- **O rascunho é dado, não árvore** (mantenedor, 2026-09-12). Em vez de uma branch com o
+  repositório do projeto já modificado, o seeya guarda um **documento de proposta**: evidência
+  (repositórios, trackers, sessões) e mudanças propostas (estado atual, questões abertas, próximos
+  passos, ponto de retomada, lacunas achadas), com identidade do dispositivo, carimbo de hora e
+  status (`pending`/`accepted`/`rejected`). Esboço:
+
+  ```json
+  {
+    "schemaVersion": 1,
+    "proposalId": "desktop-2026-09-12T18:00:00Z",
+    "deviceId": "desktop",
+    "status": "pending",
+    "capturedAt": "2026-09-12T18:00:00Z",
+    "evidence": { "repositories": [], "trackers": [], "sessions": [] },
+    "proposedChanges": { "currentStatus": [], "openQuestions": [], "nextSteps": [] }
+  }
+  ```
+
+  **O aceite em outro dispositivo não resolve conflito nenhum:** o seeya aplica as mudanças
+  propostas sobre a árvore **atual** e monta o commit proposto para a pessoa aceitar. Isso não
+  fere a D-039 — o documento é território do seeya, e quem aceita o commit continua sendo a
+  pessoa. Várias propostas pendentes de vários dispositivos são aplicadas em ordem de
+  `capturedAt`, cada uma mostrada antes de entrar.
+- **Conflito de git só existe no caso sem sincronização:** a pessoa muda para um dispositivo
+  desatualizado, o trabalho continua lá, e `main` já andou em outro lugar. Aí é resolução de
+  conflito normal do git, e o seeya **mostra** sem resolver por conta própria (D-039).
+- **Consequência para o template:** para "aplicar mudanças propostas" não ser adivinhação sobre
+  prosa, os arquivos que o seeya escreve precisam ter **seções que ele reconhece** (cabeçalho
+  estruturado ou blocos delimitados). O que a pessoa escreve fora dessas seções é dela e o seeya
+  não toca.
 - **`drafts` é o nível em que conteúdo não revisado sai da máquina.** É onde o aviso de remoto
   público pesa mais, e a escolha desse nível traz o aviso junto. Mesmo aí, o que cruza é resumo e
   ponteiro; o cru (prompts, mensagens) nunca sai de `~/.seeya/`.
@@ -388,8 +413,10 @@ Regras que decorrem:
   `drafts` é escolha explícita.
 
 **Aberto, para quando virar especificação:** como o dispositivo se identifica de forma estável
-(nome da máquina não basta: muda e colide), e se o nível `state` merece existir separado de
-`accepted` ou é só o mínimo que `accepted` já carrega.
+(nome da máquina não basta: muda e colide). A dúvida anterior sobre `state` versus `accepted` se
+resolveu com o rascunho-como-dado: `state` e `drafts` usam a **mesma** branch de estado do seeya —
+`state` carrega só o cabeçalho da proposta (dispositivo, hora, status), `drafts` carrega o
+documento inteiro.
 - **O que reduz o problema:** na v2 o transcript é complementar. O que a sessão registrou nos
   documentos e commitou já viajou pelo caminho normal; o transcript só importa para o que não foi
   registrado, e isso é detectado onde ele vive.
