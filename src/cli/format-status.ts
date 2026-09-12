@@ -1,14 +1,19 @@
 /**
- * Plain-text rendering for `seeya status` (D-028). See docs/QUESTOES.md Q-015 for what this
- * command doesn't show yet — time remaining until end-of-day, snooze/skip-today state, daemon
- * status — and why: none of `core/schedule` (S4-T2), `seeya snooze`/`skip-today` (S4-T4) or the
- * daemon (S4-T3) exist yet, and inventing their output here would be exactly the kind of
- * unspecified behavior AGENTS.md forbids.
+ * Plain-text rendering for `seeya status` (D-028): the configured end-of-day time, the
+ * discovered/eligible session counts, and — since S4-T13 — today's effective schedule and the
+ * daemon's state, both pre-rendered by `./daemon-state.ts#describeDaemonState` and passed in as
+ * `daemonAndScheduleReport`. That text is reused verbatim from the same function `seeya daemon
+ * --status` calls (docs/PLANO-DE-ENTREGA.md S4-T13, cuidado (a)) rather than re-derived here —
+ * this module's own job stays "assemble the pieces of `seeya status`'s report", not "decide what
+ * the daemon is doing".
  */
 export interface StatusView {
   readonly endOfDayTime: string | null;
   readonly discoveredSessionCount: number;
   readonly eligibleSessionCount: number;
+  /** Pre-rendered by `./daemon-state.ts#describeDaemonState` — liveness, effective schedule
+   * (adiamento/skip-today/already-ran folded in) and health, in that order, newline-joined. */
+  readonly daemonAndScheduleReport: string;
 }
 
 function formatEndOfDayLine(endOfDayTime: string | null): string {
@@ -21,6 +26,6 @@ export function formatStatusReport(view: StatusView): string {
   return [
     formatEndOfDayLine(view.endOfDayTime),
     `Eligible sessions: ${view.eligibleSessionCount} of ${view.discoveredSessionCount} discovered`,
-    'Daemon: not implemented yet',
+    view.daemonAndScheduleReport,
   ].join('\n');
 }

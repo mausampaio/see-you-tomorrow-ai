@@ -6,6 +6,7 @@ function view(overrides: Partial<StatusView> = {}): StatusView {
     endOfDayTime: null,
     discoveredSessionCount: 0,
     eligibleSessionCount: 0,
+    daemonAndScheduleReport: 'Daemon: not running.\nEnd-of-day: not configured (manual only).',
     ...overrides,
   };
 }
@@ -29,9 +30,28 @@ describe('formatStatusReport', () => {
     expect(report).toContain('Eligible sessions: 2 of 5 discovered');
   });
 
-  it('declares the daemon as not implemented yet, rather than inventing a running/stopped state', () => {
+  /**
+   * S4-T13: `format-status.ts` no longer decides anything about the daemon — it embeds whatever
+   * `cli/daemon-state.ts#describeDaemonState` already rendered, verbatim, never re-deriving or
+   * summarizing it. The multi-line shape (liveness + schedule + health, S4-T13's own combined
+   * block) is passed through unchanged.
+   */
+  it('embeds the pre-rendered daemon/schedule report verbatim, without altering it', () => {
+    const daemonAndScheduleReport = [
+      'Daemon: running (pid 4242, started 2026-09-05T10:00:00.000Z).',
+      'End-of-day: closing in about 15 minute(s), at 19:30.',
+      'Snoozed today: 30 minute(s) total.',
+      'Daemon health: healthy — no failed cycles recorded.',
+    ].join('\n');
+
+    const report = formatStatusReport(view({ daemonAndScheduleReport }));
+
+    expect(report).toContain(daemonAndScheduleReport);
+  });
+
+  it('never falls back to the retired "not implemented yet" placeholder (D-025, S4-T13)', () => {
     const report = formatStatusReport(view());
 
-    expect(report).toContain('Daemon: not implemented yet');
+    expect(report).not.toContain('not implemented yet');
   });
 });

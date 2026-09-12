@@ -1103,6 +1103,14 @@ ninguém lembra de remover, e o campo preenchido faz o próximo achar que funcio
 
 A C (adiar o comando inteiro) custaria mais do que rende: o `seeya status` já responde coisa útil
 hoje, e o texto atual é o registro honesto de que ele está incompleto de propósito.
+
+**Gap fechado em S4-T13 (2026-09-12, ver Q-066).** `core/schedule` (S4-T2), `seeya snooze`/
+`skip-today` (S4-T4) e o daemon (S4-T3/S4-T3b/S4-T5) — as três peças que faltavam nesta questão —
+existem desde então. `seeya status` agora chama `core/schedule.ts#decideSchedule` só para
+renderizar (nunca persiste `nextState`, mesma disciplina que `seeya snooze` já usa) e mostra o
+estado do daemon pela mesma função que `seeya daemon --status` usa
+(`cli/daemon-state.ts#describeDaemonState`) — os dois nunca podem discordar porque leem a mesma
+decisão. A linha `"Daemon: not implemented yet"` não existe mais em nenhum lugar do código.
 ---
 
 ## Q-016 — Três escolhas feitas fazendo S1-T7, registradas para confirmação
@@ -6034,3 +6042,100 @@ pública por limpeza de outra função seria o erro. O exemplo de `config.json` 
 `docs/ARQUITETURA.md` com chave crua foi ajustado pelo PO nesta mesma leva.
 
 ---
+
+## Q-066 — S4-T13 (`seeya status` vira o painel único): onde a extração ficou, o `CliContext` compartilhado com `sessions`, e um `describeDaemonState` único em vez de duas renderizações
+
+**Tarefa:** S4-T13 (decisão do mantenedor em 2026-09-12, saída da triagem da Q-056 item 4,
+fechando o gap da Q-015/S1-T6)
+**Bloqueia:** não — `npm run verificar` está verde (medido nesta máquina, código de saída lido
+separado do `npm test`/`npm run cobertura` que ele engloba). `npm run verificar:linux` (Docker
+Desktop já rodando) também: 135 arquivos de teste, todos passando, tabela de cobertura completa
+sem nenhum diretório abaixo do próprio piso, nenhum "FAIL"/"ERROR" — a captura do log perdeu só a
+última linha de resumo percentual (artefato de I/O do redirecionamento através do Docker Desktop
+neste host, não um sinal de falha: um teto de cobertura não atingido interrompe ANTES da tabela
+completa, com um bloco de erro, o que não aconteceu aqui). Na primeira passada, pegou de verdade um
+teste dependente de fuso (item 5 abaixo) que só falha dentro do container — corrigido e
+reconfirmado. Registro no
+mesmo espírito de Q-056/Q-057/Q-063: cada escolha abaixo tem leitura alternativa razoável e o
+despacho pediu para registrar, não decidir calado.
+
+**1) A extração foi para `cli/daemon-state.ts`, um módulo NOVO, não para dentro de
+`daemon-command.ts` nem de `format-status.ts`.** O despacho já sugeria esse nome. `checkLiveLock`,
+`describeLiveness`, `describeScheduleDecision`, `describeHealth` e um `describeDaemonState`
+combinado (novo — ver item 2) saíram de `daemon-command.ts` inteiros, sem mudar uma linha de
+lógica ou de texto. `daemon-command.ts` ficou só com `runDaemonLauncher`/`runDaemonWorker` (o
+lançamento/worker, que `status` nunca toca) e `runDaemonStop`/`runDaemonStatus` (que agora chamam
+`daemon-state.ts`). `DaemonControlDeps` continua exportado de `daemon-command.ts` — virou
+`export type DaemonControlDeps = DaemonStateDeps` — para não quebrar `tests/unit/cli/
+daemon-command.test.ts`, que já importava esse nome; trocar o nome do tipo não estava no escopo
+desta tarefa e teria efeito fora do pedido (AGENTS.md: "avisar, não parar").
+
+**2) `describeDaemonState` (a função que junta liveness + agenda + saúde num só texto) é NOVA — não
+existia antes, nem em `daemon-command.ts`.** O `runDaemonStatus` de antes desta tarefa montava esse
+texto inline, no próprio corpo da função. Extrair as PEÇAS sem também extrair a MONTAGEM deixaria
+`status-command.ts` reconstruindo a mesma sequência (`describeLiveness`, depois
+`describeScheduleDecision`, depois `describeHealth`, juntando com `\n`) — exatamente a duplicação
+que o despacho pediu para evitar, só que uma casa acima. Com `describeDaemonState` compartilhada,
+`runDaemonStatus` virou `return describeDaemonState(deps)` (uma linha) e `runStatusCommand` chama a
+mesma função direto. O teste do cuidado (a) (`tests/unit/cli/daemon-status-agreement.test.ts`)
+verifica isso da forma mais direta possível: chama as duas funções públicas sobre o MESMO
+`Storage`/`ProcessControl`/`Clock` e confere que a saída de `status` CONTÉM a saída de
+`daemon --status` (`toContain`, não igualdade — `status` tem duas linhas próprias antes do bloco
+do daemon). **Opções:** A) função combinada nova em `daemon-state.ts` (o que implementei). B) só
+extrair as peças e deixar cada comando montar sua própria sequência — mais "granular", mas reabre
+a porta para as duas sequências divergirem um dia (alguém reordena uma sem lembrar da outra).
+**Minha escolha:** A — o próprio texto do despacho ("os dois nunca podem discordar... porque leem
+a mesma decisão") pede uma decisão, não duas peças que hoje concordam por coincidência.
+
+**3) `StatusCommandContext` ganhou `storage`/`processControl`, e isso obrigou `CliContext`
+(`cli/composition.ts`) a ganhar os dois também — o que `seeya sessions` nunca usa.** `cli/index.ts`
+constrói `buildCliContext()` uma vez por comando e passa o resultado tanto para
+`runSessionsCommand` quanto para `runStatusCommand` (cada um com sua própria chamada a
+`buildCliContext()`, não um contexto compartilhado entre os dois comandos). Como `SessionsCommandContext`
+e `StatusCommandContext` são estruturalmente diferentes (a primeira não pede `storage`/
+`processControl`), bastaria D-020 para justificar construir os dois campos em `cli/`; a pergunta é
+se eles deveriam entrar em `CliContext` (compartilhado) ou se `status` deveria ganhar um
+`buildStatusContext` próprio, separado, do jeito que `buildSnoozeContext`/`buildConfigContext`
+já são funções dedicadas por comando. **Opções:** A) estender `CliContext` (o que implementei) —
+`sessions` ganha dois campos que ignora, mas não há uma segunda função de composição quase
+idêntica a `buildCliContext` para manter sincronizada (mesma leitura de config, mesmo
+`resolveCliHome`, mesmo `Clock`). B) `buildStatusContext` dedicado, copiando as ~10 linhas de
+`buildCliContext` e acrescentando `storage`/`processControl` — mais preciso por comando, ao custo
+de duas funções quase-idênticas em `composition.ts` que alguém precisa lembrar de manter iguais
+quando `sessions`/`status` crescerem outra dependência em comum. **Minha escolha:** A — o cuidado
+(d) do despacho já dizia "estenda `StatusCommandContext` e monte em `cli/composition.ts`", no
+singular, e a base de código já tem precedente de contexto compartilhado por múltiplos comandos
+(`CliContext` já era usado por `sessions` E `status` antes desta tarefa).
+
+**4) `describeDaemonState` sempre chama `Storage.readConfig()` de novo, mesmo quando o chamador
+(`status-command.ts`) já tinha um `Config` em mãos (`context.config`, lido por `buildCliContext`
+para a linha de `endOfDayTime`/elegibilidade).** Isso é uma segunda leitura de `config.json` por
+execução do `seeya status` — nunca uma segunda checagem de liveness (cuidado (g), que só fala do
+`ProcessControl.isAlive`), só um `readFile`/`JSON.parse` a mais, barato. A alternativa seria
+`describeDaemonState` aceitar um `Config` já lido como parâmetro em vez de ler `Storage` de novo,
+mas isso mudaria a assinatura que `runDaemonStatus` já usava antes desta tarefa (`DaemonControlDeps`
+não carrega `Config`) só para economizar uma leitura de arquivo local, no comando manual mais barato
+do projeto. **Minha escolha:** manter a releitura — é exatamente o que `runDaemonStatus` já fazia
+sozinho antes desta tarefa, e mudar isso teria sido escopo extra não pedido.
+
+**5) Os testes de agenda novos em `tests/unit/cli/status-command.test.ts` que precisam de um
+horário PRÓXIMO de `NOW` (aviso prévio, "já venceu" e o adiamento) calculam o `endOfDayTime`
+esperado a partir de `NOW`, nunca um literal `"HH:MM"` — achado por medição real, não por
+inspeção.** `NOW` é fixo em UTC (`'2026-09-05T10:00:00.000Z'`); `core/schedule.ts` trabalha
+inteiramente em hora LOCAL (D-019/`docs/ARQUITETURA.md` § "Fusos e horários"), então a hora local
+de `NOW` depende do fuso de quem roda a suíte. Escrevi a primeira versão do teste de adiamento com
+um literal (`'09:45'` nominal, `'10:15'` esperado depois de +30min) que **passou** nesta máquina
+(América/São_Paulo, UTC-3, `NOW` local = 07:00 — 10:15 ainda estava longe) e **falhou** rodando
+`npm run verificar:linux` (container Docker em UTC, `NOW` local = 10:00 — 10:15 já estava dentro
+da janela do aviso de 30 minutos, então a decisão virou `leadTimeWarning` em vez de `waiting`,
+exatamente a mensagem errada). Troquei os três testes que comparam contra um horário PRÓXIMO
+(dentro da janela de 45 min que os `leadTimesInMinutes` padrão cobrem) por um cálculo relativo a
+`NOW` (`localTimeOffsetFromNow`), e confirmei rodando a mesma suíte sob `TZ=UTC`,
+`TZ=America/Sao_Paulo`, `TZ=Asia/Kolkata`, `TZ=Pacific/Kiritimati` e `TZ=Etc/GMT+12` nesta máquina
+(os dois extremos de fuso que existem) — os cinco passaram. Os outros quatro testes de agenda
+(manual-only, "ainda não começou", pulado, "já rodou") usam horários literais distantes (`'19:30'`,
+`'09:00'`) que são "depois/o valor de `endOfDayFired` já resolve independente de hora" em qualquer
+fuso razoável — o mesmo padrão que `tests/unit/cli/daemon-command.test.ts` já usava antes desta
+tarefa para o mesmo motivo, sem eu precisar generalizar mais do que o arquivo já tinha.
+
+**Resposta:** (preenchida pelo PO)
