@@ -5914,3 +5914,112 @@ instante.
 
 **Prova final, que não é minha:** os três pushes seguintes à mesclagem, na CI real do Windows —
 o único ambiente onde a contenção medida aqui realmente acontece.
+
+## Q-065 — S4-T12: onde a normalização de `projectPolicy` mora, a escolha de resolver (não recusar) caminho relativo, e por que `buildDaemonContext` perdeu seu único `readConfig` de startup
+
+**Tarefa:** S4-T12 (Q-056 item 3 e Q-049 item 8 — "o que a pessoa configura precisa valer")
+**Bloqueia:** não — `npm run verificar` e `npm run verificar:linux` estão verdes (medido nesta
+máquina, o segundo via Docker Desktop, container Linux real, já rodando quando a tarefa começou).
+Registro no mesmo espírito de Q-056/Q-049: cada escolha abaixo tem leitura alternativa razoável.
+
+**Parte 1 — a normalização de `projectPolicy` mora em três lugares, cada um pela razão que o
+próprio despacho já apontava.**
+
+1. **Leitura, um critério só.** `application/eligibility-assembly.ts#projectPolicyFor` passou a
+   normalizar as CHAVES de `config.projectPolicy` com `core/cwd-normalization.ts
+   #normalizeCwdForComparison` (a mesma função, mesmo `PLATFORM_HINT` já lido no topo do arquivo
+   para `normalizedIgnoreSet`) antes de comparar com o `cwd` (também normalizado) recebido. Nenhuma
+   segunda função de normalização foi criada. `cli/session-view.ts#resolveCanTerminate` e
+   `cli/config-command.ts` (a leitura de `seeya config policy <cwd>` sem flags) passaram a chamar
+   essa MESMA `projectPolicyFor` em vez de indexar `config.projectPolicy[cwd]` cru — `cli/` importar
+   `application/` é permitido (D-020), e duplicar a normalização ali seria exatamente o erro que o
+   despacho pediu para evitar.
+
+2. **Escrita, canonicalizada — o mesmo idioma que `endOfDayTime` já usava.**
+   `adapters/storage/config-schema.ts#applyProjectPolicyUpdate` já tinha um precedente direto no
+   próprio arquivo: `normalizeEndOfDayTime` grava sempre a forma canônica (a hora digitada com um
+   dígito vira duas em disco), e a leitura tolera qualquer forma aceita. Apliquei o mesmo idioma a
+   `projectPolicy`: a chave gravada é `normalizeCwdForComparison(cwd, PLATFORM_HINT)` (barra
+   normalizada; minúsculas só em `win32`, plataforma lida uma vez no módulo, mesmo padrão de
+   `git-adapter.ts`). Antes de gravar, `findExistingPolicyEntry` procura uma entrada já existente
+   cuja chave CRUA normalize para a mesma forma — se achar, funde as flags (não reseta o que não
+   foi passado) e remove a chave antiga, para nunca sobrar duas grafias da mesma pasta em
+   `config.json` ao mesmo tempo. Uma `config.json` já gravada com chave crua e nunca mais tocada
+   por `seeya config policy` continua exatamente como está — só passa por essa canonicalização na
+   PRÓXIMA escrita que a toque; a leitura (item 1) já garante que ela casa de qualquer forma, sem
+   precisar de migração eager. **Opções:** A) canonicalizar na escrita, fundindo com qualquer chave
+   crua equivalente já existente (o que implementei). B) gravar exatamente o que a pessoa digitou,
+   sem tocar em nada além disso — mais simples, mas deixaria `config.json` crescer duas chaves para
+   a mesma pasta assim que alguém digitasse a mesma política duas vezes com grafias diferentes, e a
+   confirmação do comando (cuidado (b)) teria menos certeza sobre "o que foi gravado" já que o
+   valor ecoado seria literalmente o que a pessoa digitou, não o que ficou no arquivo. **Minha
+   escolha:** A — é o mesmo padrão que `normalizeEndOfDayTime` já validou nesta base de código, e
+   evita a bifurcação de chave.
+
+3. **Caminho relativo: resolvido, nunca recusado — como o PO já tinha recomendado no despacho.**
+   `cli/config-command.ts#resolvePolicyCwdArgument` resolve contra `process.cwd()` (injetável, para
+   teste) só quando o `cwd` recebido NÃO é absoluto sob nenhuma das duas convenções
+   (`path.win32.isAbsolute` OU `path.posix.isAbsolute` — checar as duas, não só a do SO real, é o
+   que deixa uma chave absoluta gravada num SO diferente, D-032, nunca ser confundida com
+   "relativa"). A confirmação do `set` ecoa `canonicalCwd` (o valor devolvido por
+   `applyProjectPolicyUpdate`), então a pessoa sempre vê o caminho absoluto exatamente como ficou em
+   disco, nunca o que digitou.
+
+4. **Um detalhe técnico que quase virou um teste dependente de SO, e não virou.** `core/
+   cwd-normalization.ts` só dobra maiúscula/minúscula em `win32` (por desenho: cada branch tem que
+   ser exercitável de qualquer CI runner). Isso significa que um teste que grava um caminho
+   maiúsculo e lê com um caminho minúsculo só bate de verdade rodando em `win32` — testar isso
+   incondicionalmente teria feito exatamente o que a S3-T5 já tinha marcado como erro ("não pode
+   depender de rodar no Windows para valer"). Resolvido com `it.runIf(process.platform === 'win32')`
+   nos dois arquivos que precisavam do exemplo literal do despacho (caminho maiúsculo com barra
+   final gravado, sessão minúscula com barra normal):
+   `tests/unit/application/eligibility-assembly.test.ts` e
+   `tests/unit/adapters/storage/config-schema.test.ts`. Rodando nesta máquina (win32), os dois
+   passaram; no container Linux (`verificar:linux`), aparecem como skip — nunca como falha por
+   depender de host. As outras variações (barra, barra final, prefixo diferente) são testadas
+   incondicionalmente porque não dependem de dobra de caso.
+
+**Parte 2 — `buildGenerators` é uma fábrica, seguindo `buildSessionProvider` ao pé da letra.**
+
+5. **Nenhum mecanismo novo — o mesmo padrão, mais um campo.** `scheduler/types.ts#DaemonDeps`
+   trocou `leanGenerator`/`deepGenerator: HandoffGenerator` por
+   `buildGenerators: (options: CaptureGeneratorOptions) => { leanGenerator, deepGenerator }`,
+   chamada uma vez por poll em `scheduler/poll.ts#buildEndDayDeps` com o `config` que aquele MESMO
+   poll acabou de ler — exatamente onde `buildSessionProvider(config.relevanceHours)` já era
+   chamada, na mesma função. `CaptureGeneratorOptions` é um tipo local a `scheduler/types.ts` (não
+   importado de `adapters/generation/*`, que `scheduler/` não pode importar — D-020) com só os dois
+   campos que este ciclo precisa.
+
+6. **Consequência não pedida explicitamente, mas que caiu direto do resto: `buildDaemonContext`
+   perdeu seu único `await`.** Antes desta tarefa, `cli/composition.ts#buildDaemonContext` lia
+   `config.json` UMA VEZ na subida do daemon só para montar `generatorOptions`
+   (`captureModel`/`budgetPerSessionUsd`) — não sobrava mais nenhum uso desse valor depois que os
+   dois campos passaram a vir da fábrica chamada por poll. Removi essa leitura de startup por
+   inteiro (não só o `generatorOptions`): não havia mais nenhuma razão para ela existir. Isso deixou
+   a função sem nenhum `await` no corpo, e o guard `@typescript-eslint/require-await` reprovou
+   `async function` sem `await`. **Opções:** A) trocar `async function ... { ...; return {...} }`
+   por uma função síncrona que retorna `Promise.resolve({...})` (o que implementei) — mantém a
+   assinatura pública `Promise<DaemonDeps>` intacta, então `cli/index.ts`'s quatro `await
+   buildDaemonContext()` continuam funcionando sem tocar. B) remover `async`/`Promise` de vez e
+   mudar `buildDaemonContext` para retornar `DaemonDeps` puro, ajustando os quatro call sites em
+   `cli/index.ts` para não usar `await` (ainda funcionaria — `await` sobre valor não-thenable é
+   inócuo — mas seria uma mudança de assinatura sem necessidade). **Minha escolha:** A — B mudaria
+   uma assinatura pública por um motivo que não é dela (a limpeza aconteceu em outra função), e A
+   é a mudança mínima que mantém o `Promise<DaemonDeps>` que toda a família `build*Context` já usa
+   por convenção (`buildCliContext`, `buildEndDayContext`, `buildStartDayContext`,
+   `buildSnoozeContext` — todos assíncronos de verdade, porque leem config).
+
+7. **Teste em `tests/unit/scheduler/poll.test.ts` exigiu tornar `InMemoryDaemonStorage` mutável em
+   `config`, não só em `estado.json`.** `tests/unit/scheduler/_fakes.ts#InMemoryDaemonStorage`
+   estendia `FakeStorage` (`tests/unit/application/_fakes.ts`), cujo `saveConfig` rejeita de
+   propósito ("não é exercitado por `endDay`" — verdade até esta tarefa). Como o teste do cuidado
+   (h) precisa de um `seeya config set` real entre dois polls, dei a `InMemoryDaemonStorage` seu
+   próprio `readConfig`/`saveConfig` mutáveis, no mesmo padrão que ela já usa para `estado.json`
+   e `daemon.lock`. `FakeStorage` em si não mudou — só o double do `scheduler/`, que é quem
+   realmente precisa disso.
+
+**O que ficou de fora, por não estar no despacho.** Não toquei `docs/ARQUITETURA.md`'s exemplo de
+`config.json` (que mostra uma chave `projectPolicy` crua) nem qualquer migração automática de
+`config.json` existentes na subida do `seeya` — a leitura já casa com chave crua (item 1), então
+não há necessidade funcional de migrar, e migrar na subida seria escopo novo que o despacho não
+pediu.

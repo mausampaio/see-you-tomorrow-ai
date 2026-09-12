@@ -3402,9 +3402,9 @@ como tarefa aberta, já decidida, fora do aceite.
       (por que os dois grupos novos não foram unificados sob uma alegação só, e o que a medição
       NÃO sustentou da hipótese original do despacho).
 
-- [ ] **S4-T12 — O que a pessoa configura precisa valer: política por projeto que não casa, e
+- [~] **S4-T12 — O que a pessoa configura precisa valer: política por projeto que não casa, e
       modelo de captura que só muda no restart.** Saída da triagem das questões em 2026-09-12
-      (Q-056 item 3 e Q-049 item 8). Duas correções pequenas no mesmo assunto. **Não despachada.**
+      (Q-056 item 3 e Q-049 item 8). Duas correções pequenas no mesmo assunto.
 
       **Parte 1 — `projectPolicy` compara chave crua com `cwd` do registro.** Verificado:
       `application/eligibility-assembly.ts#projectPolicyFor` faz `config.projectPolicy[cwd]` com
@@ -3426,6 +3426,56 @@ como tarefa aberta, já decidida, fora do aceite.
       encerramento, como vale o `endOfDayTime`. *Aceite:* mudar `captureModel` ou
       `budgetPerSessionUsd` com o daemon no ar vale no ciclo seguinte, sem restart, com teste em
       `tests/unit/scheduler/poll.test.ts`. Sem chave nova em disco.
+
+      **Implementado em 2026-09-12.**
+
+      **Parte 1.** `application/eligibility-assembly.ts#projectPolicyFor` agora normaliza as
+      chaves de `config.projectPolicy` com `core/cwd-normalization.ts#normalizeCwdForComparison`
+      (o mesmo critério, a mesma função que `normalizedIgnoreSet` já usava para `ignore`) antes de
+      comparar com o `cwd` recebido, também normalizado — nenhuma segunda normalização foi
+      inventada. `cli/session-view.ts#resolveCanTerminate` e a leitura de
+      `seeya config policy <cwd>` (`cli/config-command.ts`) passaram a chamar essa mesma função em
+      vez de indexar `config.projectPolicy[cwd]` cru. A escrita
+      (`adapters/storage/config-schema.ts#applyProjectPolicyUpdate`) grava a chave já
+      canonicalizada (mesmo idioma que `normalizeEndOfDayTime` já usava para `endOfDayTime`),
+      fundindo com qualquer entrada crua já existente que normalize para a mesma pasta (e removendo
+      a chave antiga) — uma `config.json` com chave crua nunca tocada continua casando pela leitura
+      normalizada, sem migração forçada. Caminho relativo em `seeya config policy` é resolvido
+      contra `process.cwd()` (`cli/config-command.ts#resolvePolicyCwdArgument`, D-020: `cli/` é a
+      raiz de composição) — nunca recusado, seguindo a recomendação do PO — e a confirmação ecoa o
+      caminho absoluto/canonicalizado que de fato foi gravado.
+
+      **Parte 2.** `scheduler/types.ts#DaemonDeps` trocou `leanGenerator`/`deepGenerator` por uma
+      fábrica `buildGenerators(options)`, chamada uma vez por ciclo em
+      `scheduler/poll.ts#buildEndDayDeps` com o `captureModel`/`budgetPerSessionUsd` que aquele
+      MESMO ciclo acabou de ler de `config.json` — exatamente o padrão que `buildSessionProvider`
+      já usava para `relevanceHours`, sem mecanismo novo. `cli/composition.ts#buildDaemonContext`
+      não lê mais `config.json` na subida do daemon (não sobrou nenhum uso para essa leitura).
+
+      **Justificativas registradas em `docs/QUESTOES.md` Q-065** (a questão desta tarefa): por que
+      a canonicalização na escrita segue o idioma de `normalizeEndOfDayTime`; por que caminho
+      relativo é resolvido e não recusado; por que dois testes que dependem de dobra de
+      maiúscula/minúscula (só existe em `win32`) usam `it.runIf(process.platform === 'win32')` em
+      vez de rodar incondicionalmente; e por que `buildDaemonContext` deixou de ser assíncrono "de
+      verdade" (perdeu seu único `await`) e o que isso mudou na assinatura.
+
+      **Medido:** `npm run verificar` verde (tipos, lint, `npm run dependencias` sem violação,
+      build, `npm run cobertura`: 1456 testes passando, 3 pulados — os dois `it.runIf(win32)` desta
+      tarefa rodaram de verdade nesta máquina — cobertura agregada 97,11% linhas, todo diretório de
+      produção acima do próprio piso do `vitest.config.ts`, `core/` 100%). `npm run verificar:linux`
+      verde via Docker Desktop (container Linux real, já estava rodando): 1454 passando, 5 pulados
+      (os dois desta tarefa mais três testes Windows-only preexistentes), mesmos pisos de cobertura
+      batendo. Códigos de saída lidos separadamente, nunca encadeados com o commit.
+
+      **Inferido/decisão do agente:** todo o desenho de onde a normalização mora, a escolha de
+      resolver em vez de recusar caminho relativo, e a forma de `CaptureGeneratorOptions` — ver
+      Q-065 para as alternativas consideradas e por quê.
+
+      **O que o mantenedor precisa ver à mão:** `seeya config policy c:/code/x --can-terminate
+      true` (note a barra normal, minúsculo) seguido de uma sessão real com `cwd` gravado no
+      registro como `C:\code\x` (barra invertida, maiúsculo) — `seeya sessions` deve mostrar
+      `canTerminate: true` para essa sessão, e `seeya config get projectPolicy` deve mostrar a
+      chave já canonicalizada (`c:/code/x`), não a que foi digitada.
 
 - [ ] **S4-T13 — `seeya status` é o painel único.** Decisão do mantenedor em 2026-09-12, saída
       da triagem da Q-056 (item 4), que fechava o gap aberto na Q-015 (S1-T6). **Não despachada.**
