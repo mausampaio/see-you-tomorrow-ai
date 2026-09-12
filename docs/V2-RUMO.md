@@ -87,23 +87,46 @@ O `seeya.json` associa a frente aos repositórios e trackers que ela atravessa:
 Quando o harness restringe o acesso ao `cwd`, o adapter dele precisa liberar os diretórios
 associados.
 
-### Dois níveis de encerramento
+### Três verbos, separados por custo e por leitor (mantenedor, 2026-09-12)
+
+Na v1, `end-day` faz tudo de uma vez: coleta fatos, gera entendimento, escreve o briefing e
+encerra sessões. Na v2 o encerramento muda de significado, e um verbo só não serve. O mantenedor
+separou em três:
 
 ```text
-seeya end-day --project <id>    encerra e consolida uma frente
-seeya end-day                   encerra o dia e consolida todas as frentes
+seeya checkpoint [--project <id>]   coleta fatos baratos e registra até onde esta máquina observou
+seeya pause <id>                    produz entendimento, lacunas e ponto de retomada da frente;
+                                    encerra as sessões dela se a política permitir (D-002)
+seeya end-day                       pausa/consolida as frentes ativas e gera a visão global do dia
 ```
 
-O encerramento analisa **só o que mudou desde o último checkpoint**: documentos do projeto,
-commits e arquivos sujos nos repositórios associados, branches e worktrees ativas, mudanças nos
-trackers e, se necessário, os trechos novos dos transcripts. A partir disso, produz o que foi
-concluído, o que está em andamento, as decisões tomadas, as pendências e bloqueios, as lacunas de
-documentação, uma sugestão de próximos passos e o ponto de retomada atualizado.
+**A separação coincide com a de custo e a de leitor, e é isso que a sustenta:**
 
-O encerramento geral não é só a soma dos encerramentos por projeto. Ele também mostra as sessões
-sem projeto, o trabalho feito fora das frentes conhecidas, os bloqueios, os reviews pendentes e
-uma sugestão de prioridades para o dia seguinte. Essa sugestão é **editável**: o seeya propõe e
-aponta furos no plano, mas o plano é de quem trabalha (D-039).
+- **`checkpoint` é fato: barato, sem modelo, pode rodar sempre.** Git dos repositórios associados,
+  cursor do transcript, arquivos tocados, e o carimbo "esta máquina observou até aqui". É o que
+  viaja entre máquinas pelo repositório do projeto (ver "Continuidade entre dispositivos"). O
+  daemon pode disparar sozinho — ao sair de uma máquina, em intervalo, antes de suspender — e a
+  pessoa também pode.
+- **`pause` é entendimento: caro, com modelo, por evento e por frente.** É o "vou almoçar, seeya".
+  Roda o detector de lacunas sobre o delta desde o último checkpoint, escreve o ponto de retomada
+  e atualiza o `journal/`. A terminação é opcional e continua opt-in por projeto: a D-002 não
+  muda de lado.
+- **`end-day` é para o humano.** Pausa o que ainda não foi pausado, consolida e produz a visão
+  global: frentes com atividade, bloqueios, reviews pendentes, sessões sem projeto, trabalho fora
+  das frentes conhecidas, e a sugestão **editável** de prioridades para o dia seguinte (D-039).
+
+**Duas regras que a separação exige:**
+
+1. **`end-day` não repete `pause` onde nada mudou.** Quem pausou três frentes durante o dia não
+   paga a chamada de modelo de novo à noite: `end-day` só pausa a frente cujo checkpoint mostra
+   atividade depois da última pausa. A consolidação é agregação determinística das pausas; só a
+   sugestão de prioridades justifica uma chamada pequena de modelo.
+2. **O agendamento do daemon vira rede de segurança de `end-day`**, como hoje: se a pessoa
+   esqueceu de parar, o horário faz por ela. O que muda é que o caminho principal passa a ser
+   `pause`, a pedido, e não o relógio.
+
+**Relação com a v1:** `end-day` e `start-day` da v1 continuam valendo para sessões que não
+pertencem a nenhum projeto — é o modo de recuperação, e é o que roda hoje.
 
 ### Trackers e transcripts como evidência
 
@@ -137,7 +160,7 @@ descoberta de sessões, a leitura do git, o handoff e a retomada são reaproveit
 1. `seeya project create`, `list`, `show` e `open`;
 2. template com `AGENTS.md`, `INDEX.md`, contexto, decisões, plano e estado;
 3. associação de repositórios locais;
-4. `end-day --project`, usando os documentos e a atividade no git;
+4. `checkpoint` e `pause <id>`, usando os documentos e a atividade no git;
 5. `end-day` geral, consolidando as frentes ativas;
 6. integração opcional com trackers;
 7. detecção de sessões sem projeto e sugestão de associação;
@@ -156,8 +179,8 @@ O desligamento forçado também deixa de ser um problema, porque só se perde o 
 registrado. E a proposta cabe inteira na D-039: o seeya monta a estrutura, os agentes escrevem e
 ninguém decide pelo mantenedor.
 
-**Ela também resolve o corte múltiplo que a D-039 tinha adiado.** `end-day --project` é um corte
-que não encerra o dia — o "até daqui a pouco" chega sem nenhuma mudança no modelo de dia.
+**Ela também resolve o corte múltiplo que a D-039 tinha adiado.** `pause` é um corte que não
+encerra o dia — o "até daqui a pouco" chega sem nenhuma mudança no modelo de dia.
 
 **A evidência mais forte a favor é este repositório.** `DECISOES.md`, `QUESTOES.md`,
 `PLANO-DE-ENTREGA.md` e `AGENTS.md` são exatamente essa estrutura, e é ela que sustenta quatro
