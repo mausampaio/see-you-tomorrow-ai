@@ -77,15 +77,51 @@ O `seeya.json` associa a frente aos repositórios e trackers que ela atravessa:
   "name": "Auth hardening",
   "defaultHarness": "claude",
   "repositories": [
-    { "name": "api", "path": "C:\\code\\app-api" },
-    { "name": "frontend", "path": "C:\\code\\app-web" }
+    { "name": "api", "remote": "https://git.example.com/acme/app-api.git" },
+    { "name": "frontend", "remote": "https://git.example.com/acme/app-web.git" }
   ],
   "trackers": [{ "type": "gitlab", "project": "acme/app", "labels": ["security"] }]
 }
 ```
 
+**A identidade do repositório é separada da resolução local dele** (mantenedor, 2026-09-12). Um
+`"path": "C:\\code\\app-api"` só funciona num dispositivo. O `seeya.json` guarda a identidade —
+o remoto — e cada dispositivo guarda, em `~/.seeya/`, onde aquele remoto está clonado nele. O
+seeya **não adivinha** onde um repositório foi clonado: na primeira vez que precisa de um
+repositório que não conhece neste dispositivo, procura em `<raiz de projetos>/<nome>` e, se não
+está lá, pergunta — oferecendo clonar ali. Clonar repositório de código é ação da pessoa (tamanho,
+credenciais), com o seeya só propondo o caminho padrão.
+
 Quando o harness restringe o acesso ao `cwd`, o adapter dele precisa liberar os diretórios
 associados.
+
+### Um repositório para todos os projetos, não um por projeto (recomendação do PO, 2026-09-12)
+
+A pergunta do mantenedor: cada projeto é um repositório, ou o seeya tem **um** repositório
+configurado na instalação e tudo mora nele? **Recomendo um só — o espaço de trabalho da pessoa —
+com cada projeto como diretório dentro dele.** Os motivos:
+
+- **Descoberta sai de graça.** É o requisito que ele mesmo colocou: o seeya, com a conta da
+  pessoa, sabe quais projetos existem no remoto **mesmo os que não estão clonados aqui**, e no
+  `open` de um projeto nunca aberto neste dispositivo, materializa só aquele diretório.
+- **Um remoto, uma sincronização, uma branch de estado, uma escada de níveis** (seção abaixo).
+  Com um repositório por projeto seriam N remotos para configurar e um índice em algum lugar
+  dizendo quais existem — e esse índice seria… um repositório.
+- **A visão global do `end-day` já está no lugar certo:** todas as frentes num histórico só.
+- **A instalação pergunta uma vez** onde o espaço de trabalho mora, com padrão dentro de
+  `~/.seeya/` e opção de mudar. O operacional local (`~/.seeya/` fora do espaço de trabalho)
+  **nunca** entra no repositório — a separação que a seção de aceite humano já exige.
+
+**O custo, declarado:** a granularidade de compartilhamento é o repositório inteiro. Compartilhar
+um projeto com outra pessoa sem compartilhar todos não cabe neste desenho, e o raio de dano de um
+remoto público é tudo, não um projeto. Para uma pessoa só — o caso da v2 — isso é aceitável, e o
+aviso de remoto público passa a dizer exatamente isso. Compartilhar por projeto é problema de
+quando existir outra pessoa, e pode ser resolvido depois por divisão ou por submódulo sem refazer
+o resto.
+
+**Isto resolve a identidade do dispositivo**, que estava aberta: na instalação, o dispositivo se
+registra no espaço de trabalho com um identificador gerado (não o nome da máquina) e um rótulo
+legível que a pessoa escolhe. O identificador vive em `~/.seeya/` e na branch de estado.
 
 ### Três verbos, separados por custo e por leitor (mantenedor, 2026-09-12)
 
@@ -243,8 +279,10 @@ conta com isso: o detector de lacunas é do seeya, não da boa vontade da sessã
 
 ### Privacidade
 
-A pasta de cada projeto fica **fora** dos repositórios que ela referencia, então o contexto de
-trabalho não encosta nem no repositório do seeya nem nos repositórios de terceiros. O template e
+O espaço de trabalho fica **fora** dos repositórios que ele referencia, então o contexto de
+trabalho não encosta nem no repositório do seeya nem nos repositórios de terceiros. Como é um
+repositório só para todos os projetos, o aviso de remoto público diz que o que fica exposto é
+**tudo**, não um projeto. O template e
 os exemplos publicados usam nomes genéricos. As credenciais dos trackers são do usuário e nunca
 entram no `seeya.json`.
 
@@ -412,8 +450,8 @@ Regras que decorrem:
 - **Padrão:** `off` sem remoto configurado; ao configurar um remoto, `accepted`. Subir para
   `drafts` é escolha explícita.
 
-**Aberto, para quando virar especificação:** como o dispositivo se identifica de forma estável
-(nome da máquina não basta: muda e colide). A dúvida anterior sobre `state` versus `accepted` se
+**Aberto, para quando virar especificação:** o identificador de dispositivo ficou resolvido na
+seção "Um repositório para todos os projetos" (gerado na instalação, com rótulo). A dúvida anterior sobre `state` versus `accepted` se
 resolveu com o rascunho-como-dado: `state` e `drafts` usam a **mesma** branch de estado do seeya —
 `state` carrega só o cabeçalho da proposta (dispositivo, hora, status), `drafts` carrega o
 documento inteiro.
