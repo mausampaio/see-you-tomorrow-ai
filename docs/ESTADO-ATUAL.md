@@ -47,8 +47,9 @@ Isto se perderia se a sessão que o viveu terminasse:
 2. **Validar a histerese da S4-T7 em uso real, com o cenário provocado:** subir o daemon poucos
    minutos antes do horário, com as duas regras de aviso já vencidas. Os dias reais até agora
    seguiram o caminho saudável, que não exercita o caso.
-3. **S4-T13 planejada e não despachada:** `seeya status` vira o painel único (decisão do
-   mantenedor em 12/09). Hoje ele imprime `Daemon: not implemented yet`, que é falso.
+3. **S4-T13 mesclada e publicada em 12/09:** `seeya status` é o painel único e mostra o daemon
+   pelo mesmo bloco que `daemon --status` (teste de concordância). A Q-066 do agente ainda não foi
+   triada pelo PO. Verificação à mão para o mantenedor: `seeya status` com o daemon no ar e parado.
 4. **S4-T12 mesclada e publicada em 12/09** (política por projeto casa por `cwd` normalizado;
    `captureModel`/`budgetPerSessionUsd` valem no ciclo seguinte, sem restart). Q-065 fechada pelo
    PO. Verificação à mão que fica para o mantenedor: `seeya config
@@ -71,9 +72,8 @@ Isto se perderia se a sessão que o viveu terminasse:
 
 ## Próximo passo
 
-A S4-T11 foi aceita em 12/09 e a S4-T12 mesclada no mesmo dia. Na fila com aval do
-mantenedor: S4-T13. Decisão ainda aberta: a ordem entre Sprint 5 e v2. A v2 está sendo desenhada
-em `V2-RUMO.md` em paralelo. O resultado do spike K está em
+S4-T11, S4-T12 e S4-T13 mescladas em 12/09; a fila do Sprint 4 está vazia. Decisão ainda
+aberta: a ordem entre Sprint 5 e v2. A v2 está sendo desenhada em `V2-RUMO.md` em paralelo. O resultado do spike K está em
 [`spikes/K-sessao-limpa.md`](spikes/K-sessao-limpa.md).
 
 ## Ambiente do mantenedor
