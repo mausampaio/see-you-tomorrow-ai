@@ -125,9 +125,11 @@ seeya end-day                       pausa/consolida as frentes ativas e gera a v
 2. **O agendamento do daemon vira rede de segurança de `end-day`**, como hoje: se a pessoa
    esqueceu de parar, o horário faz por ela. O que muda é que o caminho principal passa a ser
    `pause`, a pedido, e não o relógio. **Consequência do aceite humano:** o `end-day` agendado
-   **propõe e não commita** — ninguém está lá para aceitar. A proposta fica em `~/.seeya/` e o
-   aceite acontece quando a pessoa voltar, o que dá ao `start-day` da v2 um papel natural:
-   revisar e aceitar o que ficou proposto.
+   **propõe e não commita** — ninguém está lá para aceitar. A proposta fica como **rascunho**, e
+   o aceite acontece quando a pessoa voltar, o que dá ao `start-day` da v2 um papel natural:
+   revisar e aceitar o que ficou proposto. **No `end-day` manual o aceite é opcional, e o padrão
+   é não aceitar** (mantenedor, 2026-09-12): ele pergunta se a pessoa quer aceitar agora; se não,
+   fica rascunho para o dia seguinte; se sim, aceita e sincroniza no ato.
 
 **Por que o aceite humano não é burocracia (mantenedor, 2026-09-12).** O seeya observa lacunas
 pelo transcript, e o transcript carrega o que a pessoa colou numa sessão: caminhos internos,
@@ -143,12 +145,10 @@ do projeto — e, com remoto, para fora da máquina — sem ninguém ter olhado.
 - **A proposta mostra exatamente o que vai ser commitado**, não um resumo do que vai ser commitado.
   Aceitar às cegas é o mesmo que automático.
 
-**O que isso muda na continuidade entre máquinas, e é preciso dizer com honestidade:** outra
-máquina só enxerga o que foi **aceito** no repositório do projeto. Se a pessoa saiu do computador
-sem aceitar a proposta, o notebook não tem como saber que existe observação pendente lá — ele só
-sabe **quando foi a última consolidação aceita daquela máquina**. A frase certa é "a última
-consolidação do computador X foi às 14:00", e não "há trabalho não consolidado no computador X",
-que afirmaria o que não se vê (D-025). A seção seguinte foi ajustada para isso.
+**Sem sincronização, a continuidade entre máquinas fica fraca demais** (mantenedor, 2026-09-12):
+outra máquina só enxergaria o que foi aceito, e não teria como saber que existe rascunho pendente
+em outro lugar. Por isso a sincronização existe, é **aceita** como configuração, e tem níveis —
+ver "Sincronização em níveis" na seção seguinte.
 
 **Relação com a v1:** `end-day` e `start-day` da v1 continuam valendo para sessões que não
 pertencem a nenhum projeto — é o modo de recuperação, e é o que roda hoje.
@@ -355,10 +355,41 @@ desde o checkpoint" cobre tudo.
   `checkpoint` da máquina registra em `~/.seeya/` até onde ela observou; o `pause` transforma isso
   em proposta; o aceite humano commita a entrada do `journal/` (resumo e ponteiros, nunca o
   transcript) e publica. É o "até daqui a pouco" servindo de sincronização, com a pessoa no laço.
-- **Visão parcial se declara parcial** (D-025 aplicada ao próprio detector). Outra máquina só vê o
-  que foi aceito, então o que ela pode dizer é "a última consolidação do computador X foi às
-  14:00" — nunca "há trabalho não consolidado lá", que ela não tem como saber. A lacuna se fecha
-  quando a pessoa voltar àquela máquina e aceitar a proposta pendente.
+- **Visão parcial se declara parcial** (D-025 aplicada ao próprio detector). O que outra máquina
+  pode dizer depende do nível de sincronização abaixo: com estado sincronizado, "há rascunho não
+  aceito no computador X desde as 14:00"; sem nada, apenas "a última consolidação aceita do
+  computador X foi às 14:00". Nunca mais do que a evidência sustenta.
+
+**Sincronização em níveis** (proposta do mantenedor em 2026-09-12, com a escada organizada pelo
+PO). Uma config só, em que cada nível inclui o anterior:
+
+| nível | o que cruza | para onde |
+|---|---|---|
+| `off` | nada; tudo fica local | — |
+| `state` | só metadados: identidade do dispositivo, último checkpoint, "há rascunho aberto" — **sem conteúdo** | uma branch de estado do seeya no remoto |
+| `accepted` | o que a pessoa aceitou: decisões, estado, `journal/` | `main` do repositório do projeto |
+| `drafts` | também os rascunhos não aceitos | **uma branch por dispositivo**, nunca `main` |
+
+Regras que decorrem:
+
+- **`checkpoint` é automático e local**; nunca sincroniza por si.
+- **`pause` é manual, tem aceite, e sincroniza depois do aceite** (nível `accepted` ou acima).
+- **`end-day` agendado gera rascunho** e o sincroniza só no nível `drafts` — para a branch do
+  dispositivo. O `start-day` em outra máquina **detecta o rascunho vindo de outro dispositivo** e
+  oferece revisar e aceitar ali.
+- **Aceitar um rascunho de outro dispositivo é mesclar a branch dele em `main`.** Conflito é do
+  git, e o seeya **mostra** o conflito sem resolver por conta própria (D-039). O mesmo vale para
+  o retorno: quem volta a uma máquina cujo rascunho ficou para trás enquanto `main` andou vê a
+  diferença antes de aceitar.
+- **`drafts` é o nível em que conteúdo não revisado sai da máquina.** É onde o aviso de remoto
+  público pesa mais, e a escolha desse nível traz o aviso junto. Mesmo aí, o que cruza é resumo e
+  ponteiro; o cru (prompts, mensagens) nunca sai de `~/.seeya/`.
+- **Padrão:** `off` sem remoto configurado; ao configurar um remoto, `accepted`. Subir para
+  `drafts` é escolha explícita.
+
+**Aberto, para quando virar especificação:** como o dispositivo se identifica de forma estável
+(nome da máquina não basta: muda e colide), e se o nível `state` merece existir separado de
+`accepted` ou é só o mínimo que `accepted` já carrega.
 - **O que reduz o problema:** na v2 o transcript é complementar. O que a sessão registrou nos
   documentos e commitou já viajou pelo caminho normal; o transcript só importa para o que não foi
   registrado, e isso é detectado onde ele vive.
