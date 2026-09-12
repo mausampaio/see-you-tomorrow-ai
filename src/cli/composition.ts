@@ -252,38 +252,31 @@ export function buildConfigContext(homeDir: string = os.homedir()): ConfigContex
  * `scheduler/` cannot import `adapters/discovery/` at all (docs/ARQUITETURA.md's layer matrix), so
  * this is what lets `scheduler/poll.ts` call the real S1-T7 detection without ever naming it.
  *
- * **Known, accepted limitation: `leanGenerator`/`deepGenerator` are NOT closures.** Both are built
- * once, here, from whatever `captureModel`/`budgetPerSessionUsd` `config.json` held at daemon
- * startup — unlike `relevanceHours` (which affects discovery correctness: which sessions even show
- * up) and unlike the schedule/eligibility values `scheduler/poll.ts` re-reads every single poll, a
- * later `seeya config` edit to the capture model or budget only takes effect after the daemon
- * itself restarts. Accepted because the daemon already restarts on any config edit that matters
- * MORE (the scheduling ones), and rebuilding two generator instances every 30s poll for a value
- * that changes rarely, if ever, during a daemon's lifetime is complexity this task's brief doesn't
- * ask for — flagged in docs/QUESTOES.md Q-049 rather than silently accepted.
+ * **`leanGenerator`/`deepGenerator` are also a closure, `buildGenerators` (S4-T12), not two
+ * pre-built instances** — closing the gap docs/QUESTOES.md Q-049 item 8 flagged: before this task,
+ * both were built once, here, from whatever `captureModel`/`budgetPerSessionUsd` `config.json` held
+ * at daemon startup, so a later `seeya config set` to either only took effect after the daemon
+ * itself restarted, unlike `relevanceHours` (already a closure, above) and the scheduling values
+ * `scheduler/poll.ts` re-reads every poll. `scheduler/poll.ts#buildEndDayDeps` now calls
+ * `buildGenerators` once per poll with THIS poll's freshly-read config — the exact same "rebuild
+ * every cycle, it's cheap" treatment `buildSessionProvider` already gets, for the identical reason.
  */
-export async function buildDaemonContext(homeDir: string = os.homedir()): Promise<DaemonDeps> {
+// Not `async` (S4-T12 removed its one `await` — `storage.readConfig()` at startup — along with
+// `leanGenerator`/`deepGenerator`'s eager construction, since neither is built from config any
+// more): `Promise.resolve` keeps the return type `Promise<DaemonDeps>` for `cli/index.ts`'s
+// existing `await buildDaemonContext()` call sites, without an `async` function body that has
+// nothing left to await (`@typescript-eslint/require-await`).
+export function buildDaemonContext(homeDir: string = os.homedir()): Promise<DaemonDeps> {
   const home = resolveCliHome(homeDir);
   const clock = systemClock;
   const storage = buildStorage(home);
-  const config = await storage.readConfig();
-  const generatorOptions = {
-    model: config.captureModel,
-    budgetPerSessionUsd: config.budgetPerSessionUsd,
-  };
-  return {
+  return Promise.resolve({
     clock,
     storage,
     notifier: realNotifier,
     processControl: realProcessControl,
     transcriptReader: new TranscriptFileReader({ claudeHome: home.claudeHome }),
     gitReader: new GitAdapter({ clock }),
-    leanGenerator: new LeanHandoffGenerator(generatorOptions),
-    deepGenerator: new DeepHandoffGenerator({
-      ...generatorOptions,
-      seeyaHome: home.seeyaHome,
-      clock,
-    }),
     forkCleanup: new DiscoveryForkCleanup({
       claudeHome: home.claudeHome,
       seeyaHome: home.seeyaHome,
@@ -291,6 +284,13 @@ export async function buildDaemonContext(homeDir: string = os.homedir()): Promis
     }),
     buildSessionProvider: (relevanceHours) =>
       buildSessionProvider(home, clock, realProcessControl, relevanceHours),
+    // S4-T12: called once per poll (`scheduler/poll.ts#buildEndDayDeps`) with THAT poll's
+    // freshly-read `captureModel`/`budgetPerSessionUsd` — no config read up here at daemon
+    // startup any more, since neither generator has anything left to build eagerly from.
+    buildGenerators: (options) => ({
+      leanGenerator: new LeanHandoffGenerator(options),
+      deepGenerator: new DeepHandoffGenerator({ ...options, seeyaHome: home.seeyaHome, clock }),
+    }),
     discoverEarlyWarnings: async (sessions) => {
       const result = await discoverEarlyWarnings(sessions, {
         claudeHome: home.claudeHome,
@@ -298,5 +298,5 @@ export async function buildDaemonContext(homeDir: string = os.homedir()): Promis
       });
       return result.earlyWarnings;
     },
-  };
+  });
 }

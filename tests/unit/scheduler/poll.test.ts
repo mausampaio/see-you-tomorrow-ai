@@ -19,7 +19,7 @@ import { ControllableProcessControl, InMemoryDaemonStorage, RecordingNotifier } 
 import type { DaemonDeps } from '../../../src/scheduler/types.js';
 import type { Config, DiscoveredSession } from '../../../src/core/types.js';
 import type { EarlyWarning } from '../../../src/core/early-warnings.js';
-import type { ProcessControl } from '../../../src/core/ports.js';
+import type { HandoffGenerator, ProcessControl } from '../../../src/core/ports.js';
 
 interface FixedClock {
   now(): Date;
@@ -45,7 +45,7 @@ function buildHarness(
   config: Config,
   options: {
     readonly transcriptReader?: FakeTranscriptReader;
-    readonly leanGenerator?: DaemonDeps['leanGenerator'];
+    readonly leanGenerator?: HandoffGenerator;
     readonly earlyWarnings?: readonly EarlyWarning[];
     readonly processControl?: ProcessControl;
   } = {},
@@ -63,13 +63,19 @@ function buildHarness(
       processControl: options.processControl ?? new ControllableProcessControl(),
       transcriptReader: options.transcriptReader ?? new FakeTranscriptReader(),
       gitReader: new FakeGitReader(),
-      leanGenerator:
-        options.leanGenerator ??
-        succeedingGenerator({ understanding: '', pendingItems: [], tomorrowPlan: [] }),
-      deepGenerator: succeedingGenerator({ understanding: '', pendingItems: [], tomorrowPlan: [] }),
       forkCleanup: new FakeForkCleanup(),
       buildSessionProvider: () =>
         new FakeSessionProvider({ sessions: [...(pollOptions.sessions ?? [])], rejected: [] }),
+      buildGenerators: () => ({
+        leanGenerator:
+          options.leanGenerator ??
+          succeedingGenerator({ understanding: '', pendingItems: [], tomorrowPlan: [] }),
+        deepGenerator: succeedingGenerator({
+          understanding: '',
+          pendingItems: [],
+          tomorrowPlan: [],
+        }),
+      }),
       discoverEarlyWarnings: () => Promise.resolve(options.earlyWarnings ?? []),
     };
     return pollOnce(deps);
@@ -405,7 +411,7 @@ describe('pollOnce — non-model retry budget (Q-040 item 3)', () => {
 
     // A 4th poll must NOT call the generator again for this now-exhausted session — proven with a
     // double that rejects the whole poll if it's ever invoked, not just asserting a call count.
-    const explodingGenerator: DaemonDeps['leanGenerator'] = {
+    const explodingGenerator: HandoffGenerator = {
       generate: () => Promise.reject(new Error('should never be called — session is exhausted')),
     };
     const deps: DaemonDeps = {
@@ -415,10 +421,12 @@ describe('pollOnce — non-model retry budget (Q-040 item 3)', () => {
       processControl: new ControllableProcessControl(),
       transcriptReader: new FakeTranscriptReader(),
       gitReader: new FakeGitReader(),
-      leanGenerator: explodingGenerator,
-      deepGenerator: explodingGenerator,
       forkCleanup: new FakeForkCleanup(),
       buildSessionProvider: () => new FakeSessionProvider({ sessions: [session], rejected: [] }),
+      buildGenerators: () => ({
+        leanGenerator: explodingGenerator,
+        deepGenerator: explodingGenerator,
+      }),
       discoverEarlyWarnings: () => Promise.resolve([]),
     };
     await expect(pollOnce(deps)).resolves.toBeUndefined();
@@ -480,6 +488,101 @@ describe('pollOnce — D-036 case 1: the local day rolled over before yesterday 
     await harness.poll(new Date(2026, 8, 5, 8, 0, 0), { sessions: [] });
 
     expect(harness.notifier.notices).toStrictEqual([]);
+  });
+});
+
+describe('pollOnce — S4-T12: captureModel/budgetPerSessionUsd are read fresh every poll', () => {
+  const SESSION_ID = '11111111-1111-4111-8111-111111111111';
+
+  /** Recent-but-not-active-turn activity relative to `now` — finalizes cleanly on the FIRST poll
+   * for that day, the same shape `createConfig`'s D-036 tests above already use, so each poll below
+   * reaches `buildGenerators` without the active-turn retry muddying which poll called it. */
+  function finalizingSession(now: Date): DiscoveredSession {
+    return createSessionWithPid({
+      sessionId: SESSION_ID,
+      lastActivity: new Date(now.getTime() - 10 * 60_000),
+    });
+  }
+
+  function transcriptReaderFor(now: Date): FakeTranscriptReader {
+    return new FakeTranscriptReader(
+      new Map([
+        [
+          SESSION_ID,
+          {
+            facts: {
+              lastActivity: new Date(now.getTime() - 10 * 60_000),
+              lastPrompts: [],
+              assistantMessages: [],
+              touchedFiles: [],
+            },
+            rejected: [],
+            unknownEntryTypeCount: 0,
+          },
+        ],
+      ]),
+    );
+  }
+
+  function buildDeps(
+    storage: InMemoryDaemonStorage,
+    notifier: RecordingNotifier,
+    now: Date,
+    generatorOptionsSeen: HandoffGeneratorOptionsLog,
+  ): DaemonDeps {
+    return {
+      clock: clockAt(now),
+      storage,
+      notifier,
+      processControl: new ControllableProcessControl(),
+      transcriptReader: transcriptReaderFor(now),
+      gitReader: new FakeGitReader(),
+      forkCleanup: new FakeForkCleanup(),
+      buildSessionProvider: () =>
+        new FakeSessionProvider({ sessions: [finalizingSession(now)], rejected: [] }),
+      buildGenerators: (options) => {
+        generatorOptionsSeen.push(options);
+        const generator = succeedingGenerator({
+          understanding: '',
+          pendingItems: [],
+          tomorrowPlan: [],
+        });
+        return { leanGenerator: generator, deepGenerator: generator };
+      },
+      discoverEarlyWarnings: () => Promise.resolve([]),
+    };
+  }
+
+  type HandoffGeneratorOptionsLog = Array<{ model: string; budgetPerSessionUsd: number }>;
+
+  // The mantenedor's own scenario (docs/QUESTOES.md Q-049 item 8): `seeya config set captureModel`
+  // (or `budgetPerSessionUsd`) while the daemon is already running, mid-day — before this task, the
+  // daemon's generators were built ONCE at startup (`cli/composition.ts#buildDaemonContext`), so the
+  // edit only took effect after a restart, unlike `relevanceHours` (already a per-poll closure).
+  // Two different local DAYS (not just two `pollOnce` calls) so the second poll's capture is never
+  // mistaken for D-026's anti-duplication of the first.
+  it('a captureModel/budgetPerSessionUsd change made between two poll cycles applies on the very next one', async () => {
+    const storage = new InMemoryDaemonStorage(
+      createConfig({ endOfDayTime: '19:30', captureModel: 'sonnet', budgetPerSessionUsd: 0.25 }),
+    );
+    const notifier = new RecordingNotifier();
+    const generatorOptionsSeen: HandoffGeneratorOptionsLog = [];
+
+    const day1Now = new Date(2026, 8, 5, 19, 30, 5);
+    await pollOnce(buildDeps(storage, notifier, day1Now, generatorOptionsSeen));
+    expect(generatorOptionsSeen).toEqual([{ model: 'sonnet', budgetPerSessionUsd: 0.25 }]);
+    expect((await storage.readState())?.endOfDayFired).toBe(true);
+
+    // No daemon restart between cycles — just `seeya config set`, exactly like a real mid-day edit.
+    const midDayConfig = await storage.readConfig();
+    await storage.saveConfig({ ...midDayConfig, captureModel: 'opus', budgetPerSessionUsd: 0.5 });
+
+    const day2Now = new Date(2026, 8, 6, 19, 30, 5);
+    await pollOnce(buildDeps(storage, notifier, day2Now, generatorOptionsSeen));
+    expect(generatorOptionsSeen).toEqual([
+      { model: 'sonnet', budgetPerSessionUsd: 0.25 },
+      { model: 'opus', budgetPerSessionUsd: 0.5 },
+    ]);
   });
 });
 

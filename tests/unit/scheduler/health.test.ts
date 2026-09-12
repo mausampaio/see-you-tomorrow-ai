@@ -27,10 +27,12 @@ function buildDeps(overrides: Partial<DaemonDeps> = {}): DaemonDeps {
     processControl: new ControllableProcessControl(),
     transcriptReader: new FakeTranscriptReader(),
     gitReader: new FakeGitReader(),
-    leanGenerator: succeedingGenerator({ understanding: '', pendingItems: [], tomorrowPlan: [] }),
-    deepGenerator: succeedingGenerator({ understanding: '', pendingItems: [], tomorrowPlan: [] }),
     forkCleanup: new FakeForkCleanup(),
     buildSessionProvider: () => ({ list: () => Promise.reject(new Error('not exercised')) }),
+    buildGenerators: () => ({
+      leanGenerator: succeedingGenerator({ understanding: '', pendingItems: [], tomorrowPlan: [] }),
+      deepGenerator: succeedingGenerator({ understanding: '', pendingItems: [], tomorrowPlan: [] }),
+    }),
     discoverEarlyWarnings: () => Promise.resolve([]),
     ...overrides,
   };
