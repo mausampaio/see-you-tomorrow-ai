@@ -3406,7 +3406,7 @@ como tarefa aberta, já decidida, fora do aceite.
       (por que os dois grupos novos não foram unificados sob uma alegação só, e o que a medição
       NÃO sustentou da hipótese original do despacho).
 
-- [~] **S4-T12 — O que a pessoa configura precisa valer: política por projeto que não casa, e
+- [x] **S4-T12 — O que a pessoa configura precisa valer: política por projeto que não casa, e
       modelo de captura que só muda no restart.** Saída da triagem das questões em 2026-09-12
       (Q-056 item 3 e Q-049 item 8). Duas correções pequenas no mesmo assunto.
 

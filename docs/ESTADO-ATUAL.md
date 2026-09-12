@@ -50,8 +50,8 @@ Isto se perderia se a sessão que o viveu terminasse:
 3. **S4-T13 planejada e não despachada:** `seeya status` vira o painel único (decisão do
    mantenedor em 12/09). Hoje ele imprime `Daemon: not implemented yet`, que é falso.
 4. **S4-T12 mesclada e publicada em 12/09** (política por projeto casa por `cwd` normalizado;
-   `captureModel`/`budgetPerSessionUsd` valem no ciclo seguinte, sem restart). A Q-065 do agente
-   ainda não foi triada pelo PO. Verificação à mão que fica para o mantenedor: `seeya config
+   `captureModel`/`budgetPerSessionUsd` valem no ciclo seguinte, sem restart). Q-065 fechada pelo
+   PO. Verificação à mão que fica para o mantenedor: `seeya config
    policy` com o caminho numa forma diferente da do registro, e `seeya sessions` mostrando a
    política aplicada.
 5. **Sprint 5 inteiro:** S5-T1 a S5-T7, mais a S5-T8, que é candidata e não está agendada

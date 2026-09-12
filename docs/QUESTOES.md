@@ -6023,3 +6023,14 @@ próprio despacho já apontava.**
 `config.json` existentes na subida do `seeya` — a leitura já casa com chave crua (item 1), então
 não há necessidade funcional de migrar, e migrar na subida seria escopo novo que o despacho não
 pediu.
+
+**Fechamento do PO (2026-09-12): as sete confirmadas.** (2) canonicalizar na escrita fundindo a
+chave crua equivalente é o que impede duas grafias da mesma pasta conviverem no `config.json` —
+era o risco que a opção B deixaria aberto. (3) resolver o relativo e ecoar o caminho absoluto
+gravado é o que o despacho recomendava, pelo motivo certo: a pessoa vê o que ficou em disco, não o
+que digitou. (4) `it.runIf(win32)` para a dobra de caso é a leitura correta da S3-T5. (6)
+`Promise.resolve` mantendo a assinatura da família `build*Context` está certo; mudar assinatura
+pública por limpeza de outra função seria o erro. O exemplo de `config.json` em
+`docs/ARQUITETURA.md` com chave crua foi ajustado pelo PO nesta mesma leva.
+
+---
