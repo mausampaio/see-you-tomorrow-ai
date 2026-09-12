@@ -84,13 +84,29 @@ O `seeya.json` associa a frente aos repositórios e trackers que ela atravessa:
 }
 ```
 
-**A identidade do repositório é separada da resolução local dele** (mantenedor, 2026-09-12). Um
+**Duas coisas diferentes, que não se misturam** (mantenedor, 2026-09-12): o **espaço de
+trabalho**, que o seeya organiza e sincroniza; e os **repositórios de trabalho** de cada projeto,
+que são da pessoa, já existem na máquina dela e o seeya só lê.
+
+**A identidade do repositório de trabalho é separada da resolução local dele.** Um
 `"path": "C:\\code\\app-api"` só funciona num dispositivo. O `seeya.json` guarda a identidade —
-o remoto — e cada dispositivo guarda, em `~/.seeya/`, onde aquele remoto está clonado nele. O
-seeya **não adivinha** onde um repositório foi clonado: na primeira vez que precisa de um
-repositório que não conhece neste dispositivo, procura em `<raiz de projetos>/<nome>` e, se não
-está lá, pergunta — oferecendo clonar ali. Clonar repositório de código é ação da pessoa (tamanho,
-credenciais), com o seeya só propondo o caminho padrão.
+o remoto — e cada dispositivo guarda, em `~/.seeya/`, onde aquele remoto está nele. **É a pessoa
+quem indica onde estão; o seeya não adivinha.** Três portas de entrada, todas alimentando o mesmo
+mapa por dispositivo:
+
+- **`add-repo` recebe o caminho local** (`seeya project add-repo <id> ../app-api`): o seeya lê o
+  remoto daquele clone (`git remote get-url`), grava a identidade no `seeya.json` e o caminho no
+  mapa deste dispositivo. É o fluxo natural de quem cria o projeto onde já trabalha.
+- **`open` pergunta quando falta**: em outro dispositivo o mapa não tem aquele remoto, então o
+  `open` pergunta onde está, oferecendo `<raiz de código>/<nome>` se a pessoa configurou uma raiz,
+  e oferecendo clonar ali se não existir. Clonar é ação da pessoa (tamanho, credenciais); o seeya
+  só propõe o caminho.
+- **`config` para dizer sem ser perguntado**: um comando explícito no `~/.seeya/` deste
+  dispositivo, para quem prefere configurar de uma vez ou não quer prompt.
+
+**Repositório sem remoto** (só local) tem identidade só neste dispositivo: o seeya registra isso e
+declara, em outro dispositivo, que aquele repositório não pode ser resolvido lá — em vez de fingir
+que existe (D-025).
 
 Quando o harness restringe o acesso ao `cwd`, o adapter dele precisa liberar os diretórios
 associados.
