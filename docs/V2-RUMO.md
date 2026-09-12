@@ -387,6 +387,39 @@ barato de dizer "isto não precisa de registro" sem que ele volte a apontar no d
 
 **O K2 testa isso à mão:** estado envelhecido, e ver se a sessão detecta as contradições.
 
+## Prioridade entre projetos e jornada de trabalho (mantenedor, 2026-09-12)
+
+O `end-day` global sugere prioridades para o dia seguinte, e há duas coisas que o seeya **não tem
+como saber** e que decidem essa sugestão: qual projeto importa mais, e quanto tempo a pessoa tem.
+As duas viram entrada da pessoa, não inferência.
+
+**`priority` é parâmetro do projeto.** Um valor pequeno e ordinal (por exemplo `high` / `normal` /
+`low`), não um número solto — o objetivo é a pessoa dizer "este vem primeiro", não calibrar
+pesos. Junto com o estado do projeto (`active` / `paused`), é o que o `end-day` usa para sugerir
+com mais força as atividades de um projeto do que as de outro. Continua sendo **sugestão
+editável** (D-039): `priority` ordena a proposta; quem decide o dia é a pessoa.
+
+**A jornada é configuração da pessoa.** Períodos de trabalho (por exemplo 08:00–12:00 e
+13:00–17:00), com o **fim do último período sendo o `endOfDayTime` da v1** — a chave existente vira
+caso particular da jornada, com migração. Os avisos prévios e a rede de segurança do daemon
+continuam derivando dali.
+
+**A jornada de um dia específico pode ser diferente**, e há dois momentos para dizer isso: no
+`start-day` ("hoje só 6 h") ou no aceite do `end-day` da véspera, para quem já sabe. **O ajuste
+do dia move também o fim efetivo daquele dia** — é um `snooze` declarado de manhã, na direção que
+for — e por isso o daemon passa a saber a que horas a rede de segurança dispara hoje.
+
+**O que o seeya faz com isso, e o limite que precisa ser dito:** a jornada define **quanto** cabe
+na sugestão e **em que ordem**; a prioridade define **de qual projeto** vem primeiro. O que o
+seeya **não** sabe é quanto cada atividade demora. Ele pode estimar, e a estimativa aparece
+**rotulada como estimativa**, nunca como fato (D-025) — a sugestão diz "você tem cerca de 6 h
+hoje; eu começaria por isto", não "isto cabe". Se a pessoa anotar estimativas nas atividades, aí a
+conta de "cabe/não cabe" tem base; sem isso, o seeya limita e ordena, mas não promete.
+
+**Aberto:** se a jornada mora no espaço de trabalho (é da pessoa, viaja entre dispositivos) ou
+admite variação por dispositivo (notebook de casa versus máquina do trabalho). A recomendação do
+PO é no espaço de trabalho, com o ajuste do dia cobrindo a exceção.
+
 ## Continuidade entre dispositivos (ideia do mantenedor, 2026-09-10)
 
 **Origem:** o mantenedor acompanhava a sessão do PO pelo celular. A conexão caiu, e ao reconectar
