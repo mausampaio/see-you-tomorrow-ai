@@ -342,6 +342,93 @@ arquivos estourando prazo. Depois da separação de projeto: portão verde, cinc
 completos e o quinto arquivo que a investigação original não tinha nomeado:
 `docs/PLANO-DE-ENTREGA.md` S4-T10, `docs/QUESTOES.md` Q-063.
 
+## O runner de CI não se reproduz aqui — leia o log real antes de teorizar
+
+**S4-T11, 2026-09-12.** A seção acima resolveu a contenção por lançamento de processo **nesta
+máquina**. Dois pushes de só documentação (`4146faa`, `e9286a5`) ainda derrubaram o job
+`windows-latest` com 14-15 testes estourando prazo — e **nesta máquina, isolados, todos os sete
+arquivos apontados passam em frações de segundo** (o mais lento, o caso de 500 arquivos de
+`transcript-scan.test.ts`, leva 451ms local contra um orçamento explícito de 30 000ms). Não dá
+para reproduzir a lentidão do runner tentando de novo localmente — ela não existe aqui. O método
+que funcionou: **baixar o log bruto do run que falhou de verdade**, não confiar só no resumo do
+despacho.
+
+```
+"C:\Program Files\GitHub CLI\gh.exe" run list --repo <owner>/<repo> --limit 30 --json databaseId,conclusion,headSha
+"C:\Program Files\GitHub CLI\gh.exe" api repos/<owner>/<repo>/actions/runs/<id>/attempts/1/jobs   # se houve rerun, o attempt 1 é o que falhou
+"C:\Program Files\GitHub CLI\gh.exe" api repos/<owner>/<repo>/actions/jobs/<jobId>/logs --allow-escape-sequences > job.log
+```
+
+(`gh` não está no PATH desta máquina — chame pelo caminho completo. `--allow-escape-sequences` é
+obrigatório: sem ele o PowerShell recusa o log inteiro por causa das cores ANSI do reporter do
+vitest.) Rode do PowerShell, não do Git Bash — o Git Bash deste ambiente recusa qualquer comando
+cujo nome não seja resolvido estaticamente como não-git, e `gh.exe` cai nessa recusa.
+
+**O que o log bruto mostrou que o resumo do despacho não mostrava: cada teste que estourou tem
+DUAS linhas de falha, não uma.** Primeiro `Error: Test timed out in 5000ms.` (ou `30000ms` nos
+dois casos com orçamento explícito), depois — para o MESMO teste, com um `rmdir` de um diretório
+`seeya-git-XXXXXX` diferente a cada vez (o sufixo aleatório do `mkdtemp` de cada teste) —
+`Error: EBUSY: resource busy or locked, rmdir '...\seeya-git-XXXXXX\main'`. Isso não é um teste
+diferente falhando por outro motivo: é o `afterEach` do MESMO teste tentando apagar a fixture
+poucos milissegundos depois do timeout ter sido declarado.
+
+**Explicação do EBUSY, sustentada pelo próprio mecanismo, não só pelo log.** `git-adapter.test.ts`
+e `primitives.test.ts` chamam `GitAdapter.readFacts`/os primitivos de `adapters/git/` dentro do
+corpo do teste — funções que fazem `Promise.all` de vários `runGit` (branch, status, log,
+worktree-list, mais um par status+log por worktree). Quando o vitest declara o teste "estourado"
+aos 5000ms, ele **não cancela** essa cadeia de promises: os processos `git.exe` já lançados
+continuam rodando de verdade, sem que nada no teste os aguarde mais. O `afterEach` roda em
+seguida e chama `removeGitFixture` → `rm(root, { recursive: true, force: true })` — e no Windows,
+apagar um diretório enquanto um processo ainda tem um handle aberto num arquivo dentro dele (o
+`git.exe` órfão, ainda lendo `.git/index`, um pack, ou o próprio `cwd` do processo) devolve
+`EBUSY`. **Isto é higiene de teste, exatamente como a hipótese do despacho apontou** — mas o gatilho
+não é uma corrida entre dois testes escrevendo em fixtures diferentes (cada `mkdtemp` já é
+único); é o PRÓPRIO teste correndo contra seu próprio relógio: o timeout do vitest e a limpeza do
+`afterEach` não são atômicos entre si.
+
+**O que essa explicação NÃO cobre, e por que a medição não sustenta a hipótese original por
+inteiro.** O despacho enquadrou isto como "a mesma classe da S4-T10" (prazo fixo × lançamento de
+processo). A evidência do log derruba a generalidade dessa frase: `atomic-write.test.ts > a
+normal, uninterrupted write replaces the target in full (control case)` — um teste que **não
+lança processo nenhum**, só duas chamadas de `writeFileAtomic` (16ms nesta máquina) — também
+apareceu com `Test timed out in 5000ms.` na mesma rodada. Não há `git.exe`/`node.exe` para
+disputar lançamento ali. A correlação que o log real mostra: naquela mesma janela de tempo, o
+projeto `guards` estava rodando `eslint-restrictions.test.ts` (ESLint de verdade, 70s nessa
+rodada, contra ~40s numa rodada mais tranquila) e `dependency-cruiser.test.ts`/`layer-matrix.test.ts`
+(~40s cada) — **simultaneamente** ao lote padrão de paralelismo do projeto `integration`, no
+mesmo runner windows-latest. Isso é carga de CPU do sistema inteiro, não disputa específica pelo
+lançamento de um binário. **Medido, não só teorizado**: os dois testes com orçamento explícito de
+30s (`state-concurrent-write`, `config-concurrent-write`) estouraram por pouco (30722ms, 30105ms —
+~2-3% acima do orçamento) na MESMA rodada em que o ESLint levou 70s; o caso de 500 arquivos de
+`transcript-scan.test.ts` estourou por mais (39090ms contra 30000ms) na outra rodada. Isto sugere
+DOIS mecanismos, não um: (a) alguns testes (os que lançam processo, e o caso "control" de
+`atomic-write`) pararam de progredir e bateram exatamente no teto do prazo — starvation de
+agendamento; (b) os testes de I/O real sustentado (300+300 leituras/escritas reais,
+500 `mkdir`+`utimes` concorrentes) progrediram, só que mais devagar — degradação de vazão
+proporcional à carga, não paralisação total.
+
+**A correção aplicada, e o que ela deliberadamente não promete resolver.** `vitest.config.ts`
+ganhou dois grupos novos dentro do projeto `integration-process` (S4-T10) já serializado:
+`REAL_CHILD_PROCESS_GIT_AND_STORAGE_FILES` (git-adapter, primitives, atomic-write — lançam
+processo real, mesma classe do S4-T10) e `REAL_FS_IO_HEAVY_INTEGRATION_FILES`
+(state-concurrent-write, config-concurrent-write, transcript-scan — não lançam processo, mas
+fazem I/O real sustentado). Os dois grupos têm docstrings SEPARADOS no arquivo de config —
+lumping os dois sob a mesma alegação de recurso ("lança processo") seria repetir exatamente o
+defeito de generalidade falsa que a S4-T10 já corrigiu uma vez (D-025 aplicado a comentário, não só
+a dado). **O que essa correção não alcança**, dito explicitamente no próprio comentário do config:
+ela remove a disputa que ESTES arquivos geram entre si; não alcança a carga de CPU que o projeto
+`guards` gera na mesma janela, num projeto vitest separado que este não agenda. Se o runner ficar
+mais ocupado por outro caminho, o mesmo sintoma pode voltar — mesmo residual que a Q-063 já
+registrou para a S4-T10, ainda em aberto.
+
+**Contagem de processos por caso, medida com `vi.mock('node:child_process')` interceptando
+`spawn` (não estimada por leitura de código sozinha):** fixture de git (`createGitFixture` +
+2 commits + 1 worktree) = 6 lançamentos reais de `git.exe`; um `readFacts` sobre um cwd com 1
+outro worktree = 7; o teste mais pesado de `git-adapter.test.ts` ("never writes to the
+repository", 2 chamadas de `readFacts` mais 4 snapshots somente-leitura) = 32. Somando os 14
+casos do arquivo: ~180 lançamentos de `git.exe`, todos concluídos bem abaixo de 1s cada nesta
+máquina sem contenção — a tabela completa está em `docs/PLANO-DE-ENTREGA.md` S4-T11.
+
 ## Medir custo de chamada real: controle o calor do cache
 
 **Três medições de custo neste projeto já foram confundidas pela mesma coisa**, e a terceira só

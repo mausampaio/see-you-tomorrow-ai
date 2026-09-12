@@ -5839,3 +5839,78 @@ certa: serializar disputa por recurso real não esconde corrida. O item 4 (por q
 segue sem resposta, e a **S4-T11** trata a mesma classe nos testes de `git/` e `storage/`.
 
 ---
+
+## Q-064 — S4-T11: por que os seis arquivos novos entraram em DOIS grupos com docstrings
+## separados em vez de um só "process-heavy" maior, e o que a medição não sustentou da hipótese
+
+**Tarefa:** S4-T11 — a CI do Windows fica vermelha em push só de documentação: os testes de
+`git/` e `storage/` ficaram fora da S4-T10. **Bloqueia:** não — `npm run verificar` passou cinco
+vezes seguidas nesta máquina, `npm run verificar:linux` também passou (números no relatório da
+tarefa em `docs/PLANO-DE-ENTREGA.md` S4-T11).
+
+**1) O despacho enquadrou isto como "a mesma classe de problema da S4-T10"; a medição só
+confirma isso para metade dos arquivos.** A hipótese do despacho era prazo fixo × lançamento de
+processo de custo variável, agora para `git.exe` (git-adapter.test.ts, primitives.test.ts) e para
+o `node.exe` que `atomic-write.test.ts` mata a meio da escrita. Isso se confirmou: medi com
+`vi.mock('node:child_process')` interceptando `spawn` (script descartável, não commitado) e
+contei lançamentos reais por caso — a tabela completa está no relatório da tarefa. Mas o log bruto
+da CI (baixado com `gh api .../logs --allow-escape-sequences`, não só o resumo que o despacho
+citava) mostra `atomic-write.test.ts > a normal, uninterrupted write... (control case)` — **zero
+processos lançados**, dois `writeFileAtomic`, 16ms nesta máquina — estourando `Test timed out in
+5000ms.` na mesma rodada em que os testes de git estouraram. Não existe lançamento de processo
+para esse teste disputar. A hipótese do despacho, tomada ao pé da letra ("é a mesma classe"),
+não cobre esse caso — e eu registro isso em vez de forçar a medição a caber na hipótese.
+
+**2) A correlação que o log real revela, e que o resumo do despacho não continha.** Na mesma
+janela de tempo em que os testes de git/storage estouraram, o projeto `guards` (um projeto vitest
+SEPARADO, rodando ao mesmo tempo por padrão) executava `eslint-restrictions.test.ts` (ESLint
+real) — 70155ms nessa rodada contra ~43321ms numa rodada mais tranquila da mesma suíte — e
+`dependency-cruiser.test.ts`/`layer-matrix.test.ts` (~40-42s cada, dependency-cruiser e AST
+walks reais). Isso é contenção de CPU do runner inteiro, gerada por testes que este projeto não
+controla o agendamento de, não (só) disputa pela capacidade do SO de lançar processos. Os dois
+testes com orçamento explícito de 30s (`state`/`config-concurrent-write.test.ts`) estouraram por
+pouco (30722ms/30105ms, ~2-3% acima) exatamente na rodada em que o ESLint levou 70s — consistente
+com degradação de vazão sob carga, não com paralisação total (que se pareceria mais com "bateu
+exatamente no teto do prazo", o padrão dos testes de git).
+
+**3) Por que os seis arquivos novos NÃO entraram todos sob a alegação `PROCESS_HEAVY_*` só
+porque a correção (serializar) é a mesma.** Três dos seis (`git-adapter.test.ts`,
+`primitives.test.ts`, `atomic-write.test.ts`) lançam processo real e cabem exatamente na mesma
+alegação de recurso que a S4-T10 já mediu (capacidade do SO de lançar processo). Os outros três
+(`state-concurrent-write.test.ts`, `config-concurrent-write.test.ts`, `transcript-scan.test.ts`)
+não lançam processo nenhum — o recurso disputado ali é I/O real sustentado (300 escritas + 300
+leituras reais via `writeFileAtomic`, ou 500 `mkdir`+`utimes` concorrentes). Batizar os seis com o
+mesmo nome/alegação ("lançam processo") seria repetir, na direção oposta, o defeito que a própria
+S4-T10 já corrigiu uma vez no comentário do projeto `integration` ("não disputa nenhum recurso" —
+falso para 5 de 42 arquivos naquela época). `docs/AGENTS.md` e D-025 tratam isso como o mesmo
+erro em comentário que em dado: uma afirmação além do que a evidência sustenta. Por isso
+`vitest.config.ts` ganhou DOIS consts com docstrings separados
+(`REAL_CHILD_PROCESS_GIT_AND_STORAGE_FILES` e `REAL_FS_IO_HEAVY_INTEGRATION_FILES`), cada um
+citando só a evidência que o sustenta — mesmo entrando no MESMO projeto vitest
+(`integration-process`, `fileParallelism: false`), porque a FERRAMENTA que remove a disputa
+(serializar) é a mesma para os dois, ainda que o recurso por trás seja diferente.
+
+**4) Por que não criei um projeto vitest novo para separar os dois grupos fisicamente.** Caberia
+(dois `name`s diferentes, dois `fileParallelism: false` diferentes), mas exigiria também editar
+`tests/integration/guards/_test-projects.ts` (a lista independente de projetos esperados,
+S1-T0e) para declarar o projeto novo — mais uma superfície que poderia divergir da realidade sem
+necessidade. Como a ação de mitigação é idêntica para os dois grupos (serializar entre si, dentro
+do mesmo projeto), e como `tests/integration/guards/test-projects.test.ts` já passa sem
+alteração (confirmado por execução), manter os dois grupos no projeto `integration-process`
+existente evita essa superfície extra sem perder precisão nos comentários — a precisão que
+importa aqui é a do TEXTO que descreve o recurso, não a da estrutura de arquivos do vitest.config.
+
+**5) O que fica sem resposta, e por quê — na mesma forma que a Q-063 já deixou em aberto para a
+S4-T10.** Esta tarefa não alcança, e não tem como alcançar a partir de `vitest.config.ts`, a
+razão de o projeto `guards` estar gerando aquela carga de CPU na mesma janela — isso pertenceria a
+uma tarefa que mexesse no agendamento ENTRE projetos vitest (fora do escopo desta, e "nada em
+`src/`" nem sequer se aplicaria: seria mexer em como o `npm run cobertura`/`vitest run` invoca os
+projetos, uma mudança de escopo bem maior que o que o despacho pediu). Se o runner ficar mais
+ocupado por um caminho diferente do medido aqui, o mesmo sintoma (prazo fixo, operação de custo
+variável) pode reaparecer — a entrada nova em `docs/TESTES.md` ("O runner de CI não se reproduz
+aqui") existe para que quem vir isso de novo comece pelo log bruto da CI, não por uma tentativa
+de reproduzir localmente algo que só existe sob a carga específica daquele runner naquele
+instante.
+
+**Prova final, que não é minha:** os três pushes seguintes à mesclagem, na CI real do Windows —
+o único ambiente onde a contenção medida aqui realmente acontece.
