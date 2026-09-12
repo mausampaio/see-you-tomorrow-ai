@@ -103,6 +103,18 @@ escapou porque eu a cutuquei antes da limpeza.
    o relógio: registre o instante de referência e, antes do passo seguinte, confirme que o
    intervalo passou. Espera passiva por notificação é o mesmo que travar.
 
+**Aconteceu de novo em 2026-09-07, três vezes seguidas** (S4-T9 duas vezes, S4-T10 uma), com
+estas duas regras já escritas aqui. Um dos agentes parou com **dez arquivos modificados, um
+arquivo novo sem rastreamento e nenhum commit** — se a worktree tivesse sido recolhida naquele
+momento, a tarefa inteira teria sumido. A regra existia; o que falhou foi ela ser lida na hora
+certa. Duas consequências:
+
+- **Todo despacho repete as duas regras no topo, antes do contexto**, sob o título "Regras de
+  sobrevivência", em vez de confiar que o agente vai chegar até esta seção. Custa quatro linhas.
+- **Quando o PO recebe a notificação de um agente parado "esperando"**, a mensagem de reativação
+  manda **commitar primeiro** e só depois continuar. Reativar dizendo apenas "continue" deixa o
+  trabalho no mesmo risco em que já estava.
+
 ## Revisor — Sonnet 5, contexto limpo
 
 Recebe apenas: o diff da tarefa, `AGENTS.md`, o trecho relevante da spec e o item do plano.

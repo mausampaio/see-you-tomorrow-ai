@@ -47,13 +47,12 @@ Isto se perderia se a sessão que o viveu terminasse:
 2. **Validar a histerese da S4-T7 em uso real, com o cenário provocado:** subir o daemon poucos
    minutos antes do horário, com as duas regras de aviso já vencidas. Os dias reais até agora
    seguiram o caminho saudável, que não exercita o caso.
-3. **Reforçar o `docs/FLUXO-DE-AGENTES.md` com o caso de 07/09:** três agentes seguidos pararam
-   esperando notificação de um comando que eles mesmos dispararam, e um deles estava com dez
-   arquivos modificados e nenhum commit. A regra já existe; o que falha é ela ser lida na hora
-   certa.
-4. **Questões dos agentes ainda não triadas pelo PO:** Q-052, Q-053, Q-055 a Q-057 e Q-060 a
-   Q-063, além das antigas Q-045, Q-046 e Q-049 (a Q-054 já está fechada). Triagem no formato
-   combinado: o PO fecha o que é dele e sobe o resto resumido, uma de cada vez.
+3. **Decisão do mantenedor pendente, saída da triagem (Q-056 item 4):** `seeya status` deve ser o
+   painel único (agendamento, adiamento, daemon), ou `daemon --status` basta?
+4. **S4-T12 planejada e não despachada:** política por projeto que não casa por diferença de
+   forma do `cwd`, e `captureModel`/`budgetPerSessionUsd` que só mudam no restart do daemon.
+   Triagem das questões feita em 12/09: Q-045, 046, 049, 052, 053, 055 a 057 e 060 a 063 fechadas
+   pelo PO; o que restou é o item 3 acima e a S4-T12.
 5. **Sprint 5 inteiro:** S5-T1 a S5-T7, mais a S5-T8, que é candidata e não está agendada
    (briefing agrupado por projeto).
 6. **Spike K2:** repetir o spike K daqui a alguns dias **sem atualizar este arquivo**, para medir
@@ -71,7 +70,8 @@ Isto se perderia se a sessão que o viveu terminasse:
 
 ## Próximo passo
 
-Com o mantenedor: o despacho da S4-T11, a triagem das questões e a ordem entre Sprint 5 e v2. O resultado do spike K está em
+A S4-T11 está em andamento (agente despachado em 12/09). Com o mantenedor: a decisão sobre
+`seeya status`, o despacho da S4-T12, e a ordem entre Sprint 5 e v2. O resultado do spike K está em
 [`spikes/K-sessao-limpa.md`](spikes/K-sessao-limpa.md).
 
 ## Ambiente do mantenedor

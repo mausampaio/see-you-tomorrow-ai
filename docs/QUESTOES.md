@@ -3814,7 +3814,7 @@ emenda — aí a medição teria um caso concreto para calibrar o que conta como
 caminho, nome de arquivo?) e o que conta como paráfrase aceitável, em vez de adivinhar a regra
 antes de ver um exemplo real de falso positivo.
 
-**Resposta:** _(em aberto — pendente de observação de capturas reais pelo mantenedor)_
+**Resposta:** ver o fechamento do PO ao fim desta questão (2026-09-12).
 
 ---
 
@@ -3848,6 +3848,15 @@ antes de ver um exemplo real de falso positivo.
 > **O que fecharia:** uma captura de uma sessão que **arme a armadilha** — em que se discuta uma
 > categoria sem enumerá-la, ou se deixe uma busca inconclusiva. Aí a instrução resiste ou não, e
 > a resposta vale. Até lá: **encorajador, inconclusivo.**
+
+**Fechamento do PO (2026-09-12):** não há decisão a tomar, e não vira tarefa. A validação continua
+sendo observação de uso: a próxima captura real que **arme a armadilha** (categoria discutida sem
+enumeração, ou busca deixada inconclusiva) é o que responde, e quem nota é quem lê o handoff.
+Registrar aqui quando acontecer. O candidato mecânico (conferir identificador da saída contra a
+entrada) fica descartado pelo motivo já escrito: paráfrase legítima viraria falso positivo, que a
+D-025 classifica como pior que a ausência. Fica aberta como observação, não como pergunta.
+
+---
 
 ## Q-046 — Nove escolhas fazendo S4-T0 (D-032: evidência de git por repositório, e a migração), registradas para confirmação
 
@@ -3933,10 +3942,14 @@ suficiente (nenhum I/O extra) para não valer a complexidade de cache. **Testado
 result both times" — o arquivo em disco é conferido *entre* as duas leituras e continua
 `schemaVersion: 1`.
 
-**Resposta:** _(em aberto)_
+**Resposta:** ver o fechamento do PO ao fim desta questão (2026-09-12).
 
----
-
+**Fechamento do PO (2026-09-12): as nove confirmadas como estão.** Estão em produção desde 03/09,
+e a S4-T3c verificou 12 handoffs reais migrando sem rejeição. Notas: (4) o limite virou a config
+`maxGitRootsToVisit` pela D-035, fechando a ressalva de "sem medição"; (6) `.git`-arquivo lido
+como raiz onde ele está continua limitação aceita — se uma sessão real com worktree aparecer
+duplicada, é aí que se mede; (7) sequencial fica até existir custo de captura por fonte para medir
+contra. Os nomes de (1) entram no glossário do `AGENTS.md` nesta mesma leva.
 
 ---
 
@@ -4364,9 +4377,9 @@ jornada "dia inteiro de uso real" que o aceite do sprint pede.
 
 **Opções que enxergo para o review, além dos itens 9/10 já com opções em aberto:** confirmar as
 oito primeiras escolhas como estão, ou pedir ajuste em qualquer uma antes de marcar a tarefa `[x]`.
-**Resposta:** _(aguardando)_
+**Resposta:** ver o fechamento do PO ao fim desta questão (2026-09-12).
 
-**Resposta:** _(em aberto)_
+**Resposta:** ver o fechamento do PO ao fim desta questão (2026-09-12).
 
 ---
 
@@ -4424,6 +4437,20 @@ subir um segundo daemon.
 
 **Vira a S4-T3b**, antes da S4-T5 — porque o `--status` vai querer ler os dois: o erro
 persistido e um lock em que se possa confiar.
+
+**Fechamento do PO (2026-09-12) dos oito itens que restavam.** (1) `readState` confirmado.
+(2) arquivo único confirmado: é o que a D-006 diz, e `DayState.day` existe para isso. (3) resolvido
+pela D-035: virou `maxCaptureAttemptsPerSessionPerDay`, default 3. (4) confirmado; a descoberta de
+que o limite só importa na combinação turno ativo + modelo quebrado fica registrada. (5) resolvido
+pela D-035/D-036: `overdueFireThresholdMinutes`, default 5, e agora governa ação, não só texto.
+(6) resolvido pela S4-T3b. (7) confirmado; `SEEYA_DAEMON_CHILD` entra no glossário como
+identificador que atravessa `spawn`. **(8) não confirmado — vira tarefa.** `captureModel` e
+`budgetPerSessionUsd` presos ao valor da subida do daemon contradizem o que o resto do daemon faz
+(relê a config a cada ciclo) e o que o mantenedor espera: ele troca de modelo pelo `config set` no
+meio do dia. Proposta como **S4-T12**. (9) resolvido pela S4-T3b: erro virou estado. (10)
+confirmado.
+
+---
 
 ## Q-050 — S4-T0h: reuso do `renderItemList`, e truncar em vez de quebrar o `understanding`
 
@@ -4636,9 +4663,12 @@ asserção de D-015/D-017 mudou de comportamento.
 não sustenta que há algo quebrado ali — mexer seria escopo além do que a medição pede, exatamente
 o erro que a Q-048 já registrou noutro contexto (corrigir uma causa que não reproduziu).
 
-**Resposta:** (aguardando confirmação do mantenedor — registrado para o review, não bloqueia a
-entrega da tarefa: o aceite medido, "rodar a suíte duas vezes e a contagem não crescer", já está
-cumprido com a correção mínima acima.)
+**Resposta:** ver o fechamento do PO ao fim desta questão (2026-09-12).
+
+**Fechamento do PO (2026-09-12): confirmado — só (a), não (b).** A medição mostrou que
+`spawn-claude.ts` já fecha o stdin em todo caminho; mexer ali seria corrigir o que não reproduziu.
+O cão de guarda no fixture cobre qualquer orfandade futura, venha de onde vier. O método de contar
+processos, que foi o que achou isto, está em `docs/TESTES.md`.
 
 ---
 
@@ -4784,7 +4814,13 @@ dev altera, por convenção de `docs/FLUXO-DE-AGENTES.md`); sinalizo aqui para o
 
 **Opções que enxergo para o review, além das sete acima:** confirmar as sete como estão, ou pedir
 ajuste em qualquer uma antes de marcar a tarefa `[x]`.
-**Resposta:** _(aguardando)_
+**Resposta:** ver o fechamento do PO ao fim desta questão (2026-09-12).
+
+**Fechamento do PO (2026-09-12): as sete confirmadas.** (1) é a escolha mais importante da tarefa
+e está certa: um daemon quebrado às 23h50 não pode amanhecer "saudável". (2) 120 ciclos fica
+constante, não config — "quanto tempo de falha antes de avisar" é fato de engenharia do laço, não
+preferência de quem usa (critério da D-035). (3) a (7) confirmadas. A linha desatualizada de
+`docs/TESTES.md` foi corrigida na revisão da S4-T3b.
 
 ---
 
@@ -4955,6 +4991,10 @@ migração anterior. Conferido depois, por `grep`, que os 12 arquivos em disco c
 persistir — nenhum dos 12 tinha, porque nenhum foi capturado com o código desta tarefa. Só a
 próxima captura real, já em schemaVersion 3, vai mostrar o campo preenchido de verdade.
 
+**Fechamento do PO (2026-09-12):** registro aceito. `[]` é o valor honesto para lista; a distinção
+`null`/`0` da D-032 é de contagem, e as duas coisas não são análogas. A verificação contra 12
+handoffs reais é a evidência. Nada a decidir.
+
 ---
 
 ## Q-056 — S4-T4 (`seeya snooze`/`skip-today`/`config`): o desenho do `config`, e uma corrida real medida em `estado.json`/`config.json`
@@ -5069,6 +5109,17 @@ AGENTS.md pede para não improvisar.
 **Cobertura e portão, medidos nesta máquina:** ver relatório da tarefa em
 `docs/PLANO-DE-ENTREGA.md` S4-T4.
 
+**Fechamento do PO (2026-09-12).** (1) confirmado. (2) `get`/`set` genéricos confirmados: a D-035
+acrescentou quatro chaves logo depois e nenhuma exigiu comando novo, o que prova a escolha. (3)
+`null` literal e listas por vírgula confirmados. **O `cwd` de `policy` gravado sem normalizar não
+é confirmado: é defeito.** Verificado em 2026-09-12: `application/eligibility-assembly.ts`
+normaliza a lista `ignore` com `core/cwd-normalization.ts`, mas `projectPolicyFor` compara a chave
+crua, gravada como digitada, com o `cwd` da sessão como veio do registro. `c:/code/x` digitado
+nunca casa com `C:\code\x`, e `canTerminate: true` silenciosamente nunca se aplica — silêncio
+onde deveria haver efeito ou erro, o oposto da D-025. Vai para a **S4-T12**. (4) `seeya status`
+sem agendamento nem daemon: **sobe ao mantenedor** — é o produto decidir se `status` é o painel
+único ou se `daemon --status` basta. (5) resolvido pela S4-T4b (Q-058).
+
 ---
 
 ## Q-057 — S4-T5 (`seeya daemon --stop/--status`): sete escolhas registradas, e uma correção de responsividade no laço que a S4-T3 tinha deixado passar
@@ -5178,7 +5229,13 @@ chamada isolada) é `0`, e ele é a fonte de verdade que o `AGENTS.md`/`docs/FLU
 pedem para ler, não o texto. Registrado para quem revisar não estranhar a ausência do bloco se
 repetir a mesma verificação.
 
-**Resposta:** _(aguardando)_
+**Resposta:** ver o fechamento do PO ao fim desta questão (2026-09-12).
+
+**Fechamento do PO (2026-09-12): as sete confirmadas.** (2) foi a melhor decisão da tarefa: parar
+em cerca de 1 s em vez de até 30 s. (4) e (5) são a política certa: o lock só some com evidência
+positiva de morte. (7) o teste com plataforma forçada cobre a decisão de ramo em todo host, e a
+chamada real de SO fica medida só no Windows — declarado, não escondido. A observação sobre a
+saída do `verificar:linux` sumir antes do resumo fica registrada; o código de saída é a fonte.
 
 ---
 
@@ -5500,6 +5557,12 @@ entrar no código, como o próprio glossário pede.
 **Cobertura e portão:** `npm run verificar` e `npm run verificar:linux`, números no relatório da
 tarefa em `docs/PLANO-DE-ENTREGA.md` S4-T7.
 
+**Fechamento do PO (2026-09-12): confirmado integralmente.** O campo dedicado em vez de
+`Notice.kind` (item 1) é o que faz o tipo provar que o resultado do encerramento nunca é calado —
+era o maior risco da tarefa. A leitura de `null` como "sem evidência de mudança" (item 6) evitou
+redisparo contra o `estado.json` real. `MAX_EARLY_WARNINGS_LISTED = 5` fica como escolha
+declarada.
+
 ---
 
 ## Q-061 — S4-T8 (as três mensagens que falam do mecanismo): onde mora a normalização, o que a
@@ -5613,6 +5676,15 @@ nome novo no glossário de `AGENTS.md` é necessário.
 linhas / 94,05% branches (ambos acima do piso de 80% por diretório); `npm run verificar:linux` —
 mesmos 133 arquivos, 1434 passaram (3 skipped), portão verde. Os dois códigos de saída lidos
 separadamente do `tail`, não do pipe.
+
+**Fechamento do PO (2026-09-12): confirmado.** A normalização no schema (item 1) é o lugar certo:
+as duas entradas convergem, e um `config.json` editado à mão se autocorrige na próxima escrita —
+efeito desejável, não colateral. Tirar o `✖` de todos os campos (item 2) foi além do pedido no
+sentido certo. A exceção honesta em (3) — captura em curso reinicia, não se perde — é o que a
+frase "nothing was lost" precisa para ser verdadeira.
+
+---
+
 ## Q-062 — S4-T9 (`spawnHidden`, D-038): onde o embrulho mora, a forma da assinatura, e o limite conhecido da guarda
 
 **Tarefa:** S4-T9 — um `spawn` só, invisível por padrão, com a exceção declarada. Fecha a Q-059
@@ -5688,6 +5760,13 @@ sem apagar a medição que já estava documentada.
 **Cobertura e portão:** `npm run verificar` e `npm run verificar:linux`, números no relatório da
 tarefa em `docs/PLANO-DE-ENTREGA.md` S4-T9.
 
+**Fechamento do PO (2026-09-12): confirmado.** Adapter importar adapter está fora dos 20 pares, e
+o `depcruise` confirmou. Não forçar `shell: false` no embrulho (item 3) está certo: é invariante
+separada, e se virar guarda é decisão própria. O limite do `import * as` fica aceito pela mesma
+linha da D-019.
+
+---
+
 ## Q-063 — S4-T10: a lista de "testes envolvidos" do despacho tinha quatro arquivos; a evidência
 ## tinha cinco — e por que a correção escolhida não é a mesma coisa que a `guards/` recusou
 
@@ -5752,3 +5831,10 @@ método, não pela suposição de que já foi resolvido para sempre.
 **Cobertura e portão:** `npm run verificar` cinco vezes seguidas, verde nas cinco; `npm run
 verificar:linux` verde. Números completos no relatório da tarefa em `docs/PLANO-DE-ENTREGA.md`
 S4-T10.
+
+**Fechamento do PO (2026-09-12): confirmado.** Achar o quinto arquivo pela evidência em vez de
+pela lista do despacho é o comportamento esperado. A distinção contra o que a S1-T0 recusou está
+certa: serializar disputa por recurso real não esconde corrida. O item 4 (por que a máquina mudou)
+segue sem resposta, e a **S4-T11** trata a mesma classe nos testes de `git/` e `storage/`.
+
+---

@@ -319,6 +319,7 @@ justamente para que quem os implementar não invente nome:
 | dia | `Day` | S1-T5 |
 | estado do dia | `DayState` | S4-T2 |
 | salvar estado (método) | `saveState` | S4-T2 |
+| fatos de git por repositório / ler evidência entre repositórios | `RepositoryGitFacts` / `readEvidenceAcrossRepos` | S4-T0 |
 
 **Identificadores que vão para disco.** Chaves de `config.json`, chaves do handoff e o layout de
 pastas em `~/.seeya/`. Estes são os mais caros de errar: uma vez que o app grava um arquivo, o
@@ -346,6 +347,13 @@ usa. Fixados em S1-T0g, antes de qualquer um deles existir em código.
 | histerese entre avisos prévios | `leadTimeHysteresisMinutes` | config (D-035, default 3, S4-T7) |
 | carimbo do último aviso prévio | `lastLeadTimeWarningNoticeAt` | `estado.json` (S4-T7) |
 | prazo do último aviso prévio disparado | `firedLeadTimesEffectiveEndOfDay` | `estado.json` (S4-T7) |
+| estado do dia (arquivo) | `estado.json` | raiz de `~/.seeya/` (S4-T3) |
+| dia / pulado / adiamento acumulado / avisos disparados / encerramento disparado | `day` / `skipped` / `snoozeMinutesTotal` / `firedLeadTimesInMinutes` / `endOfDayFired` | `estado.json` (S4-T2) |
+| tentativas de captura de hoje | `captureAttemptsToday` | `estado.json` (S4-T3) |
+| saúde do daemon / último erro de ciclo / falhas consecutivas | `daemonHealth` / `lastCycleError` / `consecutiveCycleFailures` | `estado.json` (S4-T3b) |
+| lock do daemon / pid / iniciado em / início do processo | `daemon.lock` / `pid` / `startedAt` / `procStart` | raiz de `~/.seeya/` (S4-T3, S4-T3b) |
+| raiz do repositório | `root` | handoff (git, D-032) |
+| arquivos fora de repositório / repositórios não visitados | `filesOutsideRepository` / `reposNotVisited` | handoff (git, D-032) |
 | avisos já dados | `early-warnings.json` | arquivo em `~/.seeya/` (S1-T7) |
 | sessões já avisadas | `warnedSessionIds` / `warnedKeyFiles` | `early-warnings.json` (S1-T7) |
 | captura profunda | `deepCapture` | config (`projectPolicy`) |
@@ -374,6 +382,9 @@ Valores de enum seguem a mesma regra: `alive` / `idle` / `ended` / `unknown` (j�
 Nomes de comando e flags do CLI: `sessions`, `end-day`, `start-day`, `snooze`, `skip-today`,
 `status`, `config`, `daemon`, `init`, e `--session`, `--all`, `--stop`, `--dry-run`. Os três
 primeiros vieram do README, que já os tinha fixado e tem precedência.
+
+Variável de ambiente interna: `SEEYA_DAEMON_CHILD` (S4-T3) distingue o lançador do worker do
+daemon. Atravessa um `spawn`, nunca vai para disco, e ninguém digita.
 
 **Nomes de decisão não se traduzem.** `D-021` é `D-021` em qualquer idioma, e é assim que o
 código aponta para o porquê.

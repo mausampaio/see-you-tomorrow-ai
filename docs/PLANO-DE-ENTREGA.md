@@ -3276,6 +3276,31 @@ como tarefa aberta, já decidida, fora do aceite.
       seguintes** à mesclagem — a única prova possível, porque o runner é o que não se reproduz
       aqui.
 
+- [ ] **S4-T12 — O que a pessoa configura precisa valer: política por projeto que não casa, e
+      modelo de captura que só muda no restart.** Saída da triagem das questões em 2026-09-12
+      (Q-056 item 3 e Q-049 item 8). Duas correções pequenas no mesmo assunto. **Não despachada.**
+
+      **Parte 1 — `projectPolicy` compara chave crua com `cwd` do registro.** Verificado:
+      `application/eligibility-assembly.ts#projectPolicyFor` faz `config.projectPolicy[cwd]` com
+      o `cwd` da sessão como veio do registro (`C:\code\x`), e a chave é gravada **exatamente
+      como digitada** em `seeya config policy <cwd>`. No mesmo arquivo, a lista `ignore` é
+      normalizada com `core/cwd-normalization.ts` antes de comparar. Consequência: `c:/code/x`,
+      caminho relativo, caixa diferente ou barra final → `canTerminate: true` e
+      `deepCapture: true` **nunca se aplicam, sem aviso**. É silêncio onde deveria haver efeito
+      ou erro (D-025). *Aceite:* a política casa pelo mesmo critério do `ignore` — normalizar dos
+      dois lados na leitura, e gravar a chave normalizada na escrita (`config policy`); um
+      `config.json` existente com chave crua continua casando; teste com `C:\code\X\` contra
+      `c:/code/x`; e `seeya config policy` com caminho relativo resolve contra o diretório atual
+      ou recusa dizendo por quê — nunca grava algo que não vai casar.
+
+      **Parte 2 — `captureModel` e `budgetPerSessionUsd` relidos a cada ciclo.**
+      `cli/composition.ts#buildDaemonContext` constrói os geradores uma vez, com o config da
+      subida; `scheduler/poll.ts#pollOnce` relê o config a cada ciclo, mas os geradores não veem.
+      O mantenedor troca de modelo pelo `config set` no meio do dia e espera que valha no
+      encerramento, como vale o `endOfDayTime`. *Aceite:* mudar `captureModel` ou
+      `budgetPerSessionUsd` com o daemon no ar vale no ciclo seguinte, sem restart, com teste em
+      `tests/unit/scheduler/poll.test.ts`. Sem chave nova em disco.
+
 ## Sprint 5 — Entregar
 
 - [ ] **S5-T1 — Autostart do daemon** por SO (Task Scheduler, launchd, systemd user).
