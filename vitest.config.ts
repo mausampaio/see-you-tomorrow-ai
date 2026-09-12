@@ -79,6 +79,79 @@ const PROCESS_HEAVY_INTEGRATION_FILES = [
 ];
 
 /**
+ * S4-T11: the SAME resource fight as `PROCESS_HEAVY_INTEGRATION_FILES` above (the OS's capacity
+ * to launch a process, against these tests' fixed 5s default deadline), but a different binary.
+ * `git-adapter.test.ts` and `primitives.test.ts` build their fixtures through
+ * `tests/integration/git/_fixtures.ts#createGitFixture`/`commitAt`/`addWorktree`, each a real
+ * `git` subprocess, and `GitAdapter.readFacts` itself spawns 5-8 more per call (branch/status/log/
+ * worktree-list, plus a status+log pair per worktree it finds) — measured directly with a
+ * `vi.mock('node:child_process')` spy around one representative case of each shape in this file
+ * (2026-09-12, this machine, no other load): fixture setup alone is 6 real `git` launches, one
+ * plain `readFacts` call is 5 (no other worktree) to 7 (one other worktree), and the heaviest
+ * single test in `git-adapter.test.ts` ("never writes to the repository", two `readFacts` calls
+ * plus 4 read-only snapshots) reaches 32. Summed over all 14 cases in that file: ~180 real `git`
+ * launches. `atomic-write.test.ts`'s two `killMidWrite`-based cases spawn a real `node` child
+ * (5 and 3 times respectively, `SIGKILL`ed mid-write) for the same reason `proc-start.ts`'s
+ * `captureWindows` does: nothing short of an actual OS process death exercises what's being
+ * proven. None of these three files were in the CI evidence `PROCESS_HEAVY_INTEGRATION_FILES`
+ * was built from (S4-T10 only looked at `powershell.exe`); S4-T11's own CI evidence (two real
+ * windows-latest failures, `docs/PLANO-DE-ENTREGA.md` S4-T11) named them by exit code and file.
+ *
+ * **What this does NOT explain.** `atomic-write.test.ts`'s first case ("a normal, uninterrupted
+ * write", the control case) launches ZERO processes — two plain `writeFileAtomic` calls, 16ms on
+ * this machine — and it still hit `Test timed out in 5000ms` in the S4-T11 CI evidence. Moving it
+ * here removes it from contending with its OWN file's two process-launching siblings (which used
+ * to share a worker with it under `integration`'s default per-file parallelism) but the CI log
+ * shows the real cause reaching further than this file: `guards/eslint-restrictions.test.ts` (real
+ * ESLint, 70s in that run) and `guards/dependency-cruiser.test.ts`/`layer-matrix.test.ts` (real
+ * dependency-cruiser/AST walks, ~40s each) were running at the exact same wall-clock window as the
+ * `integration` project's own default-parallel batch. This move narrows the contention THIS
+ * project controls (how many of ITS OWN heavy files land in the same batch); it does not, and
+ * cannot from here, control what the `guards` project is doing at the same instant — same
+ * boundary S4-T10's Q-063 already named for "why did the machine get busier that day".
+ */
+const REAL_CHILD_PROCESS_GIT_AND_STORAGE_FILES = [
+  'tests/integration/git/git-adapter.test.ts',
+  'tests/integration/git/primitives.test.ts',
+  'tests/integration/storage/atomic-write.test.ts',
+];
+
+/**
+ * S4-T11: no test here launches a subprocess — the resource these three fight over is real,
+ * sustained filesystem I/O instead of the OS's process table. `state-concurrent-write.test.ts`
+ * and `config-concurrent-write.test.ts` each run 300 real `writeFileAtomic` calls (write + rename,
+ * so ~600 real syscalls) racing 300 real reads, inside their OWN already-generous explicit 30s
+ * timeout (Q-056/Q-058) — not the 5s default. `transcript-scan.test.ts`'s "500 stale transcripts"
+ * case (also on an explicit 30s budget) does 500 concurrent `mkdir`+`utimes` pairs via a single
+ * `Promise.all`, all real fs syscalls Node's default libuv threadpool (4 threads) serializes
+ * regardless of the 500-way "parallelism" the test code asks for.
+ *
+ * **Measured (S4-T11 CI evidence, two windows-latest failures):** both concurrent-write files blew
+ * their 30s budget in one run (30722ms/30105ms — the SAME run where the `guards` project's real
+ * ESLint pass took 70s instead of its usual ~40s); the transcript-scan case blew it in the other
+ * (39090ms). On this machine, isolated, all three finish in under 1.7s. A 30s explicit budget
+ * already being generous is exactly why widening it further is not the fix here (AGENTS.md: don't
+ * trade away the ability to catch a real hang) — serializing this trio (and the three above) so
+ * their own heavy real I/O never piles up in the same instant is the lever this project controls;
+ * it does not reach the `guards` project's CPU load happening at the same time (see the caveat on
+ * `REAL_CHILD_PROCESS_GIT_AND_STORAGE_FILES` above — same unresolved "why did the runner get
+ * busier" this task inherited from S4-T10's Q-063).
+ */
+const REAL_FS_IO_HEAVY_INTEGRATION_FILES = [
+  'tests/integration/storage/state-concurrent-write.test.ts',
+  'tests/integration/storage/config-concurrent-write.test.ts',
+  'tests/integration/discovery/transcript-scan.test.ts',
+];
+
+/** Every file S4-T10/S4-T11 pulled out of `integration`'s default parallelism, for the two places
+ * below that need the union: `integration`'s own `exclude` and `integration-process`'s `include`. */
+const SERIALIZED_RESOURCE_HEAVY_FILES = [
+  ...PROCESS_HEAVY_INTEGRATION_FILES,
+  ...REAL_CHILD_PROCESS_GIT_AND_STORAGE_FILES,
+  ...REAL_FS_IO_HEAVY_INTEGRATION_FILES,
+];
+
+/**
  * Per-directory coverage (docs/TESTES.md): `core/` 95%, every other production directory 80%.
  * One glob key PER directory, not a catch-all `'src/**'` for "everything but core" (S1-T12): a
  * catch-all glob matches every instrumented file, so it computes the exact same number as the
@@ -155,18 +228,24 @@ export default defineConfig({
           name: 'integration',
           include: ['tests/integration/**/*.test.ts'],
           // guards/ has its own project (see below) because it writes fixtures into the real
-          // src/ tree. `PROCESS_HEAVY_INTEGRATION_FILES` (S4-T10) has its own project too, for a
-          // different reason: those five launch a real `powershell.exe` and contend with each
-          // other for the OS's process-launch capacity under parallelism, at fixed 5s/8s test
-          // deadlines the measured 500-880ms warm cost doesn't leave enough room for once more
-          // than one is in flight at once. Every OTHER file left in `integration` (discovery/,
-          // storage/, git/, notification/, the rest of process/ and cli/, starting at Sprint 1)
-          // uses a per-test isolated tmpdir and never launches a real process, so it genuinely
-          // doesn't contend for anything and keeps Vitest's default parallelism.
+          // src/ tree. `SERIALIZED_RESOURCE_HEAVY_FILES` (S4-T10, extended S4-T11) has its own
+          // project too, for a different reason: those files either launch a real subprocess
+          // (`powershell.exe`, `git.exe`, a plain `node` child) or hammer real, sustained fs I/O
+          // (hundreds of real syscalls per case) — see the three consts' own docstrings above for
+          // the measurements. Every OTHER file left in `integration` uses a per-test isolated
+          // tmpdir with modest I/O and never launches a real process, so it genuinely doesn't
+          // contend for either of those two resources and keeps Vitest's default parallelism.
+          // **S4-T11 correction:** this comment used to say "the other 37 integration files" —
+          // true right after S4-T10, false now that 6 more files moved out for a related but
+          // distinct reason (real fs I/O, not just process launches). Not restated as a fresh
+          // fixed count here on purpose, so the next file that needs to move doesn't leave a
+          // THIRD stale number behind (AGENTS.md: a comment that asserts beyond its evidence is
+          // the same defect D-025 names for data — S4-T10's own docstring above was corrected for
+          // exactly this once already).
           exclude: [
             ...configDefaults.exclude,
             'tests/integration/guards/**',
-            ...PROCESS_HEAVY_INTEGRATION_FILES,
+            ...SERIALIZED_RESOURCE_HEAVY_FILES,
           ],
           // S2-T8: pays the `csc.exe` shim compilation exactly ONCE for the whole project run,
           // instead of leaving it to whichever test file's worker hits it first (see that global
@@ -179,16 +258,32 @@ export default defineConfig({
       {
         test: {
           // S4-T10: the five files in `PROCESS_HEAVY_INTEGRATION_FILES` (see that const's own
-          // docstring for the measurement). `fileParallelism: false` here — and ONLY here — makes
-          // these five run one after another, so none of their real `powershell.exe` launches ever
-          // overlaps a sibling's. This is not the same move S1-T0 rejected for `guards/`: that
-          // serialization would have HIDDEN a real race in shared fixture state (the bug was the
-          // race, not the timing); this one REMOVES real contention for a real, measured, scarce
-          // resource that the tests' own fixed deadlines were never sized to share. The other 37
-          // integration files never touch `powershell.exe`, so they pay none of this cost and keep
-          // full default parallelism in the `integration` project above.
+          // docstring for the measurement) — extended S4-T11 with two more groups that share the
+          // same fix even though they don't all share the same resource: three more files that
+          // launch a real subprocess (`git.exe`/`node`, `REAL_CHILD_PROCESS_GIT_AND_STORAGE_FILES`)
+          // and three that don't spawn anything but hammer real, sustained fs I/O instead
+          // (`REAL_FS_IO_HEAVY_INTEGRATION_FILES`). `fileParallelism: false` here — and ONLY here —
+          // makes every file in this project run one after another, so none of their real process
+          // launches or heavy I/O bursts ever overlaps a sibling's. This is not the same move
+          // S1-T0 rejected for `guards/`: that serialization would have HIDDEN a real race in
+          // shared fixture state (the bug was the race, not the timing); this one REMOVES real
+          // contention for real, measured, scarce resources (the OS's process table; real fs
+          // syscall/disk throughput) that the tests' own fixed deadlines were never sized to
+          // share. The files left in the `integration` project above never touch either resource
+          // at this scale, so they pay none of this cost and keep full default parallelism.
+          //
+          // **What this project does NOT fix (S4-T11).** The CI evidence that motivated the S4-T11
+          // additions showed a spawn-free, near-instant (16ms locally) test timing out at exactly
+          // 5000ms alongside these — see `REAL_CHILD_PROCESS_GIT_AND_STORAGE_FILES`'s own
+          // docstring. Serializing this project's OWN files removes the contention THIS project
+          // controls; it does not reach CPU load the `guards` project's real ESLint/
+          // dependency-cruiser runs generate at the same wall-clock instant, in a separate vitest
+          // project this file has no scheduling control over. If the CI runner gets busier by a
+          // path other than these specific files piling up, the same symptom (fixed deadline,
+          // variable-cost operation) can come back through that different path — same residual
+          // S4-T10's Q-063 already recorded, still open.
           name: 'integration-process',
-          include: PROCESS_HEAVY_INTEGRATION_FILES,
+          include: SERIALIZED_RESOURCE_HEAVY_FILES,
           fileParallelism: false,
         },
       },

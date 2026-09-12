@@ -3243,8 +3243,8 @@ como tarefa aberta, já decidida, fora do aceite.
       a investigação. **Q-063** registra a divergência da lista de arquivos (o quinto arquivo) e o
       raciocínio completo dos cuidados (a)-(d).
 
-- [ ] **S4-T11 — A CI do Windows fica vermelha em push só de documentação: os testes de `git/` e
-      `storage/` ficaram fora da S4-T10.** Proposta do PO em 2026-09-11, ainda **não despachada**.
+- [~] **S4-T11 — A CI do Windows fica vermelha em push só de documentação: os testes de `git/` e
+      `storage/` ficaram fora da S4-T10.** Proposta do PO em 2026-09-11.
 
       **Medido em dois pushes de oito desde 10/09, ambos só de documentação** (`4146faa` e
       `e9286a5`): o job `windows-latest` falha com 14 testes estourando `5000ms`, sempre nos
@@ -3275,6 +3275,132 @@ como tarefa aberta, já decidida, fora do aceite.
       portão local continua verde cinco vezes seguidas; e a CI do Windows verde nos **três pushes
       seguintes** à mesclagem — a única prova possível, porque o runner é o que não se reproduz
       aqui.
+
+      **Implementado em 2026-09-12.**
+
+      **Método: log bruto da CI, não só o resumo do despacho.** `gh run list`/`gh api .../logs
+      --allow-escape-sequences` (caminho completo do `gh.exe`, fora do PATH nesta máquina; rodado
+      do PowerShell — o Git Bash deste ambiente recusa qualquer comando cujo nome não seja
+      resolvido estaticamente como não-git) trouxe o log inteiro dos dois runs vermelhos
+      (`4146faa` → job `103101075995`; `e9286a5` → o **attempt 1** do job, `103184429216`, já que
+      esse run foi re-executado e o attempt 2, sozinho, mostra só o resultado verde do rerun).
+      Isso mudou a investigação: o despacho falava em "14 testes"; o log do `e9286a5` mostra 15
+      (1 + 2 + 12, três arquivos), o do `4146faa` mostra 14 (2 + 9 + 1 + 2, quatro arquivos) — **o
+      conjunto de arquivos afetados muda a cada rodada**, mesma assinatura que a S4-T10 já
+      registrou para os cinco arquivos de `powershell.exe`.
+
+      **Explicação do EBUSY (medida, não suposta).** Toda ocorrência de `EBUSY` no log aparece
+      **imediatamente depois** de `Error: Test timed out in 5000ms.` (ou `30000ms`, nos dois
+      casos com orçamento explícito) para o MESMO teste — nunca sozinha, nunca associada a um
+      teste diferente. Mecanismo: `git-adapter.test.ts`/`primitives.test.ts` chamam
+      `GitAdapter.readFacts`, que dispara vários `runGit` em paralelo (`Promise.all`). Quando o
+      vitest declara o teste estourado aos 5000ms, ele não cancela essa cadeia — os `git.exe` já
+      lançados continuam vivos. O `afterEach` roda em seguida e tenta `rm(fixture.root, {
+      recursive: true, force: true })`; no Windows, apagar um diretório com um processo ainda
+      segurando um handle dentro dele (o `git.exe` órfão) devolve `EBUSY`. **É higiene de teste,
+      como a hipótese do despacho apontou** — mas o gatilho é o próprio teste correndo contra seu
+      próprio timeout, não uma corrida entre dois testes (cada `mkdtemp` já gera uma pasta única;
+      os nomes `seeya-git-ZKL4ng`, `seeya-git-ksiq55` etc. no log confirmam isso — cada `EBUSY` é
+      uma pasta diferente).
+
+      **A hipótese do despacho ("mesma classe da S4-T10") só se sustenta em parte — dito
+      explicitamente porque a medição não bate 100% com ela.** `atomic-write.test.ts > a normal,
+      uninterrupted write replaces the target in full (control case)` — dois `writeFileAtomic`,
+      **zero processos lançados**, 16ms nesta máquina — também aparece no log com `Test timed out
+      in 5000ms.` na mesma rodada. Não há lançamento de processo para explicar isso. Correlação
+      medida no próprio log: naquela janela, `guards/eslint-restrictions.test.ts` (ESLint real)
+      levou 70155ms contra ~43321ms de uma rodada mais tranquila, e
+      `dependency-cruiser.test.ts`/`layer-matrix.test.ts` levaram ~40-42s cada — tudo isso rodando
+      **ao mesmo tempo** que o lote padrão de paralelismo do próprio projeto `integration`, em outro
+      projeto vitest. Isso é contenção de CPU do runner inteiro, não (só) disputa pelo lançamento
+      de um binário específico.
+
+      **Dois mecanismos, não um, distinguidos pela forma do estouro:** os testes que lançam
+      processo (e o "control case" de `atomic-write`) estouram bem próximo do limite exato
+      (5002-5060ms contra 5000ms) — sinal de que pararam de progredir e só bateram no relógio
+      (starvation de agendamento). Os dois testes de 30s (`state`/`config-concurrent-write`, 300
+      escritas + 300 leituras reais cada) estouraram por pouco (30722ms/30105ms, ~2-3% acima) na
+      MESMA rodada em que o ESLint levou 70s; o caso de 500 arquivos de `transcript-scan.test.ts`
+      estourou por mais (39090ms contra 30000ms) na outra rodada. Esses progrediram, só que mais
+      devagar — degradação de vazão de I/O real sob carga, não paralisação total.
+
+      **A correção: dois grupos novos, com docstrings SEPARADOS, dentro do `integration-process`
+      já existente.** `REAL_CHILD_PROCESS_GIT_AND_STORAGE_FILES` (git-adapter.test.ts,
+      primitives.test.ts, atomic-write.test.ts — lançam processo real, mesma classe de recurso da
+      S4-T10) e `REAL_FS_IO_HEAVY_INTEGRATION_FILES` (state-concurrent-write.test.ts,
+      config-concurrent-write.test.ts, transcript-scan.test.ts — não lançam processo, mas fazem
+      I/O real sustentado: 300+300 escritas/leituras reais ou 500 `mkdir`+`utimes` concorrentes).
+      **Deliberadamente não foram agrupados sob uma única alegação de recurso**: chamar os seis de
+      "process-heavy" seria repetir a generalidade falsa que a própria S4-T10 já corrigiu uma vez
+      no comentário do `integration` project (AGENTS.md/D-025 aplicado a comentário). Os dois
+      grupos entram no MESMO projeto vitest (`integration-process`, `fileParallelism: false`) —
+      a serialização é a mesma ferramenta para os dois, mesmo com recursos diferentes por trás.
+
+      **O que a correção explicitamente NÃO promete resolver**, registrado no próprio comentário
+      do `vitest.config.ts`: ela remove a disputa que ESTES 11 arquivos geram entre si; não
+      alcança a carga de CPU que `guards/eslint-restrictions.test.ts` e
+      `guards/dependency-cruiser.test.ts` geram na mesma janela, num projeto vitest separado que
+      este não agenda. Se o runner ficar mais ocupado por outro caminho, o mesmo sintoma pode
+      voltar — mesmo residual que a Q-063 já registrou para a S4-T10, ainda em aberto.
+
+      **Tabela de processos por caso, medida com `vi.mock('node:child_process')` interceptando
+      `spawn`** (script de medição descartável, não commitado — 2026-09-12, esta máquina, sem
+      carga concorrente):
+
+      | bloco em `git-adapter.test.ts` | git.exe lançados | tempo local (`--reporter=verbose`) |
+      |---|---|---|
+      | fixture (`createGitFixture`+2 commits+1 worktree) | 6 | — |
+      | `readFacts`, 1 outro worktree | 7 | — |
+      | "cwd que não é repositório" | 1 | 66ms |
+      | "main cwd: branch, dirty..." (fixture+1 readFacts) | 13 | 701ms |
+      | "lista o outro worktree..." | 13 | 618ms |
+      | "não duplica o próprio worktree..." | 13 | 903ms |
+      | "do cwd do worktree vinculado..." | 13 | 714ms |
+      | alias (symlink/junction) | 11 | 486ms |
+      | "nunca escreve no repositório" (2×readFacts+4 snapshots) | 32 | 950ms |
+      | D-032, 2 repos sem worktree, ambos visitados | 16 | 482ms |
+      | D-032, cwd próprio incluído | 16 | 481ms |
+      | D-032, arquivo fora de repo contado | 11 | 421ms |
+      | D-032, tudo fora de repo (0 repos) | 6 | 323ms |
+      | D-032, dedup mesma raiz | 11 | 408ms |
+      | D-032, teto de raízes (reposNotVisited) | 11 | 416ms |
+      | D-022, worktree sumida do disco | 13 | 549ms |
+      | **total do arquivo (14 casos)** | **~180** | **9,33s (os 6 arquivos juntos, isolados)** |
+
+      `primitives.test.ts` (6 casos): 1-2 `git.exe` por caso, 8 no total, todos abaixo de 140ms
+      localmente. `atomic-write.test.ts` (4 casos): 0 processos no "control case" e no "failed
+      write" (16ms/17ms), 5 lançamentos reais de `node.exe` (`SIGKILL` a meio da escrita) no caso
+      "never leaves... partially overwritten" (754ms), 3 no caso "never creates a partial target"
+      (375ms). `state-concurrent-write.test.ts`/`config-concurrent-write.test.ts`: 0 processos, 300
+      escritas reais + 300 leituras reais cada, 1,6s localmente contra um orçamento de 30s.
+      `transcript-scan.test.ts`: 0 processos, o caso de 500 arquivos é 451ms localmente contra os
+      mesmos 30s de orçamento.
+
+      **Custo em tempo total, medido — antes (sem os 6 arquivos movidos) vs. depois:**
+
+      ```
+      antes  (1 rodada):  EXITCODE:0, 144s de parede
+      depois (rodada 1):  EXITCODE:0, 169s de parede
+      depois (rodada 2):  EXITCODE:0, 152s de parede
+      depois (rodada 3):  EXITCODE:0, 153s de parede
+      depois (rodada 4):  EXITCODE:0, 141s de parede
+      depois (rodada 5):  EXITCODE:0, 147s de parede
+      ```
+
+      Média das 5 rodadas depois: 152s. Mesma ordem de grandeza do "antes" (144s) e da faixa que a
+      S4-T10 já tinha medido (126-140s) — sem regressão perceptível, mesma leitura que a S4-T10 já
+      fez para os cinco primeiros arquivos. `npm run verificar:linux` verde (container
+      `node:22-bookworm`): 133 arquivos, 1441 passaram, 3 pulados — nenhum dos seis arquivos
+      lança processo real no Linux (nem `powershell.exe` nem contenção equivalente foi observada),
+      então a separação de projeto é inofensiva lá, como já valia para a S4-T10.
+
+      **Aceite, medido cinco vezes seguidas nesta máquina, `npm run verificar`, todas
+      EXITCODE:0, 133 arquivos, 1441 testes passaram, 3 pulados.** `npm run verificar:linux`
+      verde. **A prova final, que não é minha, são os três pushes seguintes à mesclagem na CI real
+      do Windows** — o runner não se reproduz nesta máquina, então nenhuma medição local pode
+      substituir essa observação. `docs/QUESTOES.md` Q-064 registra o raciocínio completo
+      (por que os dois grupos novos não foram unificados sob uma alegação só, e o que a medição
+      NÃO sustentou da hipótese original do despacho).
 
 ## Sprint 5 — Entregar
 
