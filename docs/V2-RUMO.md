@@ -416,9 +416,9 @@ seeya **não** sabe é quanto cada atividade demora. Ele pode estimar, e a estim
 hoje; eu começaria por isto", não "isto cabe". Se a pessoa anotar estimativas nas atividades, aí a
 conta de "cabe/não cabe" tem base; sem isso, o seeya limita e ordena, mas não promete.
 
-**Aberto:** se a jornada mora no espaço de trabalho (é da pessoa, viaja entre dispositivos) ou
-admite variação por dispositivo (notebook de casa versus máquina do trabalho). A recomendação do
-PO é no espaço de trabalho, com o ajuste do dia cobrindo a exceção.
+**A jornada mora no espaço de trabalho** (mantenedor, 2026-09-12): é da pessoa e viaja entre
+dispositivos. A variação por dispositivo não existe como configuração; a exceção é o ajuste do
+dia.
 
 ## Continuidade entre dispositivos (ideia do mantenedor, 2026-09-10)
 
